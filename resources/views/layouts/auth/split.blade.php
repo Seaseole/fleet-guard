@@ -1,50 +1,37 @@
+{{-- 'split' variant: brand panel beside the form. Copy stays factual — no invented marketing claims. --}}
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dark">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         @include('partials.head')
     </head>
-    <body class="min-h-screen bg-white antialiased dark:bg-linear-to-b dark:from-neutral-950 dark:to-neutral-900">
-        <div class="relative grid h-dvh flex-col items-center justify-center px-8 sm:px-0 lg:max-w-none lg:grid-cols-2 lg:px-0">
-            <div class="bg-muted relative hidden h-full flex-col p-10 text-white lg:flex dark:border-e dark:border-neutral-800">
-                <div class="absolute inset-0 bg-neutral-900"></div>
-                <a href="{{ route('home') }}" class="relative z-20 flex items-center text-lg font-medium" wire:navigate>
-                    <span class="flex h-10 w-10 items-center justify-center rounded-md">
-                        <x-app-logo-icon class="me-2 h-7 fill-current text-white" />
-                    </span>
-                    {{ config('app.name', 'Laravel') }}
-                </a>
 
-                @php
-                    [$message, $author] = str(Illuminate\Foundation\Inspiring::quotes()->random())->explode('-');
-                @endphp
+    <body class="min-h-dvh bg-fg-canvas text-fg-ink lg:grid lg:grid-cols-2">
+        <div class="hidden flex-col justify-between border-e border-fg-line bg-fg-surface p-10 lg:flex">
+            <x-app-logo :href="route('home')" />
 
-                <div class="relative z-20 mt-auto">
-                    <blockquote class="space-y-2">
-                        <flux:heading size="lg">&ldquo;{{ trim($message) }}&rdquo;</flux:heading>
-                        <footer><flux:heading>{{ trim($author) }}</flux:heading></footer>
-                    </blockquote>
-                </div>
+            <div class="grid gap-3">
+                <x-ui.heading size="lg">{{ __('Fleet, haulage and cross-border operations') }}</x-ui.heading>
+                <x-ui.text class="max-w-sm">
+                    {{ __('One place for trips, fuel, workshop, invoicing, accounts and the documents that keep trucks moving between borders.') }}
+                </x-ui.text>
             </div>
-            <div class="w-full lg:p-8">
-                <div class="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
-                    <a href="{{ route('home') }}" class="z-20 flex flex-col items-center gap-2 font-medium lg:hidden" wire:navigate>
-                        <span class="flex h-9 w-9 items-center justify-center rounded-md">
-                            <x-app-logo-icon class="size-9 fill-current text-black dark:text-white" />
-                        </span>
 
-                        <span class="sr-only">{{ config('app.name', 'Laravel') }}</span>
-                    </a>
-                    {{ $slot }}
+            <x-ui.text color="muted" size="xs">
+                {{ config('app.name') }} · {{ __('Base currency') }}: BWP · {{ __('Timezone') }}: Africa/Gaborone
+            </x-ui.text>
+        </div>
+
+        <div class="flex min-h-dvh flex-col justify-center px-4 py-10">
+            <div class="mx-auto w-full max-w-md">
+                <div class="mb-8 lg:hidden">
+                    <x-app-logo :href="route('home')" />
                 </div>
+
+                {{ $slot }}
             </div>
         </div>
 
-        @persist('toast')
-            <flux:toast.group>
-                <flux:toast />
-            </flux:toast.group>
-        @endpersist
-
-        @fluxScripts
+        <x-ui.toast.group />
+        <x-flash-toasts />
     </body>
 </html>

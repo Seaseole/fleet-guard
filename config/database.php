@@ -54,7 +54,12 @@ return [
             'password' => env('DB_PASSWORD', ''),
             'unix_socket' => env('DB_SOCKET', ''),
             'charset' => env('DB_CHARSET', 'utf8mb4'),
-            'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
+            // Pinned rather than left to drift. R1 in DESIGN.md: one database holding two
+            // collations surfaces as "Illegal mix of collations" on a string join, which is a
+            // production surprise nobody asked for. utf8mb4_0900_ai_ci is MySQL 8+ only, which
+            // is the point now that dev runs on Cloud's engine (docs/DEV-DATABASE.md) — a server
+            // that cannot provide it fails loudly at migrate time instead of quietly diverging.
+            'collation' => env('DB_COLLATION', 'utf8mb4_0900_ai_ci'),
             'prefix' => '',
             'prefix_indexes' => true,
             'strict' => true,

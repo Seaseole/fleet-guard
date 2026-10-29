@@ -1,5 +1,4 @@
+{{-- Default application shell: sidebar layout (DESIGN-SYSTEM.md §7). --}}
 <x-layouts::app.sidebar :title="$title ?? null">
-    <flux:main>
-        {{ $slot }}
-    </flux:main>
+    {{ $slot }}
 </x-layouts::app.sidebar>

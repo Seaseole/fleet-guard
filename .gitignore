@@ -38,3 +38,13 @@ yarn-error.log
 /boost.json
 /opencode.json
 /opencode.jsonc
+
+# Owner decision (DESIGN.md §14.6): automated tests exist locally and run before each
+# phase sign-off, but are never committed to this repository.
+/tests
+/phpunit.xml
+/pestphp.xml
+
+# EnvKit — never commit .env backups (they contain secrets)
+.env.bkp*
+.devswarm-temp/

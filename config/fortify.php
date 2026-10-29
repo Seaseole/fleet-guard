@@ -161,7 +161,8 @@ return [
     */
 
     'features' => [
-        Features::registration(),
+        // Public registration stays off: the Owner invites staff by email with a
+        // role (DESIGN.md §9.1). Re-enabling this would reopen self-signup.
         Features::resetPasswords(),
         Features::emailVerification(),
         Features::twoFactorAuthentication([

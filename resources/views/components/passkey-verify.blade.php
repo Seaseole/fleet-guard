@@ -2,7 +2,7 @@
     'optionsRoute' => 'passkey.login-options',
     'submitRoute' => 'passkey.login',
     'label' => __('Sign in with a passkey'),
-    'loadingLabel' => __('Authenticating...'),
+    'loadingLabel' => __('Authenticating…'),
     'separator' => __('Or continue with email'),
 ])
 
@@ -26,6 +26,7 @@
         async verify() {
             this.loading = true;
             this.error = null;
+
             try {
                 const response = await window.Passkeys.verify({
                     routes: {
@@ -33,6 +34,7 @@
                         submit: '{{ route($submitRoute) }}',
                     },
                 });
+
                 Livewire.navigate(response.redirect || '/dashboard');
             } catch (e) {
                 if (e.constructor?.name !== 'UserCancelledError') {
@@ -47,29 +49,18 @@
     <template x-if="supported">
         <div>
             <div class="grid gap-2">
-                <flux:button
-                    variant="outline"
-                    icon="finger-print"
-                    class="w-full"
-                    x-on:click="verify()"
-                    x-bind:disabled="loading"
-                >
-                    <span x-show="!loading">{{ $label }}</span>
+                <x-ui.button variant="outline" icon="finger-print" class="w-full" x-on:click="verify()" x-bind:disabled="loading">
+                    <span x-show="! loading">{{ $label }}</span>
                     <span x-show="loading" x-cloak>{{ $loadingLabel }}</span>
-                </flux:button>
-                <p x-show="error" x-text="error" x-cloak
-                   class="text-sm text-center text-red-600 dark:text-red-400"></p>
+                </x-ui.button>
+
+                <p x-show="error" x-text="error" x-cloak class="text-center text-sm text-danger"></p>
             </div>
 
-            <div class="relative my-6">
-                <div class="absolute inset-0 flex items-center">
-                    <div class="w-full border-t border-zinc-200 dark:border-zinc-700"></div>
-                </div>
-                <div class="relative flex justify-center text-xs uppercase">
-                    <span class="px-2 text-zinc-500 dark:text-zinc-400 bg-white dark:bg-zinc-900">
-                        {{ $separator }}
-                    </span>
-                </div>
+            <div class="my-6 flex items-center gap-3">
+                <span class="h-px flex-1 bg-fg-line"></span>
+                <span class="text-xs text-fg-ink-muted">{{ $separator }}</span>
+                <span class="h-px flex-1 bg-fg-line"></span>
             </div>
         </div>
     </template>

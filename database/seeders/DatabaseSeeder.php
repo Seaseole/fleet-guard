@@ -1,25 +1,35 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
-use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use Database\Seeders\Production\ChartOfAccountsSeeder;
+use Database\Seeders\Production\CompanySeeder;
+use Database\Seeders\Production\CurrenciesSeeder;
+use Database\Seeders\Production\RolesSeeder;
 use Illuminate\Database\Seeder;
 
-class DatabaseSeeder extends Seeder
+/**
+ * Production seeds only — the rows the application cannot start without.
+ *
+ * Demo data never runs from here. It lives in `Database\Seeders\Demo` and is invoked by class, so an
+ * accidental `db:seed` on a real company cannot invent a truck, a customer or a fuel receipt. That
+ * separation is the owner's rule, not a style preference.
+ *
+ * `OwnerSeeder` is deliberately absent: it needs credentials, and a seed command that silently
+ * creates an administrative account with a default password is the kind of thing that reaches
+ * production on a Friday. It runs from `fleet:setup-owner` (§9.1).
+ */
+final class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        $this->call([
+            CompanySeeder::class,
+            CurrenciesSeeder::class,
+            RolesSeeder::class,
+            ChartOfAccountsSeeder::class,
         ]);
     }
 }

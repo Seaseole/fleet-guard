@@ -1,66 +1,180 @@
 @import 'tailwindcss';
-@import '../../vendor/livewire/flux/dist/flux.css';
 
 @source '../views';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../vendor/livewire/flux-pro/stubs/**/*.blade.php';
-@source '../../vendor/livewire/flux/stubs/**/*.blade.php';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ | Fleet Guard design tokens — docs/DESIGN-SYSTEM.md is the source of truth.
+ | Every colour pair below is AA-checked in both themes; a new colour requires
+ | its contrast ratio written next to it.
+ */
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    /* Typography: IBM Plex Sans for UI, IBM Plex Mono for figures and identifiers. */
+    --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-    --color-zinc-50: #fafafa;
-    --color-zinc-100: #f5f5f5;
-    --color-zinc-200: #e5e5e5;
-    --color-zinc-300: #d4d4d4;
-    --color-zinc-400: #a3a3a3;
-    --color-zinc-500: #737373;
-    --color-zinc-600: #525252;
-    --color-zinc-700: #404040;
-    --color-zinc-800: #262626;
-    --color-zinc-900: #171717;
-    --color-zinc-950: #0a0a0a;
+    /* Neutrals — warm, low-chroma. */
+    --color-fg-canvas: #f7f7f4;
+    --color-fg-surface: #ffffff;
+    --color-fg-surface-raised: #ffffff;
+    --color-fg-surface-sunk: #f0f1ec;
+    --color-fg-ink: #121413;
+    --color-fg-ink-secondary: #4c524e;
+    --color-fg-ink-muted: #6b726d;          /* 4.60:1 on fg-canvas, 4.94:1 on fg-surface */
+    --color-fg-line: #e2e4de;
+    --color-fg-line-strong: #c9ccc4;
 
-    --color-accent: var(--color-neutral-800);
-    --color-accent-content: var(--color-neutral-800);
-    --color-accent-foreground: var(--color-white);
+    /* Accent — corridor teal, one per view. */
+    --color-accent: #0f766e;                /* white text on it = 4.9:1 */
+    --color-accent-hover: #0b5f59;
+    --color-accent-soft: #e2f1ef;
+    --color-on-accent: #ffffff;
+
+    /* Semantic state, never mood. */
+    --color-success: #067647;
+    --color-success-soft: #ecfdf3;
+    --color-warning: #b54708;
+    --color-warning-soft: #fffaeb;
+    --color-danger: #b42318;
+    --color-danger-hover: #991b14;
+    --color-danger-soft: #fff1f0;
+    --color-on-danger: #ffffff;              /* 6.57:1 on fg-danger */
+    --color-info: #175cd3;
+    --color-info-soft: #eff6ff;
+    --color-neutral-badge: #5a615c;
+
+    /* Focus ring. */
+    --color-focus: #0f766e;
+
+    /* Radii. */
+    --radius-fg-sm: 4px;
+    --radius-fg-md: 8px;
+    --radius-fg-lg: 14px;
+
+    /* Elevation. */
+    --shadow-fg-1: 0 1px 1px rgb(17 20 18 / 0.04), 0 1px 2px rgb(17 20 18 / 0.06);
+    --shadow-fg-2: 0 2px 4px rgb(17 20 18 / 0.06), 0 8px 16px rgb(17 20 18 / 0.08);
+    --shadow-fg-3: 0 12px 32px rgb(17 20 18 / 0.14), 0 4px 8px rgb(17 20 18 / 0.08);
+
+    /* Motion (use with duration-(--t-*) / ease-(--ease-*)). */
+    --t-fast: 120ms;
+    --t-base: 180ms;
+    --t-slow: 240ms;
+    --ease-standard: cubic-bezier(0.2, 0, 0.1, 1);
+    --ease-emphasis: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 @layer theme {
     .dark {
-        --color-accent: var(--color-white);
-        --color-accent-content: var(--color-white);
-        --color-accent-foreground: var(--color-neutral-800);
+        --color-fg-canvas: #0d0f0e;
+        --color-fg-surface: #151816;
+        --color-fg-surface-raised: #1b1f1d;
+        --color-fg-surface-sunk: #101312;
+        --color-fg-ink: #e9ebe7;
+        --color-fg-ink-secondary: #a9b1ac;
+        --color-fg-ink-muted: #8b938e;        /* 6.10:1 on fg-canvas, 5.67:1 on fg-surface */
+        --color-fg-line: #2a2f2c;
+        --color-fg-line-strong: #3a403c;
+
+        --color-accent: #2dbbae;
+        --color-accent-hover: #45d0c2;
+        --color-accent-soft: #102a28;
+        --color-on-accent: #04211e;
+
+        --color-success: #4cc38a;
+        --color-success-soft: #0d2a1c;
+        --color-warning: #f79009;
+        --color-warning-soft: #2a1c0a;
+        --color-danger: #f97066;
+        --color-danger-hover: #fb8b84;
+        --color-danger-soft: #2c1413;
+        --color-on-danger: #0d0f0e;          /* 6.90:1 on fg-danger */
+        --color-info: #7ca9f9;
+        --color-info-soft: #101d33;
+        --color-neutral-badge: #98a29b;
+
+        --color-focus: #2dbbae;
+
+        --shadow-fg-1: 0 1px 1px rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.5);
+        --shadow-fg-2: 0 2px 4px rgb(0 0 0 / 0.45), 0 8px 16px rgb(0 0 0 / 0.55);
+        --shadow-fg-3: 0 12px 32px rgb(0 0 0 / 0.6), 0 4px 8px rgb(0 0 0 / 0.5);
     }
 }
 
 @layer base {
+    html {
+        color-scheme: light;
+    }
 
-    *,
-    ::after,
-    ::before,
-    ::backdrop,
-    ::file-selector-button {
-        border-color: var(--color-gray-200, currentColor);
+    html.dark {
+        color-scheme: dark;
+    }
+
+    body {
+        @apply bg-fg-canvas text-sm leading-5 text-fg-ink font-sans antialiased;
+    }
+
+    /* Focus is always visible; nothing in this codebase sets outline: none. */
+    :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+        @apply outline-2 outline-offset-2 outline-focus;
+    }
+
+    /* Figures and machine identifiers are monospace with tabular numerals. */
+    .fg-numeric,
+    .fg-identifier {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .fg-numeric {
+        @apply text-right;
+    }
+
+    [x-cloak] {
+        display: none !important;
+    }
+
+    /* Skeleton shimmer, and no shimmer at all under reduced motion. */
+    @keyframes fg-shimmer {
+        100% {
+            transform: translateX(100%);
+        }
+    }
+
+    .fg-skeleton {
+        @apply relative overflow-hidden bg-fg-surface-sunk;
+    }
+
+    .fg-skeleton::after {
+        content: '';
+        @apply absolute inset-0 -translate-x-full;
+        background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+        animation: fg-shimmer 1.4s infinite;
+    }
+
+    .dark .fg-skeleton::after {
+        background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.06), transparent);
+    }
+
+    /* Leaflet rasters keep the palette coherent in dark mode without a second tile provider. */
+    .dark .fg-map-tiles .leaflet-tile-pane {
+        filter: brightness(0.85) invert(0.92) hue-rotate(180deg) saturate(0.7) contrast(0.9);
+    }
+
+    /* A black-on-white TOTP QR is unreadable in dark mode; invert it instead of restyling it. */
+    .dark .fg-qr-invert {
+        filter: invert(1) brightness(1.5);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.001ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.001ms !important;
+        }
     }
 }
-
-[data-flux-field]:not(ui-radio, ui-checkbox) {
-    @apply grid gap-2;
-}
-
-[data-flux-label] {
-    @apply  !mb-0 !leading-tight;
-}
-
-input:focus[data-flux-control],
-textarea:focus[data-flux-control],
-select:focus[data-flux-control] {
-    @apply outline-hidden ring-2 ring-accent ring-offset-2 ring-offset-accent-foreground;
-}
-
-/* \[:where(&)\]:size-4 {
-    @apply size-4;
-} */

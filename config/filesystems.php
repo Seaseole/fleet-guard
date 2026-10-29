@@ -47,6 +47,25 @@ return [
             'report' => false,
         ],
 
+        /*
+         * §14.4 — every document lives here and nowhere else.
+         *
+         * `serve => false` is the whole point: the `local` driver serves `local` and `public`
+         * through the framework's own route, and a documents disk that is reachable by that route
+         * is a private disk in name only. A file on this disk has exactly one way out — the signed
+         * download controller — which is the one place §14.4's per-download audit can be true.
+         *
+         * On Cloud this becomes the private S3-compatible bucket with the same key shape; the
+         * `root` is the only line that changes, so no path in the domain code may assume it.
+         */
+        'documents_private' => [
+            'driver' => 'local',
+            'root' => storage_path('app/documents'),
+            'serve' => false,
+            'throw' => true,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),
