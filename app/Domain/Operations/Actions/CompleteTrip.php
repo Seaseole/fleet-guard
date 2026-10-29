@@ -12,6 +12,8 @@ use App\Domain\Fleet\OdometerSource;
 use App\Domain\Fleet\Queries\FleetDirectory;
 use App\Domain\Kernel\Audit\ActorKind;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
+use App\Domain\Operations\BorderCrossingStatus;
+use App\Domain\Operations\Models\BorderCrossing;
 use App\Domain\Operations\Models\Trip;
 use App\Domain\Operations\TripStatus;
 use Illuminate\Support\Facades\DB;
@@ -22,10 +24,11 @@ use InvalidArgumentException;
  *
  * The closing odometer is the one number this Action insists on, because everything downstream is
  * measured against the span it completes: fuel variance (Phase 3), cost-per-km and the corridor
- * distance figures (Phase 8). The §10.2 checklist's other two lines — *fuel reconciled, every crossing
- * exited* — are not implemented here because the tables they read do not exist yet, and a completion
- * gate that has nothing to check would be a gate that always passes. They land with their slices, in
- * the same place, and this docblock is where a reader looks for why a line is missing.
+ * distance figures (Phase 8). Of the §10.2 checklist's other two lines, *every crossing exited*
+ * landed with slice 2f: a crossing still `planned` or `entered` is a gate the paper says the truck
+ * has not cleared, and completion is where the road's facts are declared in. *Fuel reconciled* still
+ * waits for Phase 3's fuel module, and a gate that has nothing to check would be a gate that always
+ * passes, so it is absent rather than assumed.
  *
  * The reading goes through Fleet's `RecordOdometerReading`, so the truck's projection, its audit trail
  * and its service-schedule arithmetic all move on the same call that ends the trip (§4.3: one reading,
@@ -56,6 +59,22 @@ final class CompleteTrip
                 'Trip %s is %s; a trip is completed after its POD is approved (§10.2), or re-completed after a re-open.',
                 $trip->trip_no,
                 $trip->status->label(),
+            ));
+        }
+
+        // §10.2: a gate the crossing record has not cleared is a trip that has not finished crossing.
+        $uncleared = BorderCrossing::query()
+            ->where('trip_id', $trip->id)
+            ->whereIn('status', [BorderCrossingStatus::Planned, BorderCrossingStatus::Entered])
+            ->orderBy('created_at')
+            ->first();
+
+        if ($uncleared !== null) {
+            throw new InvalidArgumentException(sprintf(
+                'Trip %s cannot be completed: the crossing at %s is %s, and §10.2 requires every crossing to be exited.',
+                $trip->trip_no,
+                $uncleared->label(),
+                $uncleared->status->label(),
             ));
         }
 

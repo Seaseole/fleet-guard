@@ -31,7 +31,7 @@ class TripsRecost extends Command
         {--company= : Only this company. Omit to check every company in the database.}
         {--quiet-ok : Print only problems}';
 
-    protected $description = 'Recompute each trip cost rollup from gl_journal_lines and report drift';
+    protected $description = 'Recompute each trip cost rollup from the ledger lines and report drift';
 
     public function handle(TripCostRollup $rollup): int
     {

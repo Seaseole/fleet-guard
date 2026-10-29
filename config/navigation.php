@@ -23,7 +23,7 @@ return [
             ['label' => 'Dispatch', 'route' => 'operations.dispatch', 'icon' => 'map', 'permission' => 'trips.view', 'phase' => 2],
             ['label' => 'Jobs', 'route' => 'operations.jobs', 'icon' => 'clipboard-document-list', 'permission' => 'jobs.view', 'phase' => 2],
             ['label' => 'Routes', 'route' => 'operations.routes', 'icon' => 'map', 'permission' => 'routes.view', 'phase' => 1],
-            ['label' => 'Cross-border', 'route' => 'crossborder.index', 'icon' => 'globe-alt', 'permission' => 'crossborder.view', 'phase' => 6],
+            ['label' => 'Cross-border', 'route' => 'crossborder.index', 'icon' => 'globe-alt', 'permission' => 'crossborder.view', 'phase' => 2],
             ['label' => 'Live map', 'route' => 'telematics.live', 'icon' => 'signal', 'permission' => 'gps.view', 'phase' => 7],
         ],
     ],

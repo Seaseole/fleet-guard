@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Domain\Operations\Actions;
 
+use App\Domain\Kernel\Ledger\ChartOfAccounts;
 use App\Domain\Kernel\Ledger\Data\LineDto;
 use App\Domain\Kernel\Ledger\Data\PostingDto;
 use App\Domain\Kernel\Ledger\Data\Side;
 use App\Domain\Kernel\Ledger\LedgerService;
-use App\Domain\Kernel\Ledger\Models\Account;
 use App\Domain\Kernel\Money\Fx;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Operations\Data\TripCostDto;
@@ -42,6 +42,7 @@ final class RecordTripCost
     public function __construct(
         private readonly LedgerService $ledger,
         private readonly TripCostRollup $rollup,
+        private readonly ChartOfAccounts $chart,
     ) {}
 
     public function __invoke(Trip $trip, TripCostDto $dto, ?int $actorId = null): TripCost
@@ -101,8 +102,18 @@ final class RecordTripCost
 
         $this->assertDriverPresent($trip, $dto->type);
 
-        $debit = $this->account($dto->type->accountCode());
-        $credit = $this->account($dto->paidWith->accountCode());
+        // The chart's read door, not the Account model: D3 lets a module name a code and learn its
+        // id, never hold the row.
+        $accounts = $this->chart->byCode();
+        $debit = $accounts[$dto->type->accountCode()] ?? null;
+        $credit = $accounts[$dto->paidWith->accountCode()] ?? null;
+
+        if ($debit === null || $credit === null) {
+            throw new InvalidArgumentException(sprintf(
+                'Account %s is not in this company\'s chart, so the cost cannot be posted. Seed the chart first (§6.2).',
+                $debit === null ? $dto->type->accountCode() : $dto->paidWith->accountCode(),
+            ));
+        }
 
         $dimensions = array_filter([
             'truck_id' => $trip->truck_id,
@@ -174,11 +185,6 @@ final class RecordTripCost
                 $trip->trip_no,
             ));
         }
-    }
-
-    private function account(string $code): Account
-    {
-        return Account::query()->where('code', $code)->firstOrFail();
     }
 
     private function description(Trip $trip, TripCostDto $dto): string

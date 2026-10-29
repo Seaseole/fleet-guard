@@ -14,6 +14,10 @@ declare(strict_types=1);
  * the seat that reads a dispatch board most often, so a quoted amount must never reach this HTML —
  * the one assertion here that a passing domain test would sail straight past.
  *
+ * Slice 2f's border half rides here too: a gate registered through its dialog, a crossing planned,
+ * entered, exited, charged and finished through the trip's own section, and the same section read by a
+ * dispatcher who holds `crossborder.view` and none of the controls.
+ *
  * Not a test suite: `tests/` stays out of the repository (§14.6). Fixtures live in the `OPR` namespace
  * on the development database; everything created is removed and then asserted removed, including the
  * two operational counters, which `documents:number-integrity` compares against the surviving rows.
@@ -45,6 +49,9 @@ use App\Domain\Operations\Data\JobDto;
 use App\Domain\Operations\Data\JobQuoteDto;
 use App\Domain\Operations\Data\RouteDto;
 use App\Domain\Operations\JobStatus;
+use App\Domain\Operations\Models\BorderCost;
+use App\Domain\Operations\Models\BorderCrossing;
+use App\Domain\Operations\Models\BorderPost;
 use App\Domain\Operations\Models\Chargeable;
 use App\Domain\Operations\Models\Job;
 use App\Domain\Operations\Models\Load;
@@ -564,6 +571,19 @@ final class OperationsRenderSweep extends TestCase
                 if (in_array($derived, $columns, true)) {
                     throw new Exception("freight_jobs stores {$derived} — §10.3 says it must not");
                 }
+            }
+        });
+
+        $this->attempt('the status filter narrows the register and keeps the rows that match', function () use ($owner, $job): void {
+            // `CreateTrip` moves an accepted job to `in_execution`, so that is the status a fixture
+            // with a trip on it carries by the time the register is filtered.
+            $html = (string) Livewire::actingAs($owner)
+                ->test('pages::operations.jobs')
+                ->set('statusFilter', 'in_execution')
+                ->html();
+
+            if (! str_contains($html, $job->job_no)) {
+                throw new Exception('the job in execution vanished when the register was filtered to in_execution');
             }
         });
 
@@ -1112,6 +1132,226 @@ final class OperationsRenderSweep extends TestCase
             }
         });
 
+        echo "\n== §10.9 the border: the register, then the four acts on the trip ==\n";
+
+        $this->pageContains($owner, '/crossborder', 'Gates on file', 'the owner opens the gate register');
+
+        $this->attempt('a gate is registered through the page, and a second attempt is refused by name', function () use ($owner): void {
+            Livewire::actingAs($owner)
+                ->test('pages::crossborder.index')
+                ->set('postName', 'OPR Kazungula')
+                ->set('postCountry', 'BW')
+                ->set('postOpenFrom', '06:00')
+                ->set('postOpenTo', '20:00')
+                ->call('createPost')
+                ->assertHasNoErrors('post')
+                ->assertDispatched('close-border-post');
+
+            if (! DB::table('border_posts')->where('name', 'OPR Kazungula')->exists()) {
+                throw new Exception('the dialog registered no gate');
+            }
+
+            $html = (string) Livewire::actingAs($owner)->test('pages::crossborder.index')->html();
+
+            foreach (['OPR Kazungula', '06:00–20:00'] as $needle) {
+                if (! str_contains($html, $needle)) {
+                    throw new Exception("the gate register is missing {$needle}");
+                }
+            }
+
+            // Two rows for one gate would split its crossings; the Action refuses and the dialog says so.
+            Livewire::actingAs($owner)
+                ->test('pages::crossborder.index')
+                ->set('postName', 'OPR Kazungula')
+                ->set('postCountry', 'BW')
+                ->call('createPost')
+                ->assertHasErrors('post');
+
+            if ((int) DB::table('border_posts')->where('name', 'OPR Kazungula')->count() !== 1) {
+                throw new Exception('a refused duplicate left a second gate row');
+            }
+        });
+
+        $this->attempt('the trip plans a crossing before it reaches the gate, and its section lists it', function () use ($owner): void {
+            $trip = Trip::query()->findOrFail($this->assignedTripId);
+            $postId = (int) DB::table('border_posts')->where('name', 'OPR Kazungula')->value('id');
+
+            Livewire::actingAs($owner)
+                ->test('pages::operations.detail', ['trip' => $trip])
+                ->set('crossingPostId', (string) $postId)
+                ->set('crossingDirection', 'entry')
+                ->call('planCrossing')
+                ->assertHasNoErrors('crossing')
+                ->assertDispatched('toast');
+
+            $crossing = DB::table('border_crossings')->where('trip_id', $trip->id)->first();
+
+            if ($crossing === null) {
+                throw new Exception('the page planned no crossing');
+            }
+
+            if ($crossing->status !== 'planned') {
+                throw new Exception('the crossing was planned as '.$crossing->status);
+            }
+
+            $html = (string) Livewire::actingAs($owner)->test('pages::operations.detail', ['trip' => $trip])->html();
+
+            foreach (['Border gates', 'OPR Kazungula', 'planned', 'Plan the crossing'] as $needle) {
+                if (! str_contains($html, $needle)) {
+                    throw new Exception("the trip page is missing {$needle}");
+                }
+            }
+        });
+
+        $this->attempt('entered, exited, charged and finished through the page; the fee reaches the ledger', function () use ($owner, $baseCurrency): void {
+            $trip = Trip::query()->findOrFail($this->assignedTripId);
+            $crossingId = (string) DB::table('border_crossings')->where('trip_id', $trip->id)->value('id');
+            $page = static fn () => Livewire::actingAs($owner)->test('pages::operations.detail', ['trip' => $trip]);
+
+            $page()->call('enterCrossing', $crossingId)->assertHasNoErrors('crossing');
+            $page()->call('exitCrossing', $crossingId)->assertHasNoErrors('crossing');
+
+            $page()
+                ->call('openCharge', $crossingId)
+                ->assertDispatched('open-border-charge')
+                ->set('chargeKind', 'duty')
+                ->set('chargeAmount', '450.00')
+                ->set('chargeCurrency', $baseCurrency)
+                ->set('chargeOccurredOn', CarbonImmutable::now(CurrentCompany::timezone())->toDateString())
+                ->set('chargePaidWith', 'petty_cash')
+                ->set('chargeDescription', 'OPR border duty')
+                ->call('captureCharge')
+                ->assertHasNoErrors('charge')
+                ->assertDispatched('close-border-charge');
+
+            $cost = DB::table('border_costs')->where('border_crossing_id', $crossingId)->first();
+
+            if ($cost === null || $cost->kind !== 'duty' || $cost->currency_code !== $baseCurrency || (int) $cost->base_amount !== 45_000) {
+                throw new Exception('the page captured no duty row with the expected money: '.json_encode($cost));
+            }
+
+            $entry = DB::table('gl_journal_entries')
+                ->where('source_type', 'trip_cost')
+                ->where('source_id', $cost->trip_cost_id)
+                ->first();
+
+            if ($entry === null || (int) $entry->total_debit !== 45_000 || (int) $entry->total_credit !== 45_000) {
+                throw new Exception('the charge posted no balanced entry');
+            }
+
+            $lines = DB::table('gl_journal_lines as l')
+                ->join('gl_accounts as a', 'a.id', '=', 'l.account_id')
+                ->where('l.entry_id', $entry->id)
+                ->pluck('a.code', 'l.direction');
+
+            if (($lines['debit'] ?? null) !== '5400' || ($lines['credit'] ?? null) !== '1110') {
+                throw new Exception('the charge posted '.json_encode($lines->all()).', not 5400 → 1110 (§6.6)');
+            }
+
+            $page()->call('finishCrossing', $crossingId)->assertHasNoErrors('crossing');
+
+            $status = DB::table('border_crossings')->where('id', $crossingId)->value('status');
+
+            if ($status !== 'costs_captured') {
+                throw new Exception('finishing left the crossing at '.$status);
+            }
+
+            // §6.6's projection moved with the posting: 250.00 of fuel plus 450.00 at the gate.
+            $fresh = Trip::query()->findOrFail($trip->id);
+
+            if ($fresh->border_cost_base !== 45_000 || $fresh->direct_cost_base !== 70_000) {
+                throw new Exception('the rollup is '.json_encode([$fresh->border_cost_base, $fresh->direct_cost_base]).', not 45000/70000');
+            }
+
+            // §4.4: three moves, three events, in order.
+            $states = DB::table('operational_events')
+                ->where('aggregate_type', 'border_crossing')
+                ->where('aggregate_id', $crossingId)
+                ->orderBy('id')
+                ->pluck('to_state')
+                ->all();
+
+            if ($states !== ['entered', 'exited', 'costs_captured']) {
+                throw new Exception('the crossing trail reads '.json_encode($states));
+            }
+
+            $html = (string) $page()->html();
+
+            foreach (['Border gates', 'OPR Kazungula', 'costs captured', '450,00'] as $needle) {
+                if (! str_contains($html, $needle)) {
+                    throw new Exception("the finished crossing is missing {$needle} on the trip page");
+                }
+            }
+        });
+
+        $this->attempt('the register lists the finished crossing, and its status filter narrows past it', function () use ($owner): void {
+            $trip = Trip::query()->findOrFail($this->assignedTripId);
+            $register = static fn () => Livewire::actingAs($owner)->test('pages::crossborder.index');
+
+            $html = (string) $register()->set('search', $trip->trip_no)->html();
+
+            foreach ([$trip->trip_no, 'OPR Kazungula', 'costs captured', '450,00', '1 charge(s)'] as $needle) {
+                if (! str_contains($html, $needle)) {
+                    throw new Exception("the register is missing {$needle}");
+                }
+            }
+
+            $filtered = (string) $register()->set('statusFilter', 'planned')->html();
+
+            if (! str_contains($filtered, 'No crossings match')) {
+                throw new Exception('the status filter still lists a costs-captured crossing under planned');
+            }
+        });
+
+        echo "\n== §9.3 on the border: the dispatcher reads the gate and cannot move or charge it ==\n";
+
+        $this->pageContains($dispatcher, '/crossborder', 'Gates on file', 'a dispatcher may open the register (§9.3 gives crossborder.view)');
+
+        $this->attempt('the register offers no gate form to a seat without crossborder.manage', function () use ($dispatcher): void {
+            $html = (string) Livewire::actingAs($dispatcher)->test('pages::crossborder.index')->html();
+
+            if (! str_contains($html, 'OPR Kazungula')) {
+                throw new Exception('the dispatcher cannot see the gates on file');
+            }
+
+            if (str_contains($html, 'Register a gate')) {
+                throw new Exception('the register offered the gate form to a seat without crossborder.manage');
+            }
+        });
+
+        $this->attempt('the trip shows the dispatcher the crossing, but no control that moves or charges it', function () use ($dispatcher): void {
+            $html = (string) Livewire::actingAs($dispatcher)
+                ->test('pages::operations.detail', ['trip' => Trip::query()->findOrFail($this->assignedTripId)])
+                ->html();
+
+            foreach (['Border gates', 'OPR Kazungula', 'costs captured', '450,00'] as $needle) {
+                if (! str_contains($html, $needle)) {
+                    throw new Exception("the dispatcher's page is missing {$needle}");
+                }
+            }
+
+            foreach (['Plan the crossing', 'Add a charge', 'Finish the costs', 'Capture and post', 'Capture a border charge'] as $hidden) {
+                if (str_contains($html, $hidden)) {
+                    throw new Exception("a dispatcher was shown {$hidden} — §9.3 keeps crossings at crossborder.view");
+                }
+            }
+        });
+
+        $this->attempt('the dispatcher may not plan a crossing through a hand-made POST either', function () use ($dispatcher): void {
+            $trip = Trip::query()->findOrFail($this->assignedTripId);
+            $postId = (int) DB::table('border_posts')->where('name', 'OPR Kazungula')->value('id');
+
+            Livewire::actingAs($dispatcher)
+                ->test('pages::operations.detail', ['trip' => $trip])
+                ->set('crossingPostId', (string) $postId)
+                ->call('planCrossing')
+                ->assertHasErrors('crossing');
+
+            if ((int) DB::table('border_crossings')->where('trip_id', $trip->id)->count() !== 1) {
+                throw new Exception('a dispatcher POST planned a second crossing');
+            }
+        });
+
         echo "\n== §15.2's cross-phase rule: the phase ships dashboard figures, counted from real rows ==\n";
 
         $this->attempt('the overview carries the four operations cards, and the planned count is the register\'s', function () use ($owner): void {
@@ -1466,6 +1706,12 @@ final class OperationsRenderSweep extends TestCase
             });
         }
 
+        // The border rows point at the trip's costs both ways: `border_costs.trip_cost_id` is a foreign
+        // key into `trip_costs`, so the crossing's costs go before the costs they name.
+        $crossingIds = $ids['trip_ids'] === [] ? [] : DB::table('border_crossings')->whereIn('trip_id', $ids['trip_ids'])->pluck('id')->all();
+        $this->deleteIn('border_costs', 'border_crossing_id', $crossingIds);
+        $this->deleteIn('border_crossings', 'id', $crossingIds);
+
         $this->deleteIn('chargeables', 'trip_id', $ids['trip_ids']);
         $this->deleteIn('trip_costs', 'trip_id', $ids['trip_ids']);
         $this->deleteIn('loads', 'trip_id', $ids['trip_ids']);
@@ -1482,6 +1728,7 @@ final class OperationsRenderSweep extends TestCase
         DB::table('documents')->where('title', 'like', 'OPR%')->delete();
         DB::table('routes')->where('code', 'like', 'OPR%')->delete();
         DB::table('customers')->where('code', 'like', 'OPR%')->delete();
+        DB::table('border_posts')->where('name', 'like', 'OPR%')->delete();
 
         $this->deleteIn('drivers', 'id', $ids['driver_ids']);
         $this->deleteIn('employees', 'id', $ids['employee_ids']);
@@ -1518,12 +1765,17 @@ final class OperationsRenderSweep extends TestCase
             ->whereRaw('`aggregate_id` not in (select `id` from `freight_jobs`)')
             ->delete();
 
+        DB::table('operational_events')
+            ->where('aggregate_type', 'border_crossing')
+            ->whereRaw('`aggregate_id` not in (select `id` from `border_crossings`)')
+            ->delete();
+
         // The money rows leave their own trail. Matching by id is not possible here — `auditable_id`
         // is a bigint column and these models key on ULIDs — so the sweep is scoped to rows written
         // during this run, which is the only trail this script could have made.
         if ($this->runStartedAt !== null) {
             DB::table('audits')
-                ->whereIn('auditable_type', [TripCost::class, Chargeable::class])
+                ->whereIn('auditable_type', [TripCost::class, Chargeable::class, BorderPost::class, BorderCrossing::class, BorderCost::class])
                 ->where('created_at', '>=', $this->runStartedAt)
                 ->delete();
         }
@@ -1555,6 +1807,17 @@ final class OperationsRenderSweep extends TestCase
                 ->count(),
             'journal lines without an entry' => (int) DB::table('gl_journal_lines')
                 ->whereRaw('`entry_id` not in (select `id` from `gl_journal_entries`)')
+                ->count(),
+            'border gates' => (int) DB::table('border_posts')->where('name', 'like', 'OPR%')->count(),
+            'border crossings' => (int) DB::table('border_crossings')
+                ->whereRaw('`trip_id` not in (select `id` from `trips`)')
+                ->count(),
+            'border costs' => (int) DB::table('border_costs')
+                ->whereRaw('`border_crossing_id` not in (select `id` from `border_crossings`)')
+                ->count(),
+            'border events' => (int) DB::table('operational_events')
+                ->where('aggregate_type', 'border_crossing')
+                ->whereRaw('`aggregate_id` not in (select `id` from `border_crossings`)')
                 ->count(),
         ];
 

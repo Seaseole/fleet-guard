@@ -23,6 +23,7 @@ require __DIR__.'/security.php';
 require __DIR__.'/fleet.php';
 require __DIR__.'/people.php';
 require __DIR__.'/operations.php';
+require __DIR__.'/crossborder.php';
 require __DIR__.'/kiosk.php';
 require __DIR__.'/maintenance.php';
 require __DIR__.'/invoicing.php';

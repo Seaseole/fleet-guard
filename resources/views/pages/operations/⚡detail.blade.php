@@ -13,20 +13,30 @@ use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Operations\Actions\AddLoad;
 use App\Domain\Operations\Actions\AdvanceTrip;
 use App\Domain\Operations\Actions\ApprovePod;
+use App\Domain\Operations\Actions\CaptureBorderCost;
 use App\Domain\Operations\Actions\CloseTrip;
 use App\Domain\Operations\Actions\CompleteTrip;
 use App\Domain\Operations\Actions\DepartTrip;
+use App\Domain\Operations\Actions\FinishBorderCosts;
 use App\Domain\Operations\Actions\HoldTrip;
 use App\Domain\Operations\Actions\IssueTripAccessToken;
+use App\Domain\Operations\Actions\MarkCrossingEntered;
+use App\Domain\Operations\Actions\MarkCrossingExited;
 use App\Domain\Operations\Actions\MarkLoaded;
+use App\Domain\Operations\Actions\PlanBorderCrossing;
 use App\Domain\Operations\Actions\RecordTripCost;
 use App\Domain\Operations\Actions\RejectPod;
 use App\Domain\Operations\Actions\RemoveLoad;
 use App\Domain\Operations\Actions\ReopenTrip;
 use App\Domain\Operations\Actions\RevokeTripAccessToken;
 use App\Domain\Operations\Actions\StopTrip;
+use App\Domain\Operations\BorderCostKind;
+use App\Domain\Operations\BorderCrossingDirection;
+use App\Domain\Operations\Data\BorderCostDto;
 use App\Domain\Operations\Data\LoadDto;
 use App\Domain\Operations\Data\TripCostDto;
+use App\Domain\Operations\Models\BorderCrossing;
+use App\Domain\Operations\Models\BorderPost;
 use App\Domain\Operations\Models\Chargeable;
 use App\Domain\Operations\Models\Load;
 use App\Domain\Operations\Models\ProofOfDelivery;
@@ -64,8 +74,9 @@ use Livewire\Component;
  * projection: `departed_has_odometer` and `odometer_ordered` are engine rules, and a form that starts the
  * driver from a blank box is how they get violated at 06:00.
  *
- * Money is absent. Trip costs are a later Phase 2 slice, and §9.3 hides the margin from the seat that
- * opens this screen most often, so nothing here would be safe to print anyway.
+ * Money and gates follow in their own sections. A trip cost is every seat's to raise only if it holds
+ * `expenses.create`, the margin is hidden from the dispatcher who opens this screen most often (§9.3),
+ * and a crossing is readable with `crossborder.view` but moved only with `crossborder.manage`.
  */
 new #[Title('Trip')] class extends Component
 {
@@ -124,6 +135,29 @@ new #[Title('Trip')] class extends Component
 
     public string $costDescription = '';
 
+    /* The border section (§4.4, §10.9). One shared charge form, opened for one crossing at a time. */
+    public string $crossingPostId = '';
+
+    public string $crossingDirection = BorderCrossingDirection::Entry->value;
+
+    public string $chargeCrossingId = '';
+
+    public string $chargeKind = BorderCostKind::Duty->value;
+
+    public string $chargeAmount = '';
+
+    public string $chargeCurrency = '';
+
+    public string $chargeRate = '1';
+
+    public string $chargeRateSource = FxRateSource::Manual->value;
+
+    public string $chargePaidWith = TripCostPayment::PettyCash->value;
+
+    public string $chargeOccurredOn = '';
+
+    public string $chargeDescription = '';
+
     public function mount(Trip $trip): void
     {
         $this->tripId = $trip->id;
@@ -136,6 +170,8 @@ new #[Title('Trip')] class extends Component
 
         $this->costCurrency = CurrentCompany::model()->base_currency_code;
         $this->costOccurredOn = Carbon::now(CurrentCompany::timezone())->toDateString();
+        $this->chargeCurrency = $this->costCurrency;
+        $this->chargeOccurredOn = $this->costOccurredOn;
     }
 
     public function addLoad(AddLoad $add): void
@@ -442,6 +478,244 @@ new #[Title('Trip')] class extends Component
         $this->costPaidWith = TripCostPayment::PettyCash->value;
         unset($this->trip, $this->tripCosts, $this->chargeables);
         $this->dispatch('toast', message: __('Cost recorded and posted.'), kind: 'success');
+    }
+
+    /* ----------------------------------------------------------- border gates */
+
+    /** §9.3: the Dispatcher reads crossings; only `crossborder.manage` seats move or charge them. */
+    public function canSeeCrossings(): bool
+    {
+        return Gate::allows('crossborder.view') || $this->canManageCrossings();
+    }
+
+    public function canManageCrossings(): bool
+    {
+        return Gate::allows('crossborder.manage');
+    }
+
+    /** @return list<BorderCrossing> */
+    #[Computed]
+    public function crossings(): array
+    {
+        return BorderCrossing::query()
+            ->where('trip_id', $this->tripId)
+            ->with(['post', 'costs'])
+            ->orderBy('created_at')
+            ->get()
+            ->all();
+    }
+
+    /** @return list<array{id: int, label: string}> */
+    #[Computed]
+    public function borderPostChoices(): array
+    {
+        return BorderPost::query()
+            ->orderBy('country_code')
+            ->orderBy('name')
+            ->get()
+            ->map(static fn (BorderPost $post): array => ['id' => $post->id, 'label' => $post->label()])
+            ->all();
+    }
+
+    /** @return list<array{value: string, label: string}> */
+    public function directionOptions(): array
+    {
+        return array_map(
+            static fn (BorderCrossingDirection $direction): array => [
+                'value' => $direction->value,
+                'label' => ucfirst($direction->label()),
+            ],
+            BorderCrossingDirection::cases(),
+        );
+    }
+
+    /** @return list<array{value: string, label: string}> */
+    public function borderKindOptions(): array
+    {
+        return array_map(
+            static fn (BorderCostKind $kind): array => ['value' => $kind->value, 'label' => $kind->label()],
+            BorderCostKind::cases(),
+        );
+    }
+
+    /** The charges a crossing has posted so far, in base minor units — read from the rows, never summed twice. */
+    public function crossingCharges(BorderCrossing $crossing): int
+    {
+        return (int) $crossing->costs->sum('base_amount');
+    }
+
+    public function planCrossing(PlanBorderCrossing $plan): void
+    {
+        $this->validate([
+            'crossingPostId' => ['required', 'integer'],
+            'crossingDirection' => ['required', Rule::in(BorderCrossingDirection::values())],
+        ]);
+
+        $post = BorderPost::query()->find($this->crossingPostId);
+
+        if ($post === null) {
+            $this->addError('crossing', __('That gate is not in the register. Add it on the cross-border screen first.'));
+
+            return;
+        }
+
+        try {
+            $crossing = $plan($this->trip(), $post, BorderCrossingDirection::from($this->crossingDirection), (int) auth()->id());
+        } catch (Throwable $refused) {
+            $this->addError('crossing', $refused->getMessage());
+
+            return;
+        }
+
+        $this->crossingPostId = '';
+        unset($this->crossings);
+        $this->dispatch('toast', message: __('Crossing planned at :gate.', ['gate' => $crossing->label()]), kind: 'success');
+    }
+
+    public function enterCrossing(string $crossingId, MarkCrossingEntered $enter): void
+    {
+        $crossing = $this->crossing($crossingId);
+
+        if ($crossing === null) {
+            return;
+        }
+
+        try {
+            $enter($crossing, actorId: (int) auth()->id());
+        } catch (Throwable $refused) {
+            $this->addError('crossing', $refused->getMessage());
+
+            return;
+        }
+
+        unset($this->crossings);
+        $this->dispatch('toast', message: __('The truck is at :gate.', ['gate' => $crossing->label()]), kind: 'success');
+    }
+
+    public function exitCrossing(string $crossingId, MarkCrossingExited $exit): void
+    {
+        $crossing = $this->crossing($crossingId);
+
+        if ($crossing === null) {
+            return;
+        }
+
+        try {
+            $exit($crossing, actorId: (int) auth()->id());
+        } catch (Throwable $refused) {
+            $this->addError('crossing', $refused->getMessage());
+
+            return;
+        }
+
+        unset($this->crossings);
+        $this->dispatch('toast', message: __('Through :gate — capture the charges now.', ['gate' => $crossing->label()]), kind: 'success');
+    }
+
+    public function finishCrossing(string $crossingId, FinishBorderCosts $finish): void
+    {
+        $crossing = $this->crossing($crossingId);
+
+        if ($crossing === null) {
+            return;
+        }
+
+        try {
+            $finish($crossing, (int) auth()->id());
+        } catch (Throwable $refused) {
+            $this->addError('crossing', $refused->getMessage());
+
+            return;
+        }
+
+        unset($this->crossings);
+        $this->dispatch('toast', message: __(':gate is finished — the costs are in.', ['gate' => $crossing->label()]), kind: 'success');
+    }
+
+    public function openCharge(string $crossingId): void
+    {
+        $crossing = $this->crossing($crossingId);
+
+        if ($crossing === null) {
+            return;
+        }
+
+        $this->reset(['chargeKind', 'chargeAmount', 'chargeRate', 'chargeDescription']);
+        $this->chargeCrossingId = $crossing->id;
+        $this->chargeKind = BorderCostKind::Duty->value;
+        $this->chargeRate = '1';
+        $this->chargeRateSource = FxRateSource::Manual->value;
+        $this->chargePaidWith = TripCostPayment::PettyCash->value;
+        $this->resetValidation();
+
+        $this->dispatch('open-border-charge');
+    }
+
+    /**
+     * Capture one charge at the gate (§4.4). The form parses the amount exactly once and hands the
+     * Action a DTO; the Action creates the border cost, posts its trip cost and refreshes the trip's
+     * rollup in one transaction, so this method has nothing to reconcile afterwards.
+     */
+    public function captureCharge(CaptureBorderCost $capture): void
+    {
+        $crossing = $this->crossing($this->chargeCrossingId);
+
+        if ($crossing === null) {
+            return;
+        }
+
+        $this->validate([
+            'chargeKind' => ['required', Rule::in(BorderCostKind::values())],
+            'chargeAmount' => ['required', 'string'],
+            'chargeCurrency' => ['required', 'string', Rule::exists('currencies', 'code')],
+            'chargeRate' => ['nullable', 'numeric', 'gt:0'],
+            'chargeRateSource' => ['required', Rule::in(array_map(static fn (FxRateSource $source): string => $source->value, FxRateSource::cases()))],
+            'chargePaidWith' => ['required', Rule::in(array_map(static fn (TripCostPayment $payment): string => $payment->value, TripCostPayment::cases()))],
+            'chargeOccurredOn' => ['required', 'date'],
+            'chargeDescription' => ['nullable', 'string', 'max:160'],
+        ]);
+
+        $base = CurrentCompany::model()->base_currency_code;
+        $currency = Currency::normalise($this->chargeCurrency);
+        $occurredOn = Carbon::parse($this->chargeOccurredOn);
+
+        try {
+            $capture($crossing, new BorderCostDto(
+                kind: BorderCostKind::from($this->chargeKind),
+                amount: Money::ofMajor($this->chargeAmount, $currency),
+                rate: $currency === $base ? '1' : (string) $this->chargeRate,
+                rateSource: FxRateSource::from($this->chargeRateSource),
+                rateDate: $occurredOn,
+                occurredOn: $occurredOn,
+                paidWith: TripCostPayment::from($this->chargePaidWith),
+                description: $this->chargeDescription === '' ? null : $this->chargeDescription,
+            ), (int) auth()->id());
+        } catch (Throwable $refused) {
+            $this->addError('charge', $refused->getMessage());
+
+            return;
+        }
+
+        $this->reset(['chargeCrossingId', 'chargeAmount', 'chargeDescription', 'chargeKind', 'chargeRate', 'chargeRateSource', 'chargePaidWith']);
+        $this->chargeKind = BorderCostKind::Duty->value;
+        $this->chargeRate = '1';
+        $this->chargeRateSource = FxRateSource::Manual->value;
+        $this->chargePaidWith = TripCostPayment::PettyCash->value;
+        unset($this->crossings, $this->trip, $this->tripCosts, $this->chargeables);
+        $this->dispatch('close-border-charge');
+        $this->dispatch('toast', message: __('Charge captured and posted.'), kind: 'success');
+    }
+
+    /** A crossing is only ever acted on through this trip's own rows. */
+    private function crossing(string $crossingId): ?BorderCrossing
+    {
+        $crossing = BorderCrossing::query()->where('trip_id', $this->tripId)->find($crossingId);
+
+        if ($crossing === null) {
+            $this->addError('crossing', __('That crossing is not on this trip.'));
+        }
+
+        return $crossing;
     }
 
     /**
@@ -1078,6 +1352,188 @@ new #[Title('Trip')] class extends Component
 
         @error('reason') <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert> @enderror
     </section>
+
+    {{--
+        §10.9's gates on this trip. Three facts shape the section: the crossing is planned before the
+        truck arrives (or backfilled from the paper), the money is captured while it is at the barrier
+        or after it left, and finishing is a person saying the gate is done being charged. The section
+        is readable by every seat with `crossborder.view`; the buttons ask `crossborder.manage`.
+    --}}
+    @if ($this->canSeeCrossings())
+        <section class="grid gap-5 rounded-fg-lg border border-fg-line bg-fg-surface p-5">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <x-ui.subheading>{{ __('Border gates') }}</x-ui.subheading>
+                <a href="{{ route('crossborder.index') }}" class="text-sm text-accent">{{ __('The gate register') }}</a>
+            </div>
+
+            @if ($this->crossings === [])
+                <x-ui.text>{{ __('No gate is planned on this trip. Plan one before the truck reaches the border, or from the paper when it comes back.') }}</x-ui.text>
+            @else
+                <x-ui.table>
+                    <x-slot name="head">
+                        <x-ui.table.th>{{ __('Gate') }}</x-ui.table.th>
+                        <x-ui.table.th>{{ __('Entered') }}</x-ui.table.th>
+                        <x-ui.table.th>{{ __('Exited') }}</x-ui.table.th>
+                        <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
+                        <x-ui.table.th numeric>{{ __('Charges') }}</x-ui.table.th>
+                        @if ($this->canManageCrossings())
+                            <x-ui.table.th class="text-right">{{ __('Actions') }}</x-ui.table.th>
+                        @endif
+                    </x-slot>
+
+                    @foreach ($this->crossings as $crossing)
+                        <tr wire:key="crossing-{{ $crossing->id }}">
+                            <x-ui.table.td>
+                                <span class="block text-fg-ink">{{ $crossing->post?->name ?? __('Gate #:id', ['id' => $crossing->border_post_id]) }}</span>
+                                <span class="block text-xs text-fg-ink-muted">{{ $crossing->country_code }} · {{ $crossing->direction->label() }}</span>
+                                @if ($crossing->transit_doc_no !== null)
+                                    <span class="block text-xs text-fg-ink-muted">{{ __('Transit :no', ['no' => $crossing->transit_doc_no]) }}</span>
+                                @endif
+                            </x-ui.table.td>
+
+                            <x-ui.table.td nowrap>{{ $this->at($crossing->entered_at) }}</x-ui.table.td>
+                            <x-ui.table.td nowrap>
+                                {{ $this->at($crossing->exited_at) }}
+                                @if ($crossing->clearance_state !== null)
+                                    <span class="block text-xs text-fg-ink-muted">{{ $crossing->clearance_state }}</span>
+                                @endif
+                            </x-ui.table.td>
+
+                            <x-ui.table.td>
+                                <x-ui.badge :tone="$crossing->status->tone()">{{ $crossing->status->label() }}</x-ui.badge>
+                            </x-ui.table.td>
+
+                            <x-ui.table.td numeric nowrap>
+                                @if ($crossing->costs->isEmpty())
+                                    <span class="text-fg-ink-muted">{{ __('none') }}</span>
+                                @else
+                                    <span class="text-fg-ink">{{ $this->money($this->crossingCharges($crossing), $this->baseCurrency()) }}</span>
+                                    <span class="block text-xs text-fg-ink-muted">{{ __(':count charge(s)', ['count' => $crossing->costs->count()]) }}</span>
+                                @endif
+                            </x-ui.table.td>
+
+                            @if ($this->canManageCrossings())
+                                <x-ui.table.td class="text-right whitespace-nowrap">
+                                    @if ($crossing->status === App\Domain\Operations\BorderCrossingStatus::Planned)
+                                        <x-ui.button size="xs" variant="ghost" wire:click="enterCrossing('{{ $crossing->id }}')">{{ __('At the gate') }}</x-ui.button>
+                                    @endif
+
+                                    @if ($crossing->status === App\Domain\Operations\BorderCrossingStatus::Entered)
+                                        <x-ui.button size="xs" variant="ghost" wire:click="exitCrossing('{{ $crossing->id }}')">{{ __('Through the gate') }}</x-ui.button>
+                                        <x-ui.button size="xs" variant="ghost" wire:click="openCharge('{{ $crossing->id }}')">{{ __('Add a charge') }}</x-ui.button>
+                                    @endif
+
+                                    @if ($crossing->status === App\Domain\Operations\BorderCrossingStatus::Exited)
+                                        <x-ui.button size="xs" variant="ghost" wire:click="openCharge('{{ $crossing->id }}')">{{ __('Add a charge') }}</x-ui.button>
+                                        <x-ui.button size="xs" wire:click="finishCrossing('{{ $crossing->id }}')">{{ __('Finish the costs') }}</x-ui.button>
+                                    @endif
+                                </x-ui.table.td>
+                            @endif
+                        </tr>
+                    @endforeach
+                </x-ui.table>
+            @endif
+
+            @error('crossing')
+                <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+            @enderror
+
+            @if ($this->canManageCrossings())
+                <form wire:submit="planCrossing" class="flex flex-wrap items-end gap-3 border-t border-fg-line pt-4">
+                    <div class="grid gap-1">
+                        <label for="crossing-post" class="text-sm text-fg-ink">{{ __('Gate') }}</label>
+                        <select id="crossing-post" wire:model="crossingPostId" class="rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <option value="">{{ __('Choose a gate…') }}</option>
+                            @foreach ($this->borderPostChoices as $post)
+                                <option value="{{ $post['id'] }}">{{ $post['label'] }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="grid gap-1">
+                        <label for="crossing-direction" class="text-sm text-fg-ink">{{ __('Direction') }}</label>
+                        <select id="crossing-direction" wire:model="crossingDirection" class="rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            @foreach ($this->directionOptions() as $option)
+                                <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <x-ui.button type="submit" size="sm" variant="outline">{{ __('Plan the crossing') }}</x-ui.button>
+
+                    @if ($this->borderPostChoices === [])
+                        <span class="text-xs text-fg-ink-muted">{{ __('No gate is on file yet — register one from the cross-border screen.') }}</span>
+                    @endif
+                </form>
+            @endif
+        </section>
+
+        {{-- One charge at one gate. The amount is typed once and posted through the trip cost door. --}}
+        @if ($this->canManageCrossings())
+            <x-ui.dialog name="border-charge" :title="__('Capture a border charge')">
+                <form wire:submit="captureCharge" class="grid gap-4 p-5">
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <div class="grid gap-1">
+                            <label for="charge-kind" class="text-sm text-fg-ink">{{ __('What was charged') }}</label>
+                            <select id="charge-kind" wire:model="chargeKind" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                                @foreach ($this->borderKindOptions() as $option)
+                                    <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div class="grid gap-1">
+                            <label for="charge-paid-with" class="text-sm text-fg-ink">{{ __('Paid with') }}</label>
+                            <select id="charge-paid-with" wire:model="chargePaidWith" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                                @foreach ($this->paymentOptions() as $option)
+                                    <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <x-ui.input name="chargeAmount" wire:model="chargeAmount" :label="__('Amount')" />
+
+                        <div class="grid gap-1">
+                            <label for="charge-currency" class="text-sm text-fg-ink">{{ __('Currency') }}</label>
+                            <select id="charge-currency" wire:model="chargeCurrency" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                                @foreach ($this->currencyOptions() as $option)
+                                    <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <x-ui.input name="chargeRate" wire:model="chargeRate" :label="__('Rate to :currency (1 foreign = ?)', ['currency' => $this->baseCurrency()])" type="number" step="0.00000001" />
+
+                        <div class="grid gap-1">
+                            <label for="charge-rate-source" class="text-sm text-fg-ink">{{ __('Where the rate came from') }}</label>
+                            <select id="charge-rate-source" wire:model="chargeRateSource" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                                @foreach ($this->rateSourceOptions() as $option)
+                                    <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <x-ui.input name="chargeOccurredOn" wire:model="chargeOccurredOn" :label="__('What date was it paid')" type="date" />
+
+                        <x-ui.input name="chargeDescription" wire:model="chargeDescription" :label="__('Note (optional)')" />
+                    </div>
+
+                    <p class="text-xs text-fg-ink-muted">
+                        {{ __('The charge posts to the ledger in this step, as a border cost on the trip — the eight §5.2 columns are copied from that posting, so the gate and the books cannot disagree.') }}
+                    </p>
+
+                    @error('charge')
+                        <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                    @enderror
+
+                    <div class="flex items-center justify-between gap-3">
+                        <x-ui.button type="submit">{{ __('Capture and post') }}</x-ui.button>
+                        <x-ui.button type="button" variant="ghost" x-on:click="$dispatch('close-border-charge')">{{ __('Cancel') }}</x-ui.button>
+                    </div>
+                </form>
+            </x-ui.dialog>
+        @endif
+    @endif
 
     {{--
         §6.6's money on one screen. Three abilities shape it and none of them widens another: raising a

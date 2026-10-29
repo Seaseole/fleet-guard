@@ -118,8 +118,11 @@ final class ArchitectureLint
             return;
         }
 
+        // `LineDto`, `Side` and `PostingDto` are the *input vocabulary* of the one door, not an
+        // alternative to it: a module cannot build a posting without naming its lines. The ban is
+        // on the models and the barrier, which reading or writing directly would bypass the service.
         foreach ($this->imports($contents) as $import) {
-            if (preg_match('#^App\\\\Domain\\\\Kernel\\\\Ledger\\\\(Models|Data)\\\\(JournalEntry|JournalLine|Account|Period|LedgerBarrier|LineDto)#', $import, $m)) {
+            if (preg_match('#^App\\\\Domain\\\\Kernel\\\\Ledger\\\\(Models|Data)\\\\(JournalEntry|JournalLine|Account|Period|LedgerBarrier)#', $import, $m)) {
                 $this->fail($file, "D3: touches ledger internals ({$m[2]}) — modules post through LedgerService::post(PostingDto)");
             }
         }

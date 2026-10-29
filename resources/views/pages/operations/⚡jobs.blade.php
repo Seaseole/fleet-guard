@@ -321,10 +321,11 @@ new #[Title('Jobs')] class extends Component {
     public function jobs(): LengthAwarePaginator
     {
         $search = trim($this->search);
+        $status = $this->statusFilter;
 
         return Job::query()
             ->with(['customer:id,name,code', 'route:id,code,origin,destination', 'trips'])
-            ->when($this->statusFilter !== '', static fn ($q) => $q->where('status', $this->statusFilter))
+            ->when($status !== '', static fn ($q) => $q->where('status', $status))
             ->when($search !== '', function ($q) use ($search): void {
                 $q->where(static function ($inner) use ($search): void {
                     $inner->where('job_no', 'like', "%{$search}%")
