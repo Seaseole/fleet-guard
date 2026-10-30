@@ -291,22 +291,22 @@ new #[Title('Documents')] class extends Component {
 
                 <div class="grid gap-1.5">
                     <label for="type-filter" class="text-xs font-medium text-fg-ink-secondary">{{ __('Type') }}</label>
-                    <select id="type-filter" wire:model.live="type" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                    <x-ui.select name="type" id="type-filter" wire:model.live="type">
                         <option value="">{{ __('All types') }}</option>
                         @foreach (DocumentType::cases() as $case)
                             <option value="{{ $case->value }}">{{ $case->label() }}</option>
                         @endforeach
-                    </select>
+                    </x-ui.select>
                 </div>
 
                 <div class="grid gap-1.5">
                     <label for="lifecycle-filter" class="text-xs font-medium text-fg-ink-secondary">{{ __('Lifecycle') }}</label>
-                    <select id="lifecycle-filter" wire:model.live="lifecycle" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                    <x-ui.select name="lifecycle" id="lifecycle-filter" wire:model.live="lifecycle">
                         <option value="">{{ __('All states') }}</option>
                         @foreach (DocumentLifecycle::cases() as $case)
                             <option value="{{ $case->value }}">{{ $case->label() }}</option>
                         @endforeach
-                    </select>
+                    </x-ui.select>
                 </div>
 
                 <x-ui.button

@@ -161,12 +161,12 @@ new #[Title('Users and roles')] class extends Component {
 
                 <div class="grid gap-1.5">
                     <label for="role-filter" class="text-xs font-medium text-fg-ink-secondary">{{ __('Role') }}</label>
-                    <select id="role-filter" wire:model.live="roleFilter" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                    <x-ui.select name="roleFilter" id="role-filter" wire:model.live="roleFilter">
                         <option value="">{{ __('All roles') }}</option>
                         @foreach (RoleKey::cases() as $option)
                             <option value="{{ $option->value }}">{{ $option->label() }}</option>
                         @endforeach
-                    </select>
+                    </x-ui.select>
                 </div>
 
                 <x-ui.button variant="ghost" size="sm" wire:click="clearFilters" class="self-end" :disabled="! $this->hasFilters()">
@@ -208,8 +208,7 @@ new #[Title('Users and roles')] class extends Component {
                                 @endif
 
                                 @if (Gate::allows('users.manage') && $person->id !== auth()->id())
-                                    <select
-                                        class="ms-2 w-44 rounded-fg-sm border border-fg-line-strong bg-fg-surface px-2 py-1 text-xs text-fg-ink"
+                                    <x-ui.select
                                         wire:change="changeRole({{ $person->id }}, $event.target.value)"
                                         aria-label="{{ __('Change role') }}"
                                     >
@@ -220,7 +219,7 @@ new #[Title('Users and roles')] class extends Component {
                                                 {{ $option->label() }}
                                             </option>
                                         @endforeach
-                                    </select>
+                                    </x-ui.select>
                                 @endif
                             </x-ui.table.td>
 
@@ -274,11 +273,11 @@ new #[Title('Users and roles')] class extends Component {
                         <div class="grid gap-1.5">
                             <label for="inviteRole" class="text-xs font-medium text-fg-ink-secondary">{{ __('Role') }}</label>
 
-                            <select id="inviteRole" wire:model.live="inviteRole" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="inviteRole" id="inviteRole" wire:model.live="inviteRole">
                                 @foreach (\App\Domain\Kernel\Identity\RoleKey::invitable() as $key)
                                     <option value="{{ $key }}">{{ \App\Domain\Kernel\Identity\RoleKey::fromKey($key)->label() }}</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
 
                             <x-ui.text size="xs" color="muted">{{ \App\Domain\Kernel\Identity\RoleKey::fromKey($inviteRole)->description() }}</x-ui.text>
                         </div>

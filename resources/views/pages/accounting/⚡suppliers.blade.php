@@ -237,23 +237,23 @@ new #[Title('Suppliers')] class extends Component {
             <div class="grid gap-1.5">
                 <label for="suppliers-status-filter" class="text-xs font-medium text-fg-ink-secondary">{{ __('Status') }}</label>
 
-                <select id="suppliers-status-filter" wire:model.live="statusFilter" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                <x-ui.select name="statusFilter" id="suppliers-status-filter" wire:model.live="statusFilter">
                     <option value="">{{ __('All') }}</option>
                     <option value="active">{{ __('Active') }}</option>
                     <option value="inactive">{{ __('Retired') }}</option>
-                </select>
+                </x-ui.select>
             </div>
 
             <div class="grid gap-1.5">
                 <label for="suppliers-category-filter" class="text-xs font-medium text-fg-ink-secondary">{{ __('Category') }}</label>
 
-                <select id="suppliers-category-filter" wire:model.live="categoryFilter" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                <x-ui.select name="categoryFilter" id="suppliers-category-filter" wire:model.live="categoryFilter">
                     <option value="">{{ __('Every category') }}</option>
 
                     @foreach ($this->categories() as $option)
                         <option value="{{ $option->value }}">{{ $option->label() }}</option>
                     @endforeach
-                </select>
+                </x-ui.select>
             </div>
 
             <x-ui.button variant="ghost" size="sm" wire:click="clearFilters" class="self-end" :disabled="! $this->hasFilters()">
@@ -355,15 +355,12 @@ new #[Title('Suppliers')] class extends Component {
                     <div class="grid gap-1.5">
                         <label for="supplier-category" class="text-xs font-medium text-fg-ink-secondary">{{ __('Category') }}</label>
 
-                        <select id="supplier-category" wire:model="category" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                        <x-ui.select name="category" id="supplier-category" wire:model="category">
                             @foreach ($this->categories() as $option)
                                 <option value="{{ $option->value }}">{{ $option->label() }}</option>
                             @endforeach
-                        </select>
+                        </x-ui.select>
 
-                        @error('category')
-                            <p class="text-xs text-danger" role="alert">{{ $message }}</p>
-                        @enderror
                     </div>
 
                     <x-ui.input wire:model="contactName" name="contactName" :label="__('Contact person (optional)')" />
@@ -374,15 +371,12 @@ new #[Title('Suppliers')] class extends Component {
                     <div class="grid gap-1.5">
                         <label for="supplier-terms" class="text-xs font-medium text-fg-ink-secondary">{{ __('Payment terms') }}</label>
 
-                        <select id="supplier-terms" wire:model="paymentTerms" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                        <x-ui.select name="paymentTerms" id="supplier-terms" wire:model="paymentTerms">
                             @foreach ($this->termsOptions() as $term)
                                 <option value="{{ $term }}">{{ $this->termsLabel($term) }}</option>
                             @endforeach
-                        </select>
+                        </x-ui.select>
 
-                        @error('paymentTerms')
-                            <p class="text-xs text-danger" role="alert">{{ $message }}</p>
-                        @enderror
                     </div>
                 </div>
 

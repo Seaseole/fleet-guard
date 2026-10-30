@@ -212,11 +212,11 @@ new #[Title('Register a document')] class extends Component {
             <div class="grid gap-4">
                 <div>
                     <label for="type" class="mb-1.5 block text-sm font-medium text-fg-ink">{{ __('Type') }}</label>
-                    <select id="type" wire:model.live="type" @disabled($locked) class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                    <x-ui.select name="type" id="type" wire:model.live="type" @disabled($locked)>
                         @foreach (\App\Domain\Kernel\Documents\DocumentType::cases() as $case)
                             <option value="{{ $case->value }}">{{ $case->label() }}</option>
                         @endforeach
-                    </select>
+                    </x-ui.select>
                     @if (! $this->currentType->expires())
                         <x-ui.text size="xs" color="muted">{{ __('A :type records something that already happened and does not expire.', ['type' => strtolower($this->currentType->label())]) }}</x-ui.text>
                     @endif
@@ -228,11 +228,11 @@ new #[Title('Register a document')] class extends Component {
 
                 <div>
                     <label for="retentionClass" class="mb-1.5 block text-sm font-medium text-fg-ink">{{ __('Retention class') }}</label>
-                    <select id="retentionClass" wire:model="retentionClass" @disabled($locked) class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                    <x-ui.select name="retentionClass" id="retentionClass" wire:model="retentionClass" @disabled($locked)>
                         @foreach (\App\Domain\Kernel\Documents\RetentionClass::cases() as $case)
                             <option value="{{ $case->value }}">{{ $case->label() }}</option>
                         @endforeach
-                    </select>
+                    </x-ui.select>
                 </div>
 
                 <x-ui.input type="file" name="file" wire:model="file" :label="$locked ? __('Attach a replacement file') : __('The file (optional now)')" :hint="__('Accepted: :types · maximum :max MB — the content is sniffed, not the extension.', [

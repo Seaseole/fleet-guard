@@ -749,16 +749,13 @@ new #[Title('Fleet')] class extends Component {
                         <div class="grid gap-1.5">
                             <label for="status-to" class="text-xs font-medium text-fg-ink-secondary">{{ __('Move to') }}</label>
 
-                            <select id="status-to" wire:model="statusTo" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="statusTo" id="status-to" wire:model="statusTo">
                                 <option value="">{{ __('Choose a state') }}</option>
                                 @foreach ($this->statusTarget['allowed'] as $status)
                                     <option value="{{ $status->value }}">{{ $status->label() }}</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
 
-                            @error('statusTo')
-                                <p class="text-xs text-danger" role="alert">{{ $message }}</p>
-                            @enderror
                         </div>
 
                         <x-ui.input wire:model="statusReason" name="statusReason" :label="__('Reason')" :hint="__('Required for out of service and sold.')" />
@@ -786,12 +783,12 @@ new #[Title('Fleet')] class extends Component {
             <div class="grid gap-1.5">
                 <label for="status-filter" class="text-xs font-medium text-fg-ink-secondary">{{ __('Status') }}</label>
 
-                <select id="status-filter" wire:model.live="statusFilter" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                <x-ui.select name="statusFilter" id="status-filter" wire:model.live="statusFilter">
                     <option value="">{{ __('Every state') }}</option>
                     @foreach ($this->statuses() as $status)
                         <option value="{{ $status->value }}">{{ $status->label() }}</option>
                     @endforeach
-                </select>
+                </x-ui.select>
             </div>
 
             <x-ui.button variant="ghost" size="sm" wire:click="clearFilters" class="self-end" :disabled="! $this->hasFilters()">
@@ -1063,11 +1060,11 @@ new #[Title('Fleet')] class extends Component {
                         <div class="grid gap-1.5">
                             <label for="trailer-type" class="text-xs font-medium text-fg-ink-secondary">{{ __('Type') }}</label>
 
-                            <select id="trailer-type" wire:model="trailerType" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="trailerType" id="trailer-type" wire:model="trailerType">
                                 @foreach (\App\Domain\Fleet\Data\TrailerDto::TYPES as $type)
                                     <option value="{{ $type }}">{{ ucfirst($type) }}</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
                         </div>
 
                         <x-ui.input wire:model="capacityTonnes" name="capacityTonnes" type="number" step="0.01" numeric :label="__('Capacity, tonnes (optional)')" />
@@ -1081,11 +1078,11 @@ new #[Title('Fleet')] class extends Component {
                         <div class="grid gap-1.5">
                             <label for="equipment-kind" class="text-xs font-medium text-fg-ink-secondary">{{ __('Kind') }}</label>
 
-                            <select id="equipment-kind" wire:model="equipmentKind" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="equipmentKind" id="equipment-kind" wire:model="equipmentKind">
                                 @foreach (\App\Domain\Fleet\Data\EquipmentDto::KINDS as $kind)
                                     <option value="{{ $kind }}">{{ ucfirst($kind) }}</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
                         </div>
                     </div>
                 @endif

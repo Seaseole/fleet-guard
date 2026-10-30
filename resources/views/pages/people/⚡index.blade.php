@@ -520,16 +520,13 @@ new #[Title('People')] class extends Component {
                         <div class="grid gap-1.5">
                             <label for="driver-status-to" class="text-xs font-medium text-fg-ink-secondary">{{ __('Move to') }}</label>
 
-                            <select id="driver-status-to" wire:model="statusTo" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="statusTo" id="driver-status-to" wire:model="statusTo">
                                 <option value="">{{ __('Choose a state') }}</option>
                                 @foreach ($this->statusTarget['allowed'] as $status)
                                     <option value="{{ $status->value }}">{{ $status->label() }}</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
 
-                            @error('statusTo')
-                                <p class="text-xs text-danger" role="alert">{{ $message }}</p>
-                            @enderror
                         </div>
 
                         <x-ui.input wire:model="statusReason" name="statusReason" :label="__('Reason')" :hint="__('Required for suspension and leaving.')" />
@@ -556,7 +553,7 @@ new #[Title('People')] class extends Component {
             <div class="grid gap-1.5">
                 <label for="people-status-filter" class="text-xs font-medium text-fg-ink-secondary">{{ __('Status') }}</label>
 
-                <select id="people-status-filter" wire:model.live="statusFilter" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                <x-ui.select name="statusFilter" id="people-status-filter" wire:model.live="statusFilter">
                     <option value="">{{ $tab === 'employees' ? __('Everyone') : __('Every state') }}</option>
 
                     @if ($tab === 'employees')
@@ -567,7 +564,7 @@ new #[Title('People')] class extends Component {
                             <option value="{{ $status->value }}">{{ $status->label() }}</option>
                         @endforeach
                     @endif
-                </select>
+                </x-ui.select>
             </div>
 
             <x-ui.button variant="ghost" size="sm" wire:click="clearFilters" class="self-end" :disabled="! $this->hasFilters()">
@@ -768,11 +765,11 @@ new #[Title('People')] class extends Component {
                             <div class="grid gap-1.5">
                                 <label for="pay-frequency" class="text-xs font-medium text-fg-ink-secondary">{{ __('Paid') }}</label>
 
-                                <select id="pay-frequency" wire:model="payFrequency" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                                <x-ui.select name="payFrequency" id="pay-frequency" wire:model="payFrequency">
                                     @foreach (\App\Domain\People\Data\EmployeeDto::PAY_FREQUENCIES as $frequency)
                                         <option value="{{ $frequency }}">{{ ucfirst($frequency) }}</option>
                                     @endforeach
-                                </select>
+                                </x-ui.select>
                             </div>
                         @endif
                     </div>
@@ -784,20 +781,17 @@ new #[Title('People')] class extends Component {
                             <div class="grid gap-1.5">
                                 <label for="driver-employee" class="text-xs font-medium text-fg-ink-secondary">{{ __('Employee') }}</label>
 
-                                <select id="driver-employee" wire:model="driverEmployeeId" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                                <x-ui.select name="driverEmployeeId" id="driver-employee" wire:model="driverEmployeeId">
                                     <option value="">{{ __('Choose an employee') }}</option>
                                     @foreach ($this->driverCandidates as $candidate)
                                         <option value="{{ $candidate->id }}">{{ $candidate->name }} — {{ $candidate->employee_no }}</option>
                                     @endforeach
-                                </select>
+                                </x-ui.select>
 
                                 @if ($this->driverCandidates->isEmpty())
                                     <p class="text-xs text-fg-ink-muted">{{ __('Every active employee already has a driver record. Add the person as an employee first.') }}</p>
                                 @endif
 
-                                @error('driverEmployeeId')
-                                    <p class="text-xs text-danger" role="alert">{{ $message }}</p>
-                                @enderror
                             </div>
                         @else
                             <div class="grid gap-1.5">

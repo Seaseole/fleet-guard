@@ -645,25 +645,22 @@ new #[Title('Dispatch')] class extends Component {
 
             <div class="grid gap-1">
                 <label for="plan-job" class="text-sm text-fg-ink">{{ __('Job') }}</label>
-                <select
+                <x-ui.select name="planJobId"
                     id="plan-job"
                     wire:model="planJobId"
-                    class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink"
                 >
                     <option value="">{{ __('Choose an accepted job…') }}</option>
                     @foreach ($this->jobChoices as $job)
                         <option value="{{ $job['id'] }}">{{ $job['label'] }}</option>
                     @endforeach
-                </select>
-                @error('planJobId') <span class="text-xs text-danger">{{ $message }}</span> @enderror
+                </x-ui.select>
             </div>
 
             <div class="grid gap-1">
                 <label for="plan-driver" class="text-sm text-fg-ink">{{ __('Driver') }}</label>
-                <select
+                <x-ui.select name="planDriverId"
                     id="plan-driver"
                     wire:model="planDriverId"
-                    class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink"
                 >
                     <option value="">{{ __('Choose a driver…') }}</option>
                     @foreach ($this->driverChoices as $driver)
@@ -671,8 +668,7 @@ new #[Title('Dispatch')] class extends Component {
                             {{ $driver['label'] }}{{ $driver['eligible'] ? '' : ' — '.$driver['why'] }}
                         </option>
                     @endforeach
-                </select>
-                @error('planDriverId') <span class="text-xs text-danger">{{ $message }}</span> @enderror
+                </x-ui.select>
                 <p class="text-xs text-fg-ink-muted">
                     {{ __('A driver whose papers do not cover the day is still listed — dispatch refuses at the commitment and says why (§10.2).') }}
                 </p>
@@ -681,16 +677,15 @@ new #[Title('Dispatch')] class extends Component {
             @if ($this->trailers->isNotEmpty())
                 <div class="grid gap-1">
                     <label for="plan-trailer" class="text-sm text-fg-ink">{{ __('Trailer (optional)') }}</label>
-                    <select
+                    <x-ui.select name="planTrailerId"
                         id="plan-trailer"
                         wire:model="planTrailerId"
-                        class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink"
                     >
                         <option value="">{{ __('None — truck only') }}</option>
                         @foreach ($this->trailers as $trailer)
                             <option value="{{ $trailer->id }}">{{ $trailer->label }}</option>
                         @endforeach
-                    </select>
+                    </x-ui.select>
                 </div>
             @endif
 

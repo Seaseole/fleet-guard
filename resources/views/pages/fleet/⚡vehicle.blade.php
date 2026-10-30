@@ -446,16 +446,13 @@ new #[Title('Vehicle')] class extends Component {
                         <div class="grid gap-1.5">
                             <label for="status-to" class="text-xs font-medium text-fg-ink-secondary">{{ __('Move to') }}</label>
 
-                            <select id="status-to" wire:model="statusTo" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="statusTo" id="status-to" wire:model="statusTo">
                                 <option value="">{{ __('Choose a state') }}</option>
                                 @foreach ($this->statusActions['allowed'] as $status)
                                     <option value="{{ $status->value }}">{{ $status->label() }}</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
 
-                            @error('statusTo')
-                                <p class="text-xs text-danger" role="alert">{{ $message }}</p>
-                            @enderror
                         </div>
 
                         <x-ui.input wire:model="statusReason" name="statusReason" :label="__('Reason')" :hint="__('Required for out of service and sold.')" />
@@ -504,26 +501,23 @@ new #[Title('Vehicle')] class extends Component {
                         <div class="grid gap-1.5">
                             <label for="assignment-trailer" class="text-xs font-medium text-fg-ink-secondary">{{ __('Trailer (optional)') }}</label>
 
-                            <select id="assignment-trailer" wire:model="trailerId" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="trailerId" id="assignment-trailer" wire:model="trailerId">
                                 <option value="">{{ __('No trailer') }}</option>
                                 @foreach ($this->availableTrailers as $trailer)
                                     <option value="{{ $trailer->id }}">{{ $trailer->label() }}@if ($trailer->type) — {{ ucfirst($trailer->type) }}@endif</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
 
                             @if ($this->availableTrailers->isEmpty())
                                 <p class="text-xs text-fg-ink-muted">{{ __('No trailer is available right now.') }}</p>
                             @endif
 
-                            @error('trailerId')
-                                <p class="text-xs text-danger" role="alert">{{ $message }}</p>
-                            @enderror
                         </div>
 
                         <div class="grid gap-1.5">
                             <label for="assignment-driver" class="text-xs font-medium text-fg-ink-secondary">{{ __('Driver (optional)') }}</label>
 
-                            <select id="assignment-driver" wire:model="driverId" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="driverId" id="assignment-driver" wire:model="driverId">
                                 <option value="">{{ __('No driver') }}</option>
                                 @foreach ($this->assignableDrivers as $option)
                                     <option value="{{ $option->id }}">
@@ -532,13 +526,10 @@ new #[Title('Vehicle')] class extends Component {
                                         · {{ __('permit') }} {{ $option->permitExpiresOn?->format('d M Y') ?? __('none on file') }}
                                     </option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
 
                             <p class="text-xs text-fg-ink-muted">{{ __('A driver whose status or papers do not cover the start date is refused.') }}</p>
 
-                            @error('driverId')
-                                <p class="text-xs text-danger" role="alert">{{ $message }}</p>
-                            @enderror
                         </div>
 
                         <x-ui.input wire:model="assignmentReason" name="assignmentReason" :label="__('Note (optional)')" />

@@ -230,7 +230,7 @@ new #[Title('New journal entry')] class extends Component
                                 <legend class="sr-only">{{ __('Journal line :n', ['n' => $index + 1]) }}</legend>
                                 <div class="grid gap-1.5 sm:col-span-5">
                                     <span class="text-xs font-medium text-fg-ink-secondary sm:hidden" aria-hidden="true">{{ __('Account') }}</span>
-                                    <select
+                                    <x-ui.select
                                         wire:model="rows.{{ $index }}.account"
                                         aria-label="{{ __('Account for line :n', ['n' => $index + 1]) }}"
                                         class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink"
@@ -239,7 +239,7 @@ new #[Title('New journal entry')] class extends Component
                                         @foreach ($this->accounts as $account)
                                             <option value="{{ $account->code }}">{{ $account->code }} — {{ $account->name }}</option>
                                         @endforeach
-                                    </select>
+                                    </x-ui.select>
                                 </div>
 
                                 <div class="grid gap-1.5 sm:col-span-3">

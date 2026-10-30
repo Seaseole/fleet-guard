@@ -2791,6 +2791,50 @@ and an audit claim that `security/queues` also used unlabelled `<button>` toggle
 screen has no `<button>` elements at all. Checked before repeating it, which is the order these entries should
 follow.
 
+### 20.23 Design-system fix — 2026-10-30, the form control that was copied 64 times
+
+**What changed.** `resources/views/components/ui/select.blade.php` is the app's select primitive: `x-ui.input`'s
+prop set (`label`, `name`, `hint`, `error`) plus `options` and `placeholder`, with the same error contract — the
+control gets `aria-invalid` and the message occupies the `aria-describedby` slot the hint would otherwise use, so
+one region explains either state. 64 raw `<select>` blocks across 18 page files were converted to it (the trip page
+alone held 11), each losing its copied class string.
+
+**Why it was worth a slice.** Every one of the 64 copies had drifted: they kept `w-full rounded-fg-sm border …` and
+dropped the hover, focus-transition and disabled treatment that `x-ui.input` owns, and **none of them carried
+`aria-invalid`** — a select rejected by a gate looked, to the control itself, exactly like a valid one. Adding a
+`name` derived from the `wire:model` property is what makes the primitive's label/error wiring reachable from a
+page at all. A token change that used to need 64 edits is now one.
+
+**What the primitive then took over.** Giving each select a `name` is what makes `x-ui.select`'s error slot work,
+because the component reads the shared `$errors` bag the same way `x-ui.input` does — and 22 pages already printed
+that message themselves, in a bare `@error('<same field>') <p role="alert">{{ $message }}</p> @enderror` beside the
+control. Left in place, every refusal on those fields would have appeared twice, one copy wired to `aria-describedby`
+and one not. All 22 blocks were dropped after each was read individually (every body was a plain message echo — none
+carried a title, a retry action, or a directive, so the component's version is strictly better), and
+`scripts/render-operations.php` now counts the rendered sentence for the job form's customer field: two copies fails
+the sweep, zero copies fails it too, since that means `$errors` never reached the component.
+
+**Enforcement.** `scripts/lint-ui.php` rule **U2** fails the build on a raw `<select>` inside `resources/views/pages`,
+enabled in the same commit that removed the last one. The primitive is the only route to the element, which is the
+same shape as §9.5's paired-CHECK argument: the rule that survives is the one that makes the wrong thing
+unrepresentable rather than the one that nags.
+
+**Verification.** `lint-ui` PASS (38 page files, 48 containers, rules U1,U2,U4); `pint` PASS; all four render sweeps
+re-run — `render-master`, `render-operations`, `render-kiosk` (0 failed), `render-cutover` — because a template
+change at 64 sites reaches nearly every screen, and a sweep that skips a page it did not edit is not a sweep. On top
+of those, a throwaway probe requested every parameterless GET route as the Owner: 29 screens rendered 200, 14
+redirected (auth-flow pages bouncing an already-signed-in seat, and §9.1's re-auth gates on the sensitive screens),
+1 returned 204, and nothing answered 403 or 5xx. A second one-off walked every `<label for>` in the pages: all 67
+targets still resolve to an element, so the swap did not orphan a label. Both probes were deleted after running —
+they are coverage, not gates, and a script that never fails is a script that gets ignored.
+
+**Honest gaps.** The conversion is textual: it moved attributes and dropped classes, it did not read each field's
+`options` for whether a placeholder is the right empty state, and where a page already rendered its own `<label>`
+the component's `label` prop stays unused. `hint` was not invented for any of them. Nothing proves a select is
+*reachable* in the sense of P0-3's kiosk contract — this slice fixed the control's error semantics, not its
+keyboard path, and no browser pass was run. U3 (every `x-ui.table` carries a `:caption`) is still pending and lands
+with #17, which is the other half of the form-and-table cleanup.
+
 ---
 
 **End of design document.**

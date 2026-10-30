@@ -422,15 +422,12 @@ new #[Title('Cutover')] class extends Component
             <form class="grid gap-4" wire:submit="validateFile">
                 <div class="grid gap-1.5">
                     <label for="dataset" class="text-xs font-medium text-fg-ink-secondary">{{ __('What is this file?') }}</label>
-                    <select id="dataset" wire:model.live="dataset" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                    <x-ui.select name="dataset" id="dataset" wire:model.live="dataset">
                         @foreach ($this->datasetOptions() as $value => $label)
                             <option value="{{ $value }}">{{ $label }}</option>
                         @endforeach
-                    </select>
+                    </x-ui.select>
                     <x-ui.text size="xs" color="muted">{{ $this->datasetDescription() }}</x-ui.text>
-                    @error('dataset')
-                        <x-ui.text size="xs" class="text-danger">{{ $message }}</x-ui.text>
-                    @enderror
                 </div>
 
                 <x-ui.input

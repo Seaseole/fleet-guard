@@ -239,23 +239,23 @@ new #[Title('Parts')] class extends Component {
             <div class="grid gap-1.5">
                 <label for="parts-status-filter" class="text-xs font-medium text-fg-ink-secondary">{{ __('Status') }}</label>
 
-                <select id="parts-status-filter" wire:model.live="statusFilter" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                <x-ui.select name="statusFilter" id="parts-status-filter" wire:model.live="statusFilter">
                     <option value="">{{ __('All') }}</option>
                     <option value="active">{{ __('Active') }}</option>
                     <option value="inactive">{{ __('Retired') }}</option>
-                </select>
+                </x-ui.select>
             </div>
 
             <div class="grid gap-1.5">
                 <label for="parts-category-filter" class="text-xs font-medium text-fg-ink-secondary">{{ __('Category') }}</label>
 
-                <select id="parts-category-filter" wire:model.live="categoryFilter" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                <x-ui.select name="categoryFilter" id="parts-category-filter" wire:model.live="categoryFilter">
                     <option value="">{{ __('Every shelf') }}</option>
 
                     @foreach ($this->categories() as $option)
                         <option value="{{ $option->value }}">{{ $option->label() }}</option>
                     @endforeach
-                </select>
+                </x-ui.select>
             </div>
 
             <x-ui.button variant="ghost" size="sm" wire:click="clearFilters" class="self-end" :disabled="! $this->hasFilters()">
@@ -352,15 +352,12 @@ new #[Title('Parts')] class extends Component {
                     <div class="grid gap-1.5">
                         <label for="part-category" class="text-xs font-medium text-fg-ink-secondary">{{ __('Category') }}</label>
 
-                        <select id="part-category" wire:model="category" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                        <x-ui.select name="category" id="part-category" wire:model="category">
                             @foreach ($this->categories() as $option)
                                 <option value="{{ $option->value }}">{{ $option->label() }}</option>
                             @endforeach
-                        </select>
+                        </x-ui.select>
 
-                        @error('category')
-                            <p class="text-xs text-danger" role="alert">{{ $message }}</p>
-                        @enderror
                     </div>
 
                     <x-ui.input wire:model="unitCost" name="unitCost" numeric :label="__('Unit cost (optional)')" :hint="__('What one unit is bought for, in the currency chosen.')" />
@@ -368,15 +365,12 @@ new #[Title('Parts')] class extends Component {
                     <div class="grid gap-1.5">
                         <label for="part-currency" class="text-xs font-medium text-fg-ink-secondary">{{ __('Currency') }}</label>
 
-                        <select id="part-currency" wire:model="currency" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                        <x-ui.select name="currency" id="part-currency" wire:model="currency">
                             @foreach ($this->currencies() as $option)
                                 <option value="{{ $option->code }}">{{ $option->code }} — {{ $option->name }}</option>
                             @endforeach
-                        </select>
+                        </x-ui.select>
 
-                        @error('currency')
-                            <p class="text-xs text-danger" role="alert">{{ $message }}</p>
-                        @enderror
                     </div>
 
                     <x-ui.input wire:model="reorderLevel" name="reorderLevel" numeric :label="__('Reorder at (optional)')" :hint="__('Units on hand at which the store should reorder.')" />
@@ -384,17 +378,14 @@ new #[Title('Parts')] class extends Component {
                     <div class="grid gap-1.5">
                         <label for="part-truck" class="text-xs font-medium text-fg-ink-secondary">{{ __('Fits one truck (optional)') }}</label>
 
-                        <select id="part-truck" wire:model="truckId" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                        <x-ui.select name="truckId" id="part-truck" wire:model="truckId">
                             <option value="">{{ __('Any truck') }}</option>
 
                             @foreach ($this->trucks as $truck)
                                 <option value="{{ $truck->id }}">{{ $truck->label() }}</option>
                             @endforeach
-                        </select>
+                        </x-ui.select>
 
-                        @error('truckId')
-                            <p class="text-xs text-danger" role="alert">{{ $message }}</p>
-                        @enderror
                     </div>
                 </div>
 

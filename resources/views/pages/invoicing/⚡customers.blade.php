@@ -233,11 +233,11 @@ new #[Title('Customers')] class extends Component {
             <div class="grid gap-1.5">
                 <label for="customers-status-filter" class="text-xs font-medium text-fg-ink-secondary">{{ __('Status') }}</label>
 
-                <select id="customers-status-filter" wire:model.live="statusFilter" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                <x-ui.select name="statusFilter" id="customers-status-filter" wire:model.live="statusFilter">
                     <option value="">{{ __('Everyone') }}</option>
                     <option value="active">{{ __('Active') }}</option>
                     <option value="inactive">{{ __('Retired') }}</option>
-                </select>
+                </x-ui.select>
             </div>
 
             <x-ui.button variant="ghost" size="sm" wire:click="clearFilters" class="self-end" :disabled="! $this->hasFilters()">
@@ -347,15 +347,12 @@ new #[Title('Customers')] class extends Component {
                         <div class="grid gap-1.5">
                             <label for="customer-terms" class="text-xs font-medium text-fg-ink-secondary">{{ __('Payment terms') }}</label>
 
-                            <select id="customer-terms" wire:model="paymentTerms" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="paymentTerms" id="customer-terms" wire:model="paymentTerms">
                                 @foreach ($this->termsOptions() as $term)
                                     <option value="{{ $term }}">{{ $this->termsLabel($term) }}</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
 
-                            @error('paymentTerms')
-                                <p class="text-xs text-danger" role="alert">{{ $message }}</p>
-                            @enderror
                         </div>
                     @endif
                 </div>

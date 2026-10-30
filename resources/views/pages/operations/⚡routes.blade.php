@@ -422,11 +422,11 @@ new #[Title('Routes')] class extends Component {
             <div class="grid gap-1.5">
                 <label for="routes-status-filter" class="text-xs font-medium text-fg-ink-secondary">{{ __('Status') }}</label>
 
-                <select id="routes-status-filter" wire:model.live="statusFilter" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                <x-ui.select name="statusFilter" id="routes-status-filter" wire:model.live="statusFilter">
                     <option value="">{{ __('Every corridor') }}</option>
                     <option value="active">{{ __('Active') }}</option>
                     <option value="inactive">{{ __('Retired') }}</option>
-                </select>
+                </x-ui.select>
             </div>
 
             <x-ui.button variant="ghost" size="sm" wire:click="clearFilters" class="self-end" :disabled="! $this->hasFilters()">
@@ -604,45 +604,36 @@ new #[Title('Routes')] class extends Component {
                         <div class="grid gap-1.5">
                             <label for="rate-customer" class="text-xs font-medium text-fg-ink-secondary">{{ __('Customer') }}</label>
 
-                            <select id="rate-customer" wire:model="rateCustomerId" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="rateCustomerId" id="rate-customer" wire:model="rateCustomerId">
                                 <option value="">{{ __('Choose a customer') }}</option>
 
                                 @foreach ($this->customersForRates as $customer)
                                     <option value="{{ $customer->id }}">{{ $customer->label() }}</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
 
-                            @error('rateCustomerId')
-                                <p class="text-xs text-danger" role="alert">{{ $message }}</p>
-                            @enderror
                         </div>
 
                         <div class="grid gap-1.5">
                             <label for="rate-basis" class="text-xs font-medium text-fg-ink-secondary">{{ __('Basis') }}</label>
 
-                            <select id="rate-basis" wire:model="rateType" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="rateType" id="rate-basis" wire:model="rateType">
                                 @foreach ($this->rateTypes() as $option)
                                     <option value="{{ $option->value }}">{{ $option->label() }}</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
 
-                            @error('rateType')
-                                <p class="text-xs text-danger" role="alert">{{ $message }}</p>
-                            @enderror
                         </div>
 
                         <div class="grid gap-1.5">
                             <label for="rate-currency" class="text-xs font-medium text-fg-ink-secondary">{{ __('Currency') }}</label>
 
-                            <select id="rate-currency" wire:model="rateCurrency" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="rateCurrency" id="rate-currency" wire:model="rateCurrency">
                                 @foreach ($this->currencies() as $currency)
                                     <option value="{{ $currency->code }}">{{ $currency->code }} — {{ $currency->name }}</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
 
-                            @error('rateCurrency')
-                                <p class="text-xs text-danger" role="alert">{{ $message }}</p>
-                            @enderror
                         </div>
 
                         <x-ui.input
@@ -691,33 +682,27 @@ new #[Title('Routes')] class extends Component {
                     <div class="grid gap-1.5">
                         <label for="route-origin-country" class="text-xs font-medium text-fg-ink-secondary">{{ __('Origin country') }}</label>
 
-                        <select id="route-origin-country" wire:model="originCountryCode" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                        <x-ui.select name="originCountryCode" id="route-origin-country" wire:model="originCountryCode">
                             <option value="">{{ __('Choose a country') }}</option>
 
                             @foreach ($this->countries() as $iso => $country)
                                 <option value="{{ $iso }}">{{ $country }}</option>
                             @endforeach
-                        </select>
+                        </x-ui.select>
 
-                        @error('originCountryCode')
-                            <p class="text-xs text-danger" role="alert">{{ $message }}</p>
-                        @enderror
                     </div>
 
                     <div class="grid gap-1.5">
                         <label for="route-destination-country" class="text-xs font-medium text-fg-ink-secondary">{{ __('Destination country') }}</label>
 
-                        <select id="route-destination-country" wire:model="destinationCountryCode" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                        <x-ui.select name="destinationCountryCode" id="route-destination-country" wire:model="destinationCountryCode">
                             <option value="">{{ __('Choose a country') }}</option>
 
                             @foreach ($this->countries() as $iso => $country)
                                 <option value="{{ $iso }}">{{ $country }}</option>
                             @endforeach
-                        </select>
+                        </x-ui.select>
 
-                        @error('destinationCountryCode')
-                            <p class="text-xs text-danger" role="alert">{{ $message }}</p>
-                        @enderror
                     </div>
 
                     <x-ui.input wire:model="distanceKm" name="distanceKm" numeric :label="__('Distance in km')" :hint="__('A measured distance, to one decimal place if needed.')" required />

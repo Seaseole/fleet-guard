@@ -444,16 +444,15 @@ new #[Title('Jobs')] class extends Component {
 
         <div class="grid gap-1">
             <label for="job-status" class="text-sm text-fg-ink">{{ __('Status') }}</label>
-            <select
+            <x-ui.select name="statusFilter"
                 id="job-status"
                 wire:model.live="statusFilter"
-                class="rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink"
             >
                 <option value="">{{ __('Any status') }}</option>
                 @foreach ($this->statusChoices as $choice)
                     <option value="{{ $choice['value'] }}">{{ $choice['label'] }}</option>
                 @endforeach
-            </select>
+            </x-ui.select>
         </div>
 
         @if ($this->hasFilters())
@@ -567,24 +566,22 @@ new #[Title('Jobs')] class extends Component {
         <form wire:submit="saveJob" class="grid gap-4 p-5">
             <div class="grid gap-1">
                 <label for="form-customer" class="text-sm text-fg-ink">{{ __('Customer') }}</label>
-                <select id="form-customer" wire:model="formCustomerId" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                <x-ui.select name="formCustomerId" id="form-customer" wire:model="formCustomerId">
                     <option value="">{{ __('Choose a customer…') }}</option>
                     @foreach ($this->customerChoices as $customer)
                         <option value="{{ $customer['id'] }}">{{ $customer['label'] }}</option>
                     @endforeach
-                </select>
-                @error('formCustomerId') <span class="text-xs text-danger">{{ $message }}</span> @enderror
+                </x-ui.select>
             </div>
 
             <div class="grid gap-1">
                 <label for="form-route" class="text-sm text-fg-ink">{{ __('Corridor') }}</label>
-                <select id="form-route" wire:model="formRouteId" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                <x-ui.select name="formRouteId" id="form-route" wire:model="formRouteId">
                     <option value="">{{ __('Choose a route…') }}</option>
                     @foreach ($this->routeChoices as $route)
                         <option value="{{ $route['id'] }}">{{ $route['label'] }}</option>
                     @endforeach
-                </select>
-                @error('formRouteId') <span class="text-xs text-danger">{{ $message }}</span> @enderror
+                </x-ui.select>
             </div>
 
             <div class="grid gap-3 sm:grid-cols-2">
@@ -617,20 +614,20 @@ new #[Title('Jobs')] class extends Component {
             <div class="grid gap-3 sm:grid-cols-2">
                 <div class="grid gap-1">
                     <label for="quote-type" class="text-sm text-fg-ink">{{ __('Rate type') }}</label>
-                    <select id="quote-type" wire:model="quoteRateType" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                    <x-ui.select name="quoteRateType" id="quote-type" wire:model="quoteRateType">
                         @foreach (App\Domain\Operations\RouteRateType::cases() as $type)
                             <option value="{{ $type->value }}">{{ $type->label() }}</option>
                         @endforeach
-                    </select>
+                    </x-ui.select>
                 </div>
 
                 <div class="grid gap-1">
                     <label for="quote-currency" class="text-sm text-fg-ink">{{ __('Currency') }}</label>
-                    <select id="quote-currency" wire:model="quoteCurrency" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                    <x-ui.select name="quoteCurrency" id="quote-currency" wire:model="quoteCurrency">
                         @foreach ($this->currencies as $currency)
                             <option value="{{ $currency->code }}">{{ $currency->code }} — {{ $currency->name }}</option>
                         @endforeach
-                    </select>
+                    </x-ui.select>
                 </div>
 
                 <x-ui.input name="quoteAmount" wire:model="quoteAmount" :label="__('Amount')" type="text" inputmode="decimal" />

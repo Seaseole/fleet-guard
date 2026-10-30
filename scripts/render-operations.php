@@ -638,11 +638,26 @@ final class OperationsRenderSweep extends TestCase
                 throw new Exception('the register does not list the job it just created');
             }
 
-            Livewire::actingAs($owner)
+            $refused = Livewire::actingAs($owner)
                 ->test('pages::operations.jobs')
                 ->set('formRouteId', (string) $route->id)
                 ->call('saveJob')
                 ->assertHasErrors('formCustomerId');
+
+            // The refusal used to be a hand-written `@error` block sitting beside the control; `x-ui.select`
+            // owns it now, so the sweep counts the sentence. Two copies is the bug this replaces, zero means
+            // the shared `$errors` bag never reached the component.
+            $markup = (string) $refused->html();
+            $message = $refused->instance()->getErrorBag()->first('formCustomerId');
+            $times = $message === '' ? 0 : substr_count($markup, $message);
+
+            if ($times !== 1) {
+                throw new Exception("the customer refusal renders {$times} times — once is the field, twice is the page repeating it");
+            }
+
+            if (! str_contains($markup, 'aria-describedby="form-customer-error"')) {
+                throw new Exception('the customer select says nothing is wrong — no aria-invalid, no described-by pointing at its own message');
+            }
         });
 
         $this->attempt('the quote dialog prices it, and the register reads the figure back', function () use ($owner): void {

@@ -205,16 +205,15 @@ new #[Title('Cross-border')] class extends Component {
 
         <div class="grid gap-1">
             <label for="crossing-status" class="text-sm text-fg-ink">{{ __('Status') }}</label>
-            <select
+            <x-ui.select name="statusFilter"
                 id="crossing-status"
                 wire:model.live="statusFilter"
-                class="rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink"
             >
                 <option value="">{{ __('Any status') }}</option>
                 @foreach ($this->statusChoices as $choice)
                     <option value="{{ $choice['value'] }}">{{ $choice['label'] }}</option>
                 @endforeach
-            </select>
+            </x-ui.select>
         </div>
 
         @if ($this->hasFilters())
@@ -316,11 +315,11 @@ new #[Title('Cross-border')] class extends Component {
 
                     <div class="grid gap-1">
                         <label for="post-country" class="text-sm text-fg-ink">{{ __('Country') }}</label>
-                        <select id="post-country" wire:model="postCountry" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                        <x-ui.select name="postCountry" id="post-country" wire:model="postCountry">
                             @foreach ($this->countryChoices() as $code => $name)
                                 <option value="{{ $code }}">{{ $code }} · {{ $name }}</option>
                             @endforeach
-                        </select>
+                        </x-ui.select>
                     </div>
 
                     <x-ui.input name="postLat" wire:model="postLat" :label="__('Latitude (optional)')" inputmode="decimal" />

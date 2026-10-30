@@ -255,6 +255,22 @@ across 18 files (the trip page alone has 11). Each copy re-declines the focus, e
 convert file by file, asserting markup in the sweeps as each screen is touched. Cheap, mechanical, and it is what
 makes P0-1 and P0-5 fixable without drift.
 
+**Landed 2026-10-30.** `resources/views/components/ui/select.blade.php` takes the same props as `x-ui.input`, plus
+`options`/`placeholder` for the choice list, and keeps the same error contract: `aria-invalid` on the control and
+the message in the `aria-describedby` slot the hint would otherwise own, so a failed select explains itself instead
+of only turning a different colour. All 64 raw blocks are gone (18 files; the trip page alone had 11), each losing
+its copied class string and gaining the hover, focus and disabled treatment it never had — **none of the 64 carried
+`aria-invalid`**, which is the measurable version of "a rejected choice looked exactly like a valid one". `name`
+is derived from the `wire:model` property where the original markup had only an `id`, and a one-off walk of the
+pages confirmed all 67 `<label for>` targets still resolve. That shared-`$errors` behaviour is the half that cost
+something: 22 hand-written `@error('<same field>')` blocks were printing the sentence a second time under a control
+that now reports it properly, so they went, and `render-operations` counts the rendered message (`once is the field,
+twice is the page repeating it`) so the dedup cannot rot back. Rule **U2** in `scripts/lint-ui.php` now fails the
+build on a raw `<select>` in a page, so the primitive is the only way to get one. Proof: the four render sweeps
+re-run green (a 64-site template change touches almost every screen), plus a throwaway probe that GETs every
+parameterless route as the Owner — 29 screens rendered, 14 redirected (auth-flow pages bouncing an already-signed-in
+seat, and the §9.1 re-auth gates), 0 responses at 403 or above 500.
+
 ---
 
 ## 3. P2 — layout, navigation and information structure

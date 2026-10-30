@@ -30,16 +30,15 @@ final class UiLint
 
     /**
      * Rules that are live. A rule is only enabled once the codebase satisfies it, because a gate that fails
-     * on 75 known future edits gets switched off entirely — so `U2` and `U3` wait for their own packages in
-     * docs/UX-UI-PLAN.md and say so in the report rather than pretending the check does not exist.
+     * on 75 known future edits gets switched off entirely — so anything still open sits in PENDING below and
+     * says so in the report rather than pretending the check does not exist.
      *
      * @var list<string>
      */
-    private const ENABLED = ['U1', 'U4'];
+    private const ENABLED = ['U1', 'U2', 'U4'];
 
     /** @var array<string, string> */
     private const PENDING = [
-        'U2' => 'no raw <select> — lands with x-ui.select (UX-UI-PLAN P1-4)',
         'U3' => 'every table has :caption — lands with the numeric/caption pass (UX-UI-PLAN P3-1)',
     ];
 

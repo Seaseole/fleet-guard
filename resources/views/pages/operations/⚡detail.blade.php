@@ -1444,21 +1444,21 @@ new #[Title('Trip')] class extends Component
                 <form wire:submit="planCrossing" class="flex flex-wrap items-end gap-3 border-t border-fg-line pt-4">
                     <div class="grid gap-1">
                         <label for="crossing-post" class="text-sm text-fg-ink">{{ __('Gate') }}</label>
-                        <select id="crossing-post" wire:model="crossingPostId" class="rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                        <x-ui.select name="crossingPostId" id="crossing-post" wire:model="crossingPostId">
                             <option value="">{{ __('Choose a gate…') }}</option>
                             @foreach ($this->borderPostChoices as $post)
                                 <option value="{{ $post['id'] }}">{{ $post['label'] }}</option>
                             @endforeach
-                        </select>
+                        </x-ui.select>
                     </div>
 
                     <div class="grid gap-1">
                         <label for="crossing-direction" class="text-sm text-fg-ink">{{ __('Direction') }}</label>
-                        <select id="crossing-direction" wire:model="crossingDirection" class="rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                        <x-ui.select name="crossingDirection" id="crossing-direction" wire:model="crossingDirection">
                             @foreach ($this->directionOptions() as $option)
                                 <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
                             @endforeach
-                        </select>
+                        </x-ui.select>
                     </div>
 
                     <x-ui.button type="submit" size="sm" variant="outline">{{ __('Plan the crossing') }}</x-ui.button>
@@ -1477,42 +1477,42 @@ new #[Title('Trip')] class extends Component
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div class="grid gap-1">
                             <label for="charge-kind" class="text-sm text-fg-ink">{{ __('What was charged') }}</label>
-                            <select id="charge-kind" wire:model="chargeKind" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="chargeKind" id="charge-kind" wire:model="chargeKind">
                                 @foreach ($this->borderKindOptions() as $option)
                                     <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
                         </div>
 
                         <div class="grid gap-1">
                             <label for="charge-paid-with" class="text-sm text-fg-ink">{{ __('Paid with') }}</label>
-                            <select id="charge-paid-with" wire:model="chargePaidWith" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="chargePaidWith" id="charge-paid-with" wire:model="chargePaidWith">
                                 @foreach ($this->paymentOptions() as $option)
                                     <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
                         </div>
 
                         <x-ui.input name="chargeAmount" wire:model="chargeAmount" :label="__('Amount')" />
 
                         <div class="grid gap-1">
                             <label for="charge-currency" class="text-sm text-fg-ink">{{ __('Currency') }}</label>
-                            <select id="charge-currency" wire:model="chargeCurrency" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="chargeCurrency" id="charge-currency" wire:model="chargeCurrency">
                                 @foreach ($this->currencyOptions() as $option)
                                     <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
                         </div>
 
                         <x-ui.input name="chargeRate" wire:model="chargeRate" :label="__('Rate to :currency (1 foreign = ?)', ['currency' => $this->baseCurrency()])" type="number" step="0.00000001" />
 
                         <div class="grid gap-1">
                             <label for="charge-rate-source" class="text-sm text-fg-ink">{{ __('Where the rate came from') }}</label>
-                            <select id="charge-rate-source" wire:model="chargeRateSource" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="chargeRateSource" id="charge-rate-source" wire:model="chargeRateSource">
                                 @foreach ($this->rateSourceOptions() as $option)
                                     <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
                         </div>
 
                         <x-ui.input name="chargeOccurredOn" wire:model="chargeOccurredOn" :label="__('What date was it paid')" type="date" />
@@ -1670,42 +1670,42 @@ new #[Title('Trip')] class extends Component
                     <div class="grid gap-3 sm:grid-cols-2">
                         <div class="grid gap-1">
                             <label for="cost-type" class="text-sm text-fg-ink">{{ __('What was it') }}</label>
-                            <select id="cost-type" wire:model="costType" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="costType" id="cost-type" wire:model="costType">
                                 @foreach ($this->costTypeOptions() as $option)
                                     <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
                         </div>
 
                         <div class="grid gap-1">
                             <label for="cost-paid-with" class="text-sm text-fg-ink">{{ __('Paid with') }}</label>
-                            <select id="cost-paid-with" wire:model="costPaidWith" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="costPaidWith" id="cost-paid-with" wire:model="costPaidWith">
                                 @foreach ($this->paymentOptions() as $option)
                                     <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
                         </div>
 
                         <x-ui.input name="costAmount" wire:model="costAmount" :label="__('Amount')" />
 
                         <div class="grid gap-1">
                             <label for="cost-currency" class="text-sm text-fg-ink">{{ __('Currency') }}</label>
-                            <select id="cost-currency" wire:model="costCurrency" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="costCurrency" id="cost-currency" wire:model="costCurrency">
                                 @foreach ($this->currencyOptions() as $option)
                                     <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
                         </div>
 
                         <x-ui.input name="costRate" wire:model="costRate" :label="__('Rate to :currency (1 foreign = ?)', ['currency' => $this->baseCurrency()])" type="number" step="0.00000001" />
 
                         <div class="grid gap-1">
                             <label for="cost-rate-source" class="text-sm text-fg-ink">{{ __('Where the rate came from') }}</label>
-                            <select id="cost-rate-source" wire:model="costRateSource" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                            <x-ui.select name="costRateSource" id="cost-rate-source" wire:model="costRateSource">
                                 @foreach ($this->rateSourceOptions() as $option)
                                     <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
                                 @endforeach
-                            </select>
+                            </x-ui.select>
                         </div>
 
                         <x-ui.input name="costOccurredOn" wire:model="costOccurredOn" :label="__('What date did it happen')" type="date" />
@@ -1881,12 +1881,12 @@ new #[Title('Trip')] class extends Component
 
             <div class="grid gap-1">
                 <label for="load-waybill" class="text-sm text-fg-ink">{{ __('Waybill (filed paper)') }}</label>
-                <select id="load-waybill" wire:model="loadWaybill" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                <x-ui.select name="loadWaybill" id="load-waybill" wire:model="loadWaybill">
                     <option value="">{{ __('None yet — loading will refuse this line') }}</option>
                     @foreach ($this->waybills as $document)
                         <option value="{{ $document->id }}">{{ $document->title }}</option>
                     @endforeach
-                </select>
+                </x-ui.select>
             </div>
 
             @error('load')

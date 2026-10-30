@@ -149,32 +149,32 @@ new #[Title('Journal')] class extends Component {
             <div class="grid gap-4 sm:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
                 <div class="grid gap-1.5">
                     <label for="period" class="text-xs font-medium text-fg-ink-secondary">{{ __('Period') }}</label>
-                    <select id="period" wire:model.live="period" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                    <x-ui.select name="period" id="period" wire:model.live="period">
                         <option value="">{{ __('All periods') }}</option>
                         @foreach ($this->periods as $option)
                             <option value="{{ $option->period }}">{{ $option->period }} · {{ $option->status }}</option>
                         @endforeach
-                    </select>
+                    </x-ui.select>
                 </div>
 
                 <div class="grid gap-1.5">
                     <label for="accountCode" class="text-xs font-medium text-fg-ink-secondary">{{ __('Account') }}</label>
-                    <select id="accountCode" wire:model.live="accountCode" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                    <x-ui.select name="accountCode" id="accountCode" wire:model.live="accountCode">
                         <option value="">{{ __('Any account') }}</option>
                         @foreach ($this->accounts as $option)
                             <option value="{{ $option->code }}">{{ $option->code }} — {{ $option->name }}</option>
                         @endforeach
-                    </select>
+                    </x-ui.select>
                 </div>
 
                 <div class="grid gap-1.5">
                     <label for="status" class="text-xs font-medium text-fg-ink-secondary">{{ __('Status') }}</label>
-                    <select id="status" wire:model.live="status" class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink">
+                    <x-ui.select name="status" id="status" wire:model.live="status">
                         <option value="">{{ __('Any status') }}</option>
                         @foreach (\App\Domain\Kernel\Ledger\Models\JournalEntry::statuses() as $option)
                             <option value="{{ $option }}">{{ ucfirst($option) }}</option>
                         @endforeach
-                    </select>
+                    </x-ui.select>
                 </div>
 
                 <x-ui.input wire:model.live.debounce.400ms="q" name="q" :label="__('Search')" :hint="__('Number or description')" />
