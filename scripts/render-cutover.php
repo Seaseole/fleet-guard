@@ -104,7 +104,7 @@ CSV;
         $dispatcher = $this->staffAs($owner, RoleKey::Dispatcher, 'render-check-dispatcher@fleetguard.local');
 
         echo "\nThe screen renders for the roles that own it\n";
-        $this->pageContains($owner, '/accounting/cutover', 'Validate a trial balance', 'the Owner sees the upload card');
+        $this->pageContains($owner, '/accounting/cutover', 'Validate a file', 'the Owner sees the upload card');
         $this->pageContains($accountant, '/accounting/cutover', 'Cutover history', 'the accountant sees the same register');
         $this->assertForbidden($dispatcher, '/accounting/cutover', 'a Dispatcher without cutover.import is refused');
 
@@ -260,14 +260,43 @@ CSV;
         return $fresh;
     }
 
+    /**
+     * Reads the rendered body rather than calling PHPUnit's `assertSee`.
+     *
+     * Outside a real test run PHPUnit's failure path dies inside its own exporter —
+     * `assert(self::$instance instanceof Configuration)` — and that AssertionError is what the sweep
+     * printed for two phases while the needle below was stale. A missing string has to say which one.
+     */
     private function pageContains(User $user, string $path, string $needle, string $label): void
     {
-        $this->attempt($label, fn () => $this->actingAs($user, 'web')->get($path)->assertOk()->assertSee($needle, false));
+        $this->attempt($label, function () use ($user, $path, $needle): void {
+            $response = $this->actingAs($user, 'web')->get($path);
+            $status = $response->getStatusCode();
+
+            if ($status !== 200) {
+                throw new Exception("{$path} answered {$status}, not 200");
+            }
+
+            if (! str_contains((string) $response->getContent(), $needle)) {
+                throw new Exception("the page did not contain '{$needle}'");
+            }
+        });
     }
 
     private function pageLacks(User $user, string $path, string $needle, string $label): void
     {
-        $this->attempt($label, fn () => $this->actingAs($user, 'web')->get($path)->assertOk()->assertDontSee($needle, false));
+        $this->attempt($label, function () use ($user, $path, $needle): void {
+            $response = $this->actingAs($user, 'web')->get($path);
+            $status = $response->getStatusCode();
+
+            if ($status !== 200) {
+                throw new Exception("{$path} answered {$status}, not 200");
+            }
+
+            if (str_contains((string) $response->getContent(), $needle)) {
+                throw new Exception("the page should not contain '{$needle}'");
+            }
+        });
     }
 
     private function assertForbidden(User $user, string $path, string $label): void
