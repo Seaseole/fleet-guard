@@ -15,6 +15,10 @@ use App\Domain\Fleet\Models\VehicleAssignment;
 use App\Domain\Fleet\Plausibility;
 use App\Domain\Kernel\Documents\Models\Document;
 use App\Domain\Kernel\Money\Money;
+use App\Domain\Maintenance\Models\Breakdown;
+use App\Domain\Maintenance\Models\Inspection;
+use App\Domain\Maintenance\Models\TyrePosition;
+use App\Domain\Maintenance\Models\WorkOrder;
 use App\Domain\Kernel\State\IllegalTransition;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\People\Data\DriverOption;
@@ -307,6 +311,55 @@ new #[Title('Vehicle')] class extends Component {
             ->where('morph_id', (string) $this->truckId)
             ->orderByRaw('case when expires_on is null then 1 else 0 end')
             ->orderBy('expires_on')
+            ->get();
+    }
+
+    /** @return Collection<int, TyrePosition> */
+    #[Computed]
+    public function fittedTyres(): Collection
+    {
+        return TyrePosition::query()
+            ->with('tyre')
+            ->where('truck_id', $this->truckId)
+            ->whereNull('removed_at')
+            ->orderBy('position')
+            ->get();
+    }
+
+    /** @return Collection<int, WorkOrder> */
+    #[Computed]
+    public function workshopOrders(): Collection
+    {
+        return WorkOrder::query()
+            ->where('truck_id', $this->truckId)
+            ->orderByDesc('opened_on')
+            ->orderByDesc('id')
+            ->limit(6)
+            ->get();
+    }
+
+    /** @return Collection<int, Inspection> */
+    #[Computed]
+    public function workshopInspections(): Collection
+    {
+        return Inspection::query()
+            ->where('truck_id', $this->truckId)
+            ->orderByDesc('done_at')
+            ->orderByDesc('id')
+            ->limit(6)
+            ->get();
+    }
+
+    /** @return Collection<int, Breakdown> */
+    #[Computed]
+    public function workshopBreakdowns(): Collection
+    {
+        return Breakdown::query()
+            ->with('workOrder')
+            ->where('truck_id', $this->truckId)
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->limit(6)
             ->get();
     }
 
@@ -628,6 +681,131 @@ new #[Title('Vehicle')] class extends Component {
             </x-ui.table>
         @endif
     </x-ui.card>
+
+    @can('maintenance.view')
+        {{-- Read-only: the tyres that are on this truck, the jobs raised for it, the checks it has had
+             and the times it stopped. Each belongs to the workshop's own register; this card is the
+             truck's side of the same rows, so a dispatcher does not have to leave the vehicle to ask. --}}
+        <x-ui.card :title="__('Workshop history')" :description="__('What the workshop has on this truck right now, and what it has done to it recently. The registers hold the detail; every row here links back to it.')">
+            @if ($this->fittedTyres->isEmpty() && $this->workshopOrders->isEmpty() && $this->workshopInspections->isEmpty() && $this->workshopBreakdowns->isEmpty())
+                <x-ui.empty-state
+                    icon="wrench"
+                    :title="__('Nothing in the workshop yet')"
+                    :description="__('Tyres, work orders, inspections and breakdowns appear here once the workshop records them against this truck.')"
+                />
+            @else
+                <div class="grid gap-6 lg:grid-cols-2">
+                    <div class="grid content-start gap-2">
+                        <div class="flex items-center justify-between gap-3">
+                            <x-ui.subheading>{{ __('Tyres fitted') }}</x-ui.subheading>
+                            <x-ui.link :href="route('maintenance.tyres')" wire:navigate>{{ __('Register') }}</x-ui.link>
+                        </div>
+
+                        @if ($this->fittedTyres->isEmpty())
+                            <x-ui.text size="sm" color="muted">{{ __('No tyre is recorded as fitted.') }}</x-ui.text>
+                        @else
+                            <ul class="grid gap-1">
+                                @foreach ($this->fittedTyres as $position)
+                                    <li wire:key="truck-tyre-{{ $position->id }}" class="flex items-center justify-between gap-3 rounded-fg-sm px-2 py-2 hover:bg-fg-surface-sunk">
+                                        <div class="grid min-w-0 gap-0.5">
+                                            <p class="truncate text-sm text-fg-ink">{{ $position->tyre?->serial ?? __('Tyre #:id', ['id' => $position->tyre_id]) }}</p>
+                                            <p class="text-xs text-fg-ink-muted">
+                                                {{ $position->position->label() }}
+                                                · {{ __('fitted :date', ['date' => $position->fitted_at->format('d M Y')]) }}
+                                                · {{ number_format($position->fitted_odometer_km) }} km
+                                            </p>
+                                        </div>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @endif
+                    </div>
+
+                    <div class="grid content-start gap-2">
+                        <div class="flex items-center justify-between gap-3">
+                            <x-ui.subheading>{{ __('Recent jobs') }}</x-ui.subheading>
+                            <x-ui.link :href="route('maintenance.index')" wire:navigate>{{ __('All work orders') }}</x-ui.link>
+                        </div>
+
+                        @if ($this->workshopOrders->isEmpty())
+                            <x-ui.text size="sm" color="muted">{{ __('No work order has been raised for this truck.') }}</x-ui.text>
+                        @else
+                            <ul class="grid gap-1">
+                                @foreach ($this->workshopOrders as $order)
+                                    <li wire:key="truck-order-{{ $order->id }}" class="flex items-center justify-between gap-3 rounded-fg-sm px-2 py-2 hover:bg-fg-surface-sunk">
+                                        <div class="grid min-w-0 gap-0.5">
+                                            <a href="{{ route('maintenance.work_order', ['workOrder' => $order->id]) }}" wire:navigate class="truncate text-sm text-fg-ink hover:text-accent">{{ $order->title }}</a>
+                                            <p class="text-xs text-fg-ink-muted">{{ $order->wo_no }} · {{ $order->opened_on->format('d M Y') }}</p>
+                                        </div>
+
+                                        <x-ui.badge :tone="$order->status->tone()">{{ $order->status->label() }}</x-ui.badge>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @endif
+                    </div>
+
+                    <div class="grid content-start gap-2">
+                        <div class="flex items-center justify-between gap-3">
+                            <x-ui.subheading>{{ __('Recent inspections') }}</x-ui.subheading>
+                            <x-ui.link :href="route('maintenance.inspections')" wire:navigate>{{ __('Register') }}</x-ui.link>
+                        </div>
+
+                        @if ($this->workshopInspections->isEmpty())
+                            <x-ui.text size="sm" color="muted">{{ __('No inspection has been recorded for this truck.') }}</x-ui.text>
+                        @else
+                            <ul class="grid gap-1">
+                                @foreach ($this->workshopInspections as $inspection)
+                                    <li wire:key="truck-inspection-{{ $inspection->id }}" class="flex items-center justify-between gap-3 rounded-fg-sm px-2 py-2 hover:bg-fg-surface-sunk">
+                                        <div class="grid min-w-0 gap-0.5">
+                                            <p class="truncate text-sm text-fg-ink">{{ $inspection->kind->label() }}</p>
+                                            <p class="text-xs text-fg-ink-muted">{{ $inspection->done_at->format('d M Y H:i') }}</p>
+                                        </div>
+
+                                        <x-ui.badge :tone="$inspection->result->tone()">{{ $inspection->result->label() }}</x-ui.badge>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @endif
+                    </div>
+
+                    <div class="grid content-start gap-2">
+                        <div class="flex items-center justify-between gap-3">
+                            <x-ui.subheading>{{ __('Breakdowns') }}</x-ui.subheading>
+                            <x-ui.link :href="route('maintenance.breakdowns')" wire:navigate>{{ __('Register') }}</x-ui.link>
+                        </div>
+
+                        @if ($this->workshopBreakdowns->isEmpty())
+                            <x-ui.text size="sm" color="muted">{{ __('This truck has not been recorded as breaking down.') }}</x-ui.text>
+                        @else
+                            <ul class="grid gap-1">
+                                @foreach ($this->workshopBreakdowns as $breakdown)
+                                    <li wire:key="truck-breakdown-{{ $breakdown->id }}" class="flex items-center justify-between gap-3 rounded-fg-sm px-2 py-2 hover:bg-fg-surface-sunk">
+                                        <div class="grid min-w-0 gap-0.5">
+                                            <p class="truncate text-sm text-fg-ink">{{ $breakdown->location }}</p>
+                                            <p class="text-xs text-fg-ink-muted">
+                                                {{ $breakdown->occurred_at->format('d M Y') }}
+                                                · {{ $breakdown->cause->label() }}
+                                                @if ($breakdown->workOrder)
+                                                    · <a href="{{ route('maintenance.work_order', ['workOrder' => $breakdown->workOrder->id]) }}" wire:navigate class="hover:text-accent">{{ $breakdown->workOrder->wo_no }}</a>
+                                                @else
+                                                    · {{ __('no repair yet') }}
+                                                @endif
+                                            </p>
+                                        </div>
+
+                                        @if ($breakdown->recoverable_from_driver)
+                                            <x-ui.badge tone="warning">{{ __('from driver') }}</x-ui.badge>
+                                        @endif
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @endif
+                    </div>
+                </div>
+            @endif
+        </x-ui.card>
+    @endcan
 
     <x-ui.card :title="__('Paper on file')" :description="__('Registration, insurance, roadworthy — the §4.4 documents whose subject is this truck.')">
         @if ($this->documents->isEmpty())

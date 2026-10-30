@@ -41,9 +41,14 @@ use App\Domain\Maintenance\Data\ServiceScheduleDto;
 use App\Domain\Maintenance\Data\WorkOrderDto;
 use App\Domain\Maintenance\Data\WorkOrderLineDto;
 use App\Domain\Maintenance\HoldReason;
+use App\Domain\Maintenance\InspectionResult;
+use App\Domain\Maintenance\Models\Breakdown;
+use App\Domain\Maintenance\Models\Inspection;
 use App\Domain\Maintenance\Models\ServiceSchedule;
+use App\Domain\Maintenance\Models\Tyre;
 use App\Domain\Maintenance\Models\WorkOrder;
 use App\Domain\Maintenance\ServiceScheduleKind;
+use App\Domain\Maintenance\TyreStatus;
 use App\Domain\Maintenance\WorkOrderKind;
 use App\Domain\Maintenance\WorkOrderLineKind;
 use App\Domain\Maintenance\WorkOrderStatus;
@@ -85,6 +90,15 @@ final class MaintenanceRenderSweep extends TestCase
 
     /** @var list<int> */
     private array $partIds = [];
+
+    /** @var list<int> */
+    private array $tyreIds = [];
+
+    /** @var list<string> */
+    private array $inspectionIds = [];
+
+    /** @var list<string> */
+    private array $breakdownIds = [];
 
     public function createApplication(): Application
     {
@@ -871,6 +885,279 @@ final class MaintenanceRenderSweep extends TestCase
                 throw new Exception('the rejection did not land on the row');
             }
         });
+
+        echo "\n== The three registers write what they say (§15.2 3f) ==\n";
+
+        $this->attempt('a tyre registered through the dialog lands on the spares rack', function () use ($clerk): void {
+            Livewire::actingAs($clerk)
+                ->test('pages::maintenance.tyres')
+                ->call('openNew')
+                ->assertDispatched('open-tyre-new')
+                ->set('newSerial', 'MNT-TYR-0001')
+                ->set('newBrand', 'Michelin')
+                ->set('newSize', '315/80R22.5')
+                ->set('newCost', '2400.00')
+                ->set('newTread', '1500')
+                ->call('create')
+                ->assertHasNoErrors('newTyre')
+                ->assertDispatched('close-tyre-new');
+
+            $tyre = Tyre::query()->where('serial', 'MNT-TYR-0001')->first();
+
+            if ($tyre === null || $tyre->status !== TyreStatus::OnSpares || $tyre->purchase_cost_base !== 240_000) {
+                throw new Exception('the tyre dialog did not leave a casing on the rack at its price');
+            }
+
+            $this->tyreIds[] = $tyre->id;
+        });
+
+        $tyre = Tyre::query()->where('serial', 'MNT-TYR-0001')->firstOrFail();
+
+        $this->attempt('fitting it through the dialog opens one position and names the slot', function () use ($clerk, $tyre, $truck): void {
+            Livewire::actingAs($clerk)
+                ->test('pages::maintenance.tyres')
+                ->call('openFit', $tyre->id)
+                ->assertDispatched('open-tyre-fit')
+                ->set('fitTruckId', (string) $truck->id)
+                ->set('fitSlot', 'FL')
+                ->set('fitAt', Carbon::now(CurrentCompany::timezone())->format('Y-m-d\TH:i'))
+                ->set('fitOdometer', '100400')
+                ->call('fit')
+                ->assertHasNoErrors('fit')
+                ->assertDispatched('close-tyre-fit');
+
+            $fresh = $tyre->fresh();
+
+            if ($fresh->status !== TyreStatus::InService || $fresh->openPosition === null || $fresh->openPosition->position->value !== 'FL') {
+                throw new Exception('the fit dialog did not open the front-left position');
+            }
+        });
+
+        $this->attempt('an inspection recorded through the dialog stores its checklist answers', function () use ($manager, $truck): void {
+            Livewire::actingAs($manager)
+                ->test('pages::maintenance.inspections')
+                ->call('openRecord')
+                ->assertDispatched('open-inspection-record')
+                ->set('inspTruckId', (string) $truck->id)
+                ->set('inspDoneAt', Carbon::now(CurrentCompany::timezone())->format('Y-m-d\TH:i'))
+                ->call('record')
+                ->assertHasNoErrors('inspection')
+                ->assertDispatched('close-inspection-record');
+
+            $row = Inspection::query()->where('truck_id', $truck->id)->orderByDesc('id')->first();
+
+            if ($row === null || $row->result !== InspectionResult::Pass || count($row->checklist) !== 8) {
+                throw new Exception('the inspection dialog did not leave a pass with every item answered');
+            }
+
+            $this->inspectionIds[] = $row->id;
+        });
+
+        $this->attempt('a failed inspection through the dialog names its item and its defect line', function () use ($manager, $truck): void {
+            Livewire::actingAs($manager)
+                ->test('pages::maintenance.inspections')
+                ->call('openRecord')
+                ->set('inspTruckId', (string) $truck->id)
+                ->set('inspDoneAt', Carbon::now(CurrentCompany::timezone())->format('Y-m-d\TH:i'))
+                ->set('answers.brakes', false)
+                ->set('inspResult', 'fail')
+                ->set('defects', ['MNT rear brakes below limit'])
+                ->call('record')
+                ->assertHasNoErrors('inspection')
+                ->assertDispatched('close-inspection-record');
+
+            $row = Inspection::query()->where('truck_id', $truck->id)->orderByDesc('id')->first();
+
+            if ($row === null || $row->result !== InspectionResult::Fail || array_keys($row->failedChecklistItems()) !== ['brakes']) {
+                throw new Exception('the inspection dialog did not leave a fail naming the brakes');
+            }
+
+            if ($row->defectLines() !== ['MNT rear brakes below limit']) {
+                throw new Exception('the inspection dialog lost the defect line');
+            }
+
+            $this->inspectionIds[] = $row->id;
+        });
+
+        $this->attempt('a breakdown recorded through the dialog is a stop with a place and hours', function () use ($dispatcher, $truck): void {
+            Livewire::actingAs($dispatcher)
+                ->test('pages::maintenance.breakdowns')
+                ->call('openRecord')
+                ->assertDispatched('open-breakdown-record')
+                ->set('bdTruckId', (string) $truck->id)
+                ->set('bdOccurredAt', Carbon::now(CurrentCompany::timezone())->format('Y-m-d\TH:i'))
+                ->set('bdLocation', 'MNT A1 north of Palapye')
+                ->set('bdDescription', 'MNT turbo failure under load')
+                ->set('bdCause', 'mechanical')
+                ->set('bdHoursLost', '6')
+                ->call('record')
+                ->assertHasNoErrors('breakdown')
+                ->assertDispatched('close-breakdown-record');
+
+            $row = Breakdown::query()->where('truck_id', $truck->id)->first();
+
+            if ($row === null || $row->hours_lost !== 6 || $row->work_order_id !== null) {
+                throw new Exception('the breakdown dialog did not leave an un-repaired stop with its hours');
+            }
+
+            $this->breakdownIds[] = $row->id;
+        });
+
+        $this->attempt('the truck’s own record shows the tyre, the checks and the stop', function () use ($owner, $truck): void {
+            $html = (string) $this->actingAs($owner, 'web')
+                ->get('/fleet/trucks/'.$truck->id)
+                ->assertOk()
+                ->getContent();
+
+            foreach (['Workshop history', 'MNT-TYR-0001', 'Pre-trip walk-around', 'MNT A1 north of Palapye'] as $needle) {
+                if (! str_contains($html, $needle)) {
+                    throw new Exception("the vehicle page is missing {$needle}");
+                }
+            }
+        });
+
+        $this->attempt('removing the tyre through the dialog prices the stint', function () use ($clerk, $tyre): void {
+            Livewire::actingAs($clerk)
+                ->test('pages::maintenance.tyres')
+                ->call('openRemove', $tyre->id)
+                ->assertDispatched('open-tyre-remove')
+                ->set('removeAt', Carbon::now(CurrentCompany::timezone())->addDay()->format('Y-m-d\TH:i'))
+                ->set('removeOdometer', '112000')
+                ->set('removeStatus', 'on_spares')
+                ->call('remove')
+                ->assertHasNoErrors('remove')
+                ->assertDispatched('close-tyre-remove');
+
+            $fresh = $tyre->fresh();
+
+            if ($fresh->status !== TyreStatus::OnSpares || $fresh->openPosition !== null) {
+                throw new Exception('the removal dialog did not close the fitment and return the casing');
+            }
+
+            $closed = $fresh->positions()->whereNotNull('removed_at')->first();
+
+            if ($closed === null || $closed->kilometresRun() !== 11_600
+                || $closed->cost_per_km_x10000 !== intdiv(240_000 * 100 + 5_800, 11_600)) {
+                throw new Exception('the removal dialog did not write 11,600 km and the rate it cost');
+            }
+        });
+
+        $this->attempt('the dispatcher is offered no repair control; the clerk raises the job', function () use ($dispatcher, $clerk, $truck): void {
+            $breakdown = Breakdown::query()->where('truck_id', $truck->id)->firstOrFail();
+
+            $html = (string) $this->actingAs($dispatcher, 'web')->get('/breakdowns')->assertOk()->getContent();
+
+            if (! str_contains($html, 'openRecord')) {
+                throw new Exception('the dispatcher is not offered the breakdown dialog');
+            }
+
+            if (str_contains($html, 'openRepair')) {
+                throw new Exception('the breakdown register offered the repair to a seat without work_orders.create');
+            }
+
+            Livewire::actingAs($clerk)
+                ->test('pages::maintenance.breakdowns')
+                ->call('openRepair', $breakdown->id)
+                ->assertDispatched('open-breakdown-repair')
+                ->set('repairHours', '8.00')
+                ->set('repairRate', '220.00')
+                ->call('raiseRepair')
+                ->assertHasNoErrors('repairForm');
+
+            $order = WorkOrder::query()->where('title', 'MNT turbo failure under load')->first();
+            $fresh = $breakdown->fresh();
+
+            if ($order === null || $order->kind !== WorkOrderKind::Breakdown || $order->truck_id !== $truck->id) {
+                throw new Exception('the repair dialog did not raise a breakdown job on the truck');
+            }
+
+            if ($order->total_cost_base !== 176_000 || $order->status !== WorkOrderStatus::Approved) {
+                throw new Exception('the repair dialog’s estimate is '.$order->total_cost_base.', expected 176000 under the limit');
+            }
+
+            if ($fresh->work_order_id !== $order->id) {
+                throw new Exception('the breakdown does not name the job it got');
+            }
+
+            $this->workOrderIds[] = $order->id;
+        });
+
+        echo "\n== The registers render, and the seats hold their gates (§4.3, §9.3) ==\n";
+
+        $this->attempt('the owner opens all three registers with their rows', function () use ($owner): void {
+            $tyres = (string) $this->actingAs($owner, 'web')->get('/tyres')->assertOk()->getContent();
+
+            foreach (['MNT-TYR-0001', 'Michelin', 'New tyre'] as $needle) {
+                if (! str_contains($tyres, $needle)) {
+                    throw new Exception("the tyre register is missing {$needle}");
+                }
+            }
+
+            $inspections = (string) $this->actingAs($owner, 'web')->get('/inspections')->assertOk()->getContent();
+
+            foreach (['MNT rear brakes below limit', 'Pre-trip walk-around', 'Record an inspection'] as $needle) {
+                if (! str_contains($inspections, $needle)) {
+                    throw new Exception("the inspection register is missing {$needle}");
+                }
+            }
+
+            $breakdowns = (string) $this->actingAs($owner, 'web')->get('/breakdowns')->assertOk()->getContent();
+
+            foreach (['MNT A1 north of Palapye', 'Mechanical failure', 'Record a breakdown'] as $needle) {
+                if (! str_contains($breakdowns, $needle)) {
+                    throw new Exception("the breakdown register is missing {$needle}");
+                }
+            }
+
+            if (! str_contains($breakdowns, 'WO-')) {
+                throw new Exception('the breakdown register does not link the repair it got');
+            }
+        });
+
+        $this->attempt('each register shows no more than one filled action (§5)', function () use ($owner): void {
+            foreach (['/tyres', '/inspections', '/breakdowns'] as $route) {
+                $html = (string) $this->actingAs($owner, 'web')->get($route)->assertOk()->getContent();
+                $this->assertOneFilledAction($html, $route);
+            }
+        });
+
+        $this->attempt('the clerk writes tyres but not inspections or breakdowns', function () use ($clerk): void {
+            $tyres = (string) $this->actingAs($clerk, 'web')->get('/tyres')->assertOk()->getContent();
+
+            if (! str_contains($tyres, 'openNew')) {
+                throw new Exception('the stores clerk is not offered the new-tyre dialog');
+            }
+
+            foreach (['/inspections', '/breakdowns'] as $route) {
+                $html = (string) $this->actingAs($clerk, 'web')->get($route)->assertOk()->getContent();
+
+                if (str_contains($html, 'openRecord')) {
+                    throw new Exception("{$route} offered the stores clerk a record dialog it would refuse");
+                }
+            }
+        });
+
+        $this->attempt('the accountant reads all three and is offered nothing that writes', function () use ($accountant): void {
+            foreach (['/tyres', '/inspections', '/breakdowns'] as $route) {
+                $html = (string) $this->actingAs($accountant, 'web')->get($route)->assertOk()->getContent();
+
+                foreach (['openNew', 'openFit', 'openRemove', 'openRecord', 'openRepair'] as $control) {
+                    if (str_contains($html, $control)) {
+                        throw new Exception("{$route} offered the accountant a write control ({$control})");
+                    }
+                }
+            }
+        });
+
+        $this->attempt('a seat with no maintenance permission is refused all three registers', function () use ($reader): void {
+            foreach (['/tyres', '/inspections', '/breakdowns'] as $route) {
+                $status = $this->actingAs($reader, 'web')->get($route)->getStatusCode();
+
+                if ($status !== 403) {
+                    throw new Exception("{$route} answered {$status}, expected 403");
+                }
+            }
+        });
     }
 
     private function staffAs(User $owner, ?RoleKey $role, string $email): User
@@ -1021,6 +1308,21 @@ final class MaintenanceRenderSweep extends TestCase
             DB::table('parts')->where('sku', 'like', 'MNT-%')->pluck('id')->all(),
         )));
 
+        $tyreIds = array_values(array_unique(array_merge(
+            $this->tyreIds,
+            DB::table('tyres')->where('serial', 'like', 'MNT-%')->pluck('id')->all(),
+        )));
+
+        $inspectionIds = array_values(array_unique(array_merge(
+            $this->inspectionIds,
+            $truckIds === [] ? [] : DB::table('inspections')->whereIn('truck_id', $truckIds)->pluck('id')->all(),
+        )));
+
+        $breakdownIds = array_values(array_unique(array_merge(
+            $this->breakdownIds,
+            $truckIds === [] ? [] : DB::table('breakdowns')->whereIn('truck_id', $truckIds)->pluck('id')->all(),
+        )));
+
         $movementIds = DB::table('stock_movements')
             ->where(fn ($query) => $query
                 ->whereIn('part_id', $partIds ?: [0])
@@ -1050,6 +1352,13 @@ final class MaintenanceRenderSweep extends TestCase
         $this->deleteIn('operational_events', 'aggregate_id', array_map('strval', $alertIds));
         $this->deleteIn('operational_events', 'aggregate_id', array_map('strval', $scheduleIds));
         $this->deleteIn('operational_events', 'aggregate_id', array_map('strval', $workOrderIds));
+        // Inspections and breakdowns cite a truck and a work order; positions cite a tyre and a truck.
+        $this->deleteIn('inspections', 'id', array_map('strval', $inspectionIds));
+        $this->deleteIn('breakdowns', 'id', array_map('strval', $breakdownIds));
+        $this->deleteIn('tyre_positions', 'tyre_id', $tyreIds);
+        $this->deleteIn('tyre_positions', 'truck_id', $truckIds);
+        $this->deleteIn('tyres', 'id', $tyreIds);
+        $this->deleteIn('audits', 'auditable_id', array_map('strval', array_merge($tyreIds, $inspectionIds, $breakdownIds)));
         $this->deleteIn('work_order_lines', 'work_order_id', $workOrderIds);
         $this->deleteIn('work_orders', 'id', $workOrderIds);
         $this->deleteIn('service_schedules', 'id', $scheduleIds);
@@ -1128,6 +1437,17 @@ final class MaintenanceRenderSweep extends TestCase
                 ->whereIn('part_id', DB::table('parts')->where('sku', 'like', 'MNT-%')->pluck('id')->all() ?: [0])
                 ->count(),
             'employees' => (int) DB::table('employees')->where('employee_no', 'like', 'EMP-MNT%')->count(),
+            'tyres' => (int) DB::table('tyres')->where('serial', 'like', 'MNT-%')->count(),
+            'tyre positions' => (int) DB::table('tyre_positions')
+                ->whereIn('tyre_id', DB::table('tyres')->where('serial', 'like', 'MNT-%')->pluck('id')->all() ?: [0])
+                ->orWhereIn('truck_id', DB::table('trucks')->where('registration_no', 'like', '%MNT')->pluck('id')->all() ?: [0])
+                ->count(),
+            'inspections' => (int) DB::table('inspections')
+                ->whereIn('truck_id', DB::table('trucks')->where('registration_no', 'like', '%MNT')->pluck('id')->all() ?: [0])
+                ->count(),
+            'breakdowns' => (int) DB::table('breakdowns')
+                ->whereIn('truck_id', DB::table('trucks')->where('registration_no', 'like', '%MNT')->pluck('id')->all() ?: [0])
+                ->count(),
             'probe seats' => (int) DB::table('users')->where('email', 'like', 'render-mnt-check-%@fleetguard.local')->count(),
         ];
 

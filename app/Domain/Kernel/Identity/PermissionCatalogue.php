@@ -87,6 +87,9 @@ final class PermissionCatalogue
             'parts.manage' => 'Add a part to the catalogue or edit its details',
             'parts.adjust' => 'Adjust parts stock',
             'parts.count' => 'Enter a stock count',
+            'tyres.manage' => 'Register tyres, fit them and take them off',
+            'inspections.record' => 'Record a pre-trip, periodic or tachograph inspection',
+            'breakdowns.record' => 'Record a breakdown',
         ],
         'Invoicing' => [
             'invoices.view' => 'See invoices',

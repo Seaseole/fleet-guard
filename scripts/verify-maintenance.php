@@ -11,6 +11,8 @@ use App\Domain\Kernel\Alerts\AlertType;
 use App\Domain\Kernel\Alerts\Data\ReminderCandidate;
 use App\Domain\Kernel\Alerts\Data\ThresholdSet;
 use App\Domain\Kernel\Alerts\Models\ReminderThreshold;
+use App\Domain\Kernel\Identity\PermissionCatalogue;
+use App\Domain\Kernel\Identity\RoleKey;
 use App\Domain\Kernel\Ledger\ChartOfAccounts;
 use App\Domain\Kernel\Ledger\Models\LedgerBarrier;
 use App\Domain\Kernel\Money\Money;
@@ -22,26 +24,42 @@ use App\Domain\Maintenance\Actions\CloseWorkOrder;
 use App\Domain\Maintenance\Actions\CompleteWorkOrder;
 use App\Domain\Maintenance\Actions\CountPartStock;
 use App\Domain\Maintenance\Actions\CreatePart;
+use App\Domain\Maintenance\Actions\CreateTyre;
+use App\Domain\Maintenance\Actions\FitTyre;
 use App\Domain\Maintenance\Actions\HoldWorkOrder;
 use App\Domain\Maintenance\Actions\InspectWorkOrder;
 use App\Domain\Maintenance\Actions\IssuePartToWorkOrder;
+use App\Domain\Maintenance\Actions\RaiseBreakdownRepair;
 use App\Domain\Maintenance\Actions\RaiseWorkOrder;
 use App\Domain\Maintenance\Actions\ReceivePartStock;
+use App\Domain\Maintenance\Actions\RecordBreakdown;
+use App\Domain\Maintenance\Actions\RecordInspection;
 use App\Domain\Maintenance\Actions\RejectWorkOrder;
+use App\Domain\Maintenance\Actions\RemoveTyre;
 use App\Domain\Maintenance\Actions\RemoveWorkOrderLine;
 use App\Domain\Maintenance\Actions\ResumeWorkOrder;
 use App\Domain\Maintenance\Actions\SaveServiceSchedule;
 use App\Domain\Maintenance\Actions\StartWorkOrder;
 use App\Domain\Maintenance\Alerts\ServiceDueSource;
+use App\Domain\Maintenance\BreakdownCause;
+use App\Domain\Maintenance\Data\BreakdownDto;
+use App\Domain\Maintenance\Data\InspectionDto;
 use App\Domain\Maintenance\Data\PartDto;
 use App\Domain\Maintenance\Data\ServiceScheduleDto;
+use App\Domain\Maintenance\Data\TyreDto;
 use App\Domain\Maintenance\Data\WorkOrderDto;
 use App\Domain\Maintenance\Data\WorkOrderLineDto;
 use App\Domain\Maintenance\HoldReason;
+use App\Domain\Maintenance\InspectionKind;
+use App\Domain\Maintenance\InspectionResult;
+use App\Domain\Maintenance\Models\Inspection;
+use App\Domain\Maintenance\Models\Tyre;
 use App\Domain\Maintenance\Models\WorkOrderLine;
 use App\Domain\Maintenance\ServiceDueState;
 use App\Domain\Maintenance\ServiceScheduleKind;
 use App\Domain\Maintenance\StockMovementKind;
+use App\Domain\Maintenance\TyreSlot;
+use App\Domain\Maintenance\TyreStatus;
 use App\Domain\Maintenance\WorkOrderKind;
 use App\Domain\Maintenance\WorkOrderLineKind;
 use App\Domain\Maintenance\WorkOrderStatus;
@@ -69,7 +87,11 @@ use Symfony\Component\Console\Output\ConsoleOutput;
  *     returns the order to approved;
  *   - slice 3e's shelf: a receipt, an issue to a job and a physical count each move the valued stock
  *     and post where §6.8 says they belong, a job that is not sanctioned cannot draw stock, and an
- *     emptied shelf is worth nothing.
+ *     emptied shelf is worth nothing;
+ *   - slice 3f's three registers: a tyre's fitment is one open position (the generated unique columns
+ *     say so twice), its removal writes the cost per kilometre the stint cost, an inspection's verdict
+ *     is refused when it disagrees with its own checklist, and a breakdown's repair is one job on the
+ *     same truck and trip.
  *
  * Everything this file writes lives in the `XMT` namespace and is deleted at the end, including the
  * `work_order` counter, so the demo company is exactly as it was found.
@@ -152,6 +174,9 @@ $alignWorkOrderCounter = static function (): void {
 $wipeFixtures = static function (array $truckIds) use ($alignWorkOrderCounter): void {
     $scheduleIds = DB::table('service_schedules')->whereIn('truck_id', $truckIds ?: [0])->pluck('id')->all();
     $workOrderIds = DB::table('work_orders')->whereIn('truck_id', $truckIds ?: [0])->pluck('id')->all();
+    $tyreIds = DB::table('tyres')->where('serial', 'like', 'XMT-%')->pluck('id')->all();
+    $inspectionIds = DB::table('inspections')->whereIn('truck_id', $truckIds ?: [0])->pluck('id')->all();
+    $breakdownIds = DB::table('breakdowns')->whereIn('truck_id', $truckIds ?: [0])->pluck('id')->all();
     $alertIds = $scheduleIds === [] ? [] : DB::table('alerts')
         ->where('subject_type', 'service_schedule')
         ->whereIn('subject_id', array_map('strval', $scheduleIds))
@@ -160,12 +185,25 @@ $wipeFixtures = static function (array $truckIds) use ($alignWorkOrderCounter): 
 
     wipeIds('alerts', 'id', $alertIds);
     wipeIds('operational_events', 'aggregate_id', array_merge(array_map('strval', $workOrderIds), array_map('strval', $scheduleIds), array_map('strval', $alertIds)));
+    wipeIds('tyre_positions', 'truck_id', $truckIds);
+    wipeIds('tyre_positions', 'tyre_id', $tyreIds ?: [0]);
+    wipeIds('tyres', 'id', $tyreIds);
+    wipeIds('inspections', 'id', $inspectionIds);
+    wipeIds('breakdowns', 'id', $breakdownIds);
     wipeIds('stock_movements', 'work_order_id', $workOrderIds);
     wipeIds('work_order_lines', 'work_order_id', $workOrderIds);
     wipeIds('work_orders', 'id', $workOrderIds);
     wipeIds('service_schedules', 'id', $scheduleIds);
     wipeIds('odometer_readings', 'truck_id', $truckIds);
-    wipeIds('audits', 'auditable_id', array_merge($workOrderIds, array_map('strval', $scheduleIds), array_map('strval', $truckIds)));
+    // char(26) on the other side: an int in this list makes MySQL coerce the column to a number.
+    wipeIds('audits', 'auditable_id', array_map('strval', array_merge(
+        $workOrderIds,
+        $tyreIds,
+        $inspectionIds,
+        $breakdownIds,
+        $scheduleIds,
+        $truckIds,
+    )));
     wipeIds('trucks', 'id', $truckIds);
     $alignWorkOrderCounter();
 };
@@ -690,6 +728,321 @@ $oil->refresh();
 check($oil->isLowStock() === true, '...and an empty shelf reads low against its reorder level of 2');
 
 /* ------------------------------------------------------------------------- */
+echo "\n== §15.2 3f the three registers state their promises ==\n";
+
+$tyreDdl = (string) ((array) DB::select('show create table tyres')[0])['Create Table'];
+check(str_contains($tyreDdl, 'tyres_company_serial_unique'), 'a tyre serial is unique within the company');
+check(str_contains($tyreDdl, 'tyres_status_allowed'), '...and only the four casing states are stored');
+
+$positionDdl = (string) ((array) DB::select('show create table tyre_positions')[0])['Create Table'];
+
+foreach ([
+    'tyre_positions_open_slot_unique',
+    'tyre_positions_open_tyre_unique',
+    'tyre_positions_slot_allowed',
+    'tyre_positions_removal_is_complete',
+    'tyre_positions_odo_never_goes_back',
+] as $name) {
+    check(str_contains($positionDdl, $name), "tyre_positions carries {$name}");
+}
+
+$generated = DB::select(
+    "select extra from information_schema.columns
+      where table_schema = database() and table_name = 'tyre_positions'
+        and column_name in ('open_position', 'open_tyre_id')",
+);
+
+check(count($generated) === 2 && ! in_array(false, array_map(
+    static fn (object $row): bool => str_contains(strtoupper((string) ($row->EXTRA ?? $row->extra ?? '')), 'STORED GENERATED'),
+    $generated,
+), true),
+    '...and the one-tyre-per-slot rule is a generated column, so a removal frees it without a delete');
+
+$inspectionDdl = (string) ((array) DB::select('show create table inspections')[0])['Create Table'];
+check(str_contains($inspectionDdl, 'inspections_kind_allowed') && str_contains($inspectionDdl, 'inspections_result_allowed'), 'inspections state their kind and result vocabularies');
+check(Schema::hasColumns('inspections', ['trip_id', 'work_order_id', 'checklist', 'defects']), '...and name the trip and job the check was evidence for');
+
+$breakdownDdl = (string) ((array) DB::select('show create table breakdowns')[0])['Create Table'];
+check(str_contains($breakdownDdl, 'breakdowns_cause_allowed'), 'breakdowns state their cause vocabulary');
+check(str_contains($breakdownDdl, 'breakdowns_recovery_names_a_driver'), '...and only a driver-caused stop can be recovered from the driver');
+
+echo "\n== §9.3 the seats that write the three registers ==\n";
+
+$dispatcher = RoleKey::Dispatcher->permissions();
+$stores = RoleKey::StoresClerk->permissions();
+$workshop = RoleKey::WorkshopManager->permissions();
+
+check(in_array('breakdowns.record', $dispatcher, true) && ! in_array('tyres.manage', $dispatcher, true),
+    'a dispatcher records a breakdown but cannot put a tyre on a truck');
+check(in_array('tyres.manage', $stores, true) && ! in_array('inspections.record', $stores, true),
+    'a stores clerk fits tyres but does not sign a safety check off');
+check(in_array('inspections.record', $workshop, true) && in_array('breakdowns.record', $workshop, true),
+    'the workshop manager records all three — and raising any of them into a job still needs work_orders.create');
+check(PermissionCatalogue::knows('tyres.manage') && PermissionCatalogue::knows('breakdowns.record'), '...and all three names are in the catalogue the founder edits');
+
+/* ------------------------------------------------------------------------- */
+echo "\n== §4.3 TYRE a fitment is one open position and a removal prices the stint ==\n";
+
+$frontTyre = app(CreateTyre::class)(new TyreDto(
+    serial: 'XMT-TYR-0001',
+    size: '315/80R22.5',
+    brand: 'Michelin',
+    purchaseCost: Money::ofMinor(240_000, $base),
+    treadDepthX100: 1500,
+));
+
+check($frontTyre->status === TyreStatus::OnSpares, 'a new casing is registered on the spares rack');
+
+refuses(
+    'a serial cannot be registered twice',
+    fn () => app(CreateTyre::class)(new TyreDto(serial: 'XMT-TYR-0001', size: '315/80R22.5')),
+    InvalidArgumentException::class,
+    'already in the register',
+);
+
+$front = app(FitTyre::class)($frontTyre, $truck, TyreSlot::FrontLeft, $today, 119_700);
+
+check($front->position === TyreSlot::FrontLeft && $front->removed_at === null, 'the fitment opens one position — front left');
+check($frontTyre->refresh()->status === TyreStatus::InService, '...and the casing reads in service');
+
+refuses(
+    'a tyre already on a truck cannot be fitted again',
+    fn () => app(FitTyre::class)($frontTyre->refresh(), $truck, TyreSlot::FrontRight, $today, 119_700),
+    InvalidArgumentException::class,
+    'remove it there first',
+);
+
+$rearTyre = app(CreateTyre::class)(new TyreDto(
+    serial: 'XMT-TYR-0002',
+    size: '315/80R22.5',
+    purchaseCost: Money::ofMinor(180_000, $base),
+));
+
+refuses(
+    'an occupied slot refuses a second tyre, naming the one already there',
+    fn () => app(FitTyre::class)($rearTyre, $truck, TyreSlot::FrontLeft, $today, 119_700),
+    InvalidArgumentException::class,
+    'occupied',
+);
+
+refuses(
+    'a fitment behind the truck’s odometer card is refused',
+    fn () => app(FitTyre::class)($rearTyre, $truck, TyreSlot::RearRightOuter, $today, 119_000),
+    InvalidArgumentException::class,
+    'backwards',
+);
+
+$rear = app(FitTyre::class)($rearTyre, $truck, TyreSlot::RearRightOuter, $today, 119_800);
+check($rear->position === TyreSlot::RearRightOuter, '...so the same tyre fits cleanly at the recorded reading');
+
+$removed = app(RemoveTyre::class)($frontTyre->refresh(), $today->copy()->addDays(30), 131_000, TyreStatus::OnSpares);
+
+check($removed->kilometresRun() === 11_300, 'the removal writes the distance the stint ran (11,300 km)');
+check($removed->cost_per_km_x10000 === intdiv(240_000 * 100 + intdiv(11_300, 2), 11_300),
+    '...and the price that distance cost per kilometre, at four places — '.$removed->costPerKmLabel());
+check($removed->costPerKmLabel() === '0.2124', '...which prints as 0.2124 per km, not a rounded-to-nothing 0.00');
+check($frontTyre->refresh()->status === TyreStatus::OnSpares, '...and the casing is back on the rack');
+
+refuses(
+    'a tyre that is not fitted has nothing to remove',
+    fn () => app(RemoveTyre::class)($frontTyre->refresh(), $today->copy()->addDays(31), 140_000, TyreStatus::OnSpares),
+    InvalidArgumentException::class,
+    'not fitted to anything',
+);
+
+$secondLife = app(FitTyre::class)($frontTyre->refresh(), $truck, TyreSlot::RearLeftOuter, $today->copy()->addDays(32), 131_500);
+check($secondLife->tyre_id === $frontTyre->id, '...so the same serial opens a second stint on another slot');
+
+refuses(
+    'a removal cannot leave the tyre in service',
+    fn () => app(RemoveTyre::class)($frontTyre->refresh(), $today->copy()->addDays(40), 140_000, TyreStatus::InService),
+    InvalidArgumentException::class,
+    'cannot stay in service',
+);
+
+$scrapped = app(RemoveTyre::class)($frontTyre->refresh(), $today->copy()->addDays(40), 140_000, TyreStatus::Scrap);
+check($scrapped->kilometresRun() === 8_500 && $frontTyre->refresh()->status === TyreStatus::Scrap, '...and a wasted casing leaves the rack as scrap with its own rate');
+
+echo "\n== §4.3 INSPECTION the verdict must agree with the checklist ==\n";
+
+$preTrip = array_fill_keys(InspectionKind::PreTrip->checklistKeys(), true);
+
+$oneNo = $preTrip;
+$oneNo['brakes'] = false;
+
+refuses(
+    'a pass cannot carry a no',
+    fn () => new InspectionDto(kind: InspectionKind::PreTrip, truckId: $truck->id, doneAt: $today, result: InspectionResult::Pass, answers: $oneNo),
+    InvalidArgumentException::class,
+    'cannot carry a "no"',
+);
+
+refuses(
+    'a pass cannot carry a defect note',
+    fn () => new InspectionDto(kind: InspectionKind::PreTrip, truckId: $truck->id, doneAt: $today, result: InspectionResult::Pass, answers: $preTrip, defects: ['Marked as seen']),
+    InvalidArgumentException::class,
+    'no defects',
+);
+
+refuses(
+    'a fail must say what was seen',
+    fn () => new InspectionDto(kind: InspectionKind::PreTrip, truckId: $truck->id, doneAt: $today, result: InspectionResult::Fail, answers: $oneNo),
+    InvalidArgumentException::class,
+    'must say what was seen',
+);
+
+refuses(
+    'an inspection must answer every item',
+    fn () => new InspectionDto(kind: InspectionKind::PreTrip, truckId: $truck->id, doneAt: $today, result: InspectionResult::Pass, answers: ['brakes' => true]),
+    InvalidArgumentException::class,
+    'left blank',
+);
+
+$pass = app(RecordInspection::class)(new InspectionDto(
+    kind: InspectionKind::PreTrip,
+    truckId: $truck->id,
+    doneAt: $today,
+    result: InspectionResult::Pass,
+    answers: $preTrip,
+));
+
+check($pass instanceof Inspection && $pass->result === InspectionResult::Pass, 'a clean walk-around is stored as a pass');
+check(count($pass->checklist) === count(InspectionKind::PreTrip->checklistKeys()) && $pass->failedChecklistItems() === [], '...with every item answered and none failed');
+
+$fail = app(RecordInspection::class)(new InspectionDto(
+    kind: InspectionKind::PreTrip,
+    truckId: $truck->id,
+    doneAt: $today,
+    result: InspectionResult::Fail,
+    answers: $oneNo,
+    defects: ['Rear brakes below limit'],
+));
+
+check(array_keys($fail->failedChecklistItems()) === ['brakes'], 'a fail names the item that failed');
+check($fail->defectLines() === ['Rear brakes below limit'], '...and the line that says what was seen');
+
+$advisoryAnswers = array_fill_keys(InspectionKind::Periodic->checklistKeys(), true);
+$advisory = app(RecordInspection::class)(new InspectionDto(
+    kind: InspectionKind::Periodic,
+    truckId: $truck->id,
+    doneAt: $today,
+    result: InspectionResult::Advisory,
+    answers: $advisoryAnswers,
+    defects: ['Rear marker lamp cracked; replacement ordered'],
+));
+
+check($advisory->result === InspectionResult::Advisory && $advisory->failedChecklistItems() === [], 'an advisory may pass every item and still carry its note');
+
+$foreignOrder = app(RaiseWorkOrder::class)(new WorkOrderDto(
+    truckId: $otherTruck->id,
+    kind: WorkOrderKind::Repair,
+    title: 'XMT job on the other truck',
+    lines: [new WorkOrderLineDto(WorkOrderLineKind::Labour, 'Labour', 100, 5_000, $base)],
+));
+
+refuses(
+    'an inspection cannot cite another truck’s job',
+    fn () => app(RecordInspection::class)(new InspectionDto(
+        kind: InspectionKind::Periodic,
+        truckId: $truck->id,
+        doneAt: $today,
+        result: InspectionResult::Pass,
+        answers: array_fill_keys(InspectionKind::Periodic->checklistKeys(), true),
+        workOrderId: $foreignOrder->id,
+    )),
+    InvalidArgumentException::class,
+    'another truck',
+);
+
+echo "\n== §4.3 BREAKDOWN one stop, one repair ==\n";
+
+refuses(
+    'recovering from the driver needs a driver-caused stop',
+    fn () => new BreakdownDto(
+        truckId: $truck->id,
+        occurredAt: $today,
+        location: 'A1 north of Palapye',
+        description: 'Turbo failure',
+        cause: BreakdownCause::Mechanical,
+        recoverableFromDriver: true,
+    ),
+    InvalidArgumentException::class,
+    'driver-caused',
+);
+
+$mechanical = app(RecordBreakdown::class)(new BreakdownDto(
+    truckId: $truck->id,
+    occurredAt: $today->copy()->subHours(4),
+    location: 'A1 north of Palapye',
+    description: 'Turbo failure under load',
+    cause: BreakdownCause::Mechanical,
+    hoursLost: 6,
+));
+
+check($mechanical->hours_lost === 6 && $mechanical->work_order_id === null, 'a mechanical stop is recorded with its hours, before any repair exists');
+
+$driverStop = app(RecordBreakdown::class)(new BreakdownDto(
+    truckId: $truck->id,
+    occurredAt: $today->copy()->subDays(2),
+    location: 'Serowe yard',
+    description: 'Trailer dropped on the ramp',
+    cause: BreakdownCause::Driver,
+    recoverableFromDriver: true,
+));
+
+check($driverStop->recoverable_from_driver === true, 'a driver-caused stop may be marked recoverable');
+
+$repair = app(RaiseBreakdownRepair::class)($mechanical, new WorkOrderDto(
+    truckId: $truck->id,
+    kind: WorkOrderKind::Breakdown,
+    title: 'Turbo repair XMT',
+    lines: [new WorkOrderLineDto(WorkOrderLineKind::Labour, 'Turbo diagnosis and repair', 800, 22_000, $base)],
+    description: $mechanical->description,
+    estimatedHours: 8.0,
+));
+
+check($repair->kind === WorkOrderKind::Breakdown && $repair->truck_id === $truck->id, 'the repair is a breakdown job on the truck that stopped');
+check($mechanical->refresh()->work_order_id === $repair->id, '...and the stop now names the job it got');
+
+refuses(
+    'a breakdown gets one repair',
+    fn () => app(RaiseBreakdownRepair::class)($mechanical->refresh(), new WorkOrderDto(
+        truckId: $truck->id,
+        kind: WorkOrderKind::Breakdown,
+        title: 'Second repair XMT',
+        lines: [new WorkOrderLineDto(WorkOrderLineKind::Labour, 'More work', 100, 5_000, $base)],
+    )),
+    InvalidArgumentException::class,
+    'already has its repair',
+);
+
+refuses(
+    'a job raised from a breakdown is a breakdown job',
+    fn () => app(RaiseBreakdownRepair::class)($driverStop, new WorkOrderDto(
+        truckId: $truck->id,
+        kind: WorkOrderKind::Repair,
+        title: 'Wrong kind XMT',
+        lines: [new WorkOrderLineDto(WorkOrderLineKind::Labour, 'Labour', 100, 5_000, $base)],
+    )),
+    InvalidArgumentException::class,
+    'breakdown work order',
+);
+
+refuses(
+    'a repair must be raised on the truck that broke down',
+    fn () => app(RaiseBreakdownRepair::class)($driverStop->refresh(), new WorkOrderDto(
+        truckId: $otherTruck->id,
+        kind: WorkOrderKind::Breakdown,
+        title: 'Wrong truck XMT',
+        lines: [new WorkOrderLineDto(WorkOrderLineKind::Labour, 'Labour', 100, 5_000, $base)],
+    )),
+    InvalidArgumentException::class,
+    'truck that broke down',
+);
+
+check($driverStop->refresh()->work_order_id === null, '...and no partial link is left behind by the refusals');
+
+/* ------------------------------------------------------------------------- */
 echo "\n== cleanup ==\n";
 
 $wipeParts();
@@ -702,6 +1055,10 @@ $leftovers = [
     'trucks' => (int) DB::table('trucks')->whereIn('id', [$truck->id, $otherTruck->id])->count(),
     'parts' => (int) DB::table('parts')->where('sku', 'like', 'XMT-%')->count(),
     'stock movements' => (int) DB::table('stock_movements')->whereIn('part_id', DB::table('parts')->where('sku', 'like', 'XMT-%')->pluck('id')->all() ?: [0])->count(),
+    'tyres' => (int) DB::table('tyres')->where('serial', 'like', 'XMT-%')->count(),
+    'tyre positions' => (int) DB::table('tyre_positions')->whereIn('truck_id', [$truck->id, $otherTruck->id])->count(),
+    'inspections' => (int) DB::table('inspections')->whereIn('truck_id', [$truck->id, $otherTruck->id])->count(),
+    'breakdowns' => (int) DB::table('breakdowns')->whereIn('truck_id', [$truck->id, $otherTruck->id])->count(),
 ];
 
 foreach ($leftovers as $what => $count) {

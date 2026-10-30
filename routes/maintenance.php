@@ -30,6 +30,18 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         ->middleware('can:maintenance.view')
         ->name('maintenance.work_order');
 
+    Route::livewire('tyres', 'pages::maintenance.tyres')
+        ->middleware('can:maintenance.view')
+        ->name('maintenance.tyres');
+
+    Route::livewire('inspections', 'pages::maintenance.inspections')
+        ->middleware('can:maintenance.view')
+        ->name('maintenance.inspections');
+
+    Route::livewire('breakdowns', 'pages::maintenance.breakdowns')
+        ->middleware('can:maintenance.view')
+        ->name('maintenance.breakdowns');
+
     Route::livewire('parts', 'pages::maintenance.parts')
         ->middleware('can:parts.view')
         ->name('maintenance.parts');
