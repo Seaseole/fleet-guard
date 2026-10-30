@@ -30,7 +30,7 @@ return [
     [
         'label' => 'Workshop',
         'items' => [
-            ['label' => 'Fuel', 'route' => 'fuel.index', 'icon' => 'bolt', 'permission' => 'fuel.view', 'phase' => 3],
+            ['label' => 'Fuel', 'route' => 'fuel.index', 'icon' => 'circle-stack', 'permission' => 'fuel.view', 'phase' => 3],
             ['label' => 'Maintenance', 'route' => 'maintenance.index', 'icon' => 'wrench', 'permission' => 'maintenance.view', 'phase' => 3],
             ['label' => 'Parts', 'route' => 'maintenance.parts', 'icon' => 'cube', 'permission' => 'parts.view', 'phase' => 1],
         ],

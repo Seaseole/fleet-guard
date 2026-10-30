@@ -56,6 +56,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
@@ -845,6 +846,13 @@ new #[Title('Trip')] class extends Component
         $trip = $this->trip();
 
         return $trip->costs_frozen || in_array($trip->status, [TripStatus::Cancelled, TripStatus::Aborted], true);
+    }
+
+    /** A fuel issue posts a trip cost and moves the rollup; this section's cached reads are now stale. */
+    #[On('trip-fuel-recorded')]
+    public function refreshAfterFuel(): void
+    {
+        unset($this->trip, $this->tripCosts, $this->chargeables);
     }
 
     public function canAddCosts(): bool
@@ -1729,6 +1737,9 @@ new #[Title('Trip')] class extends Component
             </x-ui.dialog>
         @endif
     @endif
+
+    {{-- Fuel is a module of its own (§4.3): the trip names the truck and the tank, the panel does the rest. --}}
+    <livewire:pages::fuel.trip-panel :trip="$this->trip()" />
 
     {{--
         §9.6's two halves on one screen: the door the dispatcher opens for the driver, and the decision the

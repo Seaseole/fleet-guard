@@ -5,7 +5,7 @@
         ['label' => __('New journal'), 'route' => 'accounting.journal.create', 'permission' => 'ledger.journal.manual', 'icon' => 'calculator'],
         ['label' => __('New job'), 'route' => 'jobs.create', 'permission' => 'jobs.create', 'icon' => 'clipboard-document-list'],
         ['label' => __('Dispatch trip'), 'route' => 'trips.create', 'permission' => 'trips.create', 'icon' => 'map'],
-        ['label' => __('Record fuel'), 'route' => 'fuel.create', 'permission' => 'fuel.create', 'icon' => 'bolt'],
+        ['label' => __('Record fuel'), 'route' => 'fuel.index', 'permission' => 'fuel.record', 'icon' => 'circle-stack'],
         ['label' => __('New work order'), 'route' => 'work-orders.create', 'permission' => 'work-orders.create', 'icon' => 'wrench'],
         ['label' => __('New invoice'), 'route' => 'invoices.create', 'permission' => 'invoices.create', 'icon' => 'receipt-percent'],
     ])->filter(fn (array $a) => Route::has($a['route']) && Gate::allows($a['permission']))->all();

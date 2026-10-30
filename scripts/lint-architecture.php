@@ -35,6 +35,12 @@ final class ArchitectureLint
         // §4.3 gives a part an optional "specific part" truck, and §3 draws MAINT --> FLEET. The
         // edge is one nullable FK and the label the catalogue prints, nothing more.
         'Maintenance' => ['Fleet'],
+        // §3 draws FUEL --> OPS: an issue is fuel onto a trip, and the cost it posts is the trip's.
+        // §4.3's FUEL_TANK/FUEL_ISSUE both carry `truck_id`, so Fleet is a second edge the map does
+        // not draw but the schema does. A station or a card names the supplier that bills it
+        // (`fuel_stations.supplier_id`), which is Accounting's model — three edges, each one FK and
+        // a label, no writes.
+        'Fuel' => ['Fleet', 'Operations', 'Accounting'],
     ];
 
     /** @var list<string> */
