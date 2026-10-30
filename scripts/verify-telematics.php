@@ -212,7 +212,11 @@ function xgpMessage(string $id, int $truckId, ?string $tripId, float $lat, float
     ], $extra);
 }
 
-$runStartedAt = Carbon::now();
+// Whole seconds, because every column this run is measured against is a DATETIME with no fractional
+// part. With microseconds here, an ingest inside the same second as the run start truncates *below*
+// this clock, and the audit sweep at the end can miss the row written in that first second — one run
+// passes, the next fails, and neither says anything about the code.
+$runStartedAt = Carbon::now()->startOfSecond();
 $owner = User::query()->findOrFail(1);
 Auth::login($owner);
 CurrentCompany::force(1);
