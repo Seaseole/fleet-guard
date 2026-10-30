@@ -46,6 +46,7 @@ use App\Domain\Security\Actions\ChangeUserRole;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -59,8 +60,9 @@ use Illuminate\Support\Str;
  *
  * The sentences this slice turns on:
  *
- * - a slip ties to itself: litres × price is the amount, and the table's CHECK states the same
- *   identity the DTO checks, so a hand-written row cannot slip past either;
+ * - a slip ties to itself: litres × price is the amount under §5.5's HALF_UP, and the table's CHECK
+ *   states the same rule the DTO checks — including the slip whose product lands between cents,
+ *   which is carried rather than refused — so a hand-written row cannot slip past either;
  * - an issue is fuel **onto a trip**: the tank must be that trip's truck's, the slip must still have
  *   litres on it, and the resulting cost is the issue's own frozen figure;
  * - the issue posts through Phase 2's doors — a trip cost of type `fuel` (account 5100, truck and
@@ -501,6 +503,51 @@ $retry = $createPurchase(new FuelPurchaseDto(
 
 check($retry->id === $purchase->id, 'a re-delivered slip (same source_uuid) is the same purchase, not a second one');
 check((int) DB::table('fuel_purchases')->where('invoice_no', 'XFL-SLIP-1')->count() === 1, '...and the table holds exactly one row for it');
+
+/*
+ * The slip that lands between cents. 25.30 L at BWP 19.75 is BWP 499.675, and §5.5 rounds the cost
+ * HALF_UP to 499.68 — so `amount × 100 = litres × price` is a rule, not an identity, and the CHECK
+ * has to state the rule. Written as the bare identity it refused 99 slips in 100, this one among
+ * them: `SQLSTATE[HY000] 3819 Check constraint 'fuel_purchases_price_times_litres_is_amount'`.
+ */
+$subCent = $createPurchase(new FuelPurchaseDto(
+    amount: Money::ofMinor(49_968, $baseCurrency),
+    rate: '1',
+    rateSource: FxRateSource::Manual,
+    rateDate: Carbon::now(),
+    purchasedOn: Carbon::now(),
+    litresX100: 2_530,
+    pricePerLitreMinor: 1975,
+    stationId: $station->id,
+    invoiceNo: 'XFL-SUB-CENT',
+));
+$created['purchase_ids'][] = $subCent->id;
+
+check($subCent->amount === 49_968, '25.30 L at BWP 19.75 (BWP 499.675) is carried as 499.68, HALF_UP');
+check($subCent->litresMajor() === '25.30', '...and its litre figure is untouched');
+
+refuses(
+    'a hand-written row a minor unit under the slip\'s own figure is refused by the CHECK',
+    fn () => DB::table('fuel_purchases')->insert([
+        'id' => (string) Str::ulid(),
+        'company_id' => CurrentCompany::id(),
+        'currency_code' => $baseCurrency,
+        'amount' => 49_967,
+        'fx_rate' => 1,
+        'fx_rate_source' => FxRateSource::Manual->value,
+        'fx_rate_date' => Carbon::now()->toDateString(),
+        'base_currency_code' => $baseCurrency,
+        'base_amount' => 49_967,
+        'purchased_on' => Carbon::now()->toDateString(),
+        'litres' => 2_530,
+        'price_per_litre_minor' => 1975,
+        'posted_to_ledger' => false,
+        'created_at' => Carbon::now(),
+        'updated_at' => Carbon::now(),
+    ]),
+    QueryException::class,
+    'fuel_purchases_price_times_litres_is_amount'
+);
 
 /* ------------------------------------------------------------------------- */
 echo "\n== §4.3 issuing fuel: onto a trip, from that trip's own truck ==\n";

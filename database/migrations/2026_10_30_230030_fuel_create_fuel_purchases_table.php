@@ -16,7 +16,9 @@ return new class extends Migration
      * frozen at write time, exactly as `trip_costs` does it. The spec's two "×100 = 2 dp" integer
      * columns are kept as stated — `litres` and `price_per_litre_minor` — because a slip's arithmetic
      * (litres × price) is the first thing an accountant checks, and integer minor units make that
-     * check exact rather than a tolerance.
+     * check exact rather than a tolerance. "Exact" means the CHECK reproduces §5.5's rounding rule
+     * to the minor unit, not that the product is itself a whole minor unit — see the constraint at
+     * the foot of `up()`.
      *
      * `posted_to_ledger` is the §6.8 `FuelPurchaseRecorded` seam. Phase 3a records the slip and leaves
      * the flag false: the ledger entry (`Dr 5100 Fuel / Cr 3100 Supplier payable`) needs a supplier
@@ -65,11 +67,20 @@ return new class extends Migration
         DB::statement('alter table `fuel_purchases` add constraint `fuel_purchases_currency_upper` check (currency_code = upper(currency_code) and base_currency_code = upper(base_currency_code))');
         DB::statement('alter table `fuel_purchases` add constraint `fuel_purchases_source_allowed` check (fx_rate_source in (\'manual\', \'rbg_daily\', \'bpb\', \'contract\', \'customer_agreed\', \'bank_statement\', \'opening_balance\', \'manual_override\'))');
 
-        // The slip's arithmetic, exact. Both sides are integers, so the check is multiplication
-        // rather than a tolerance: litres are stored ×100 (two decimals at a pump) and the price is
-        // currency minor units, which makes `amount × 100 = litres × price` the identity. A
-        // transposed digit then fails on the row that carries it instead of at reconciliation.
-        DB::statement('alter table `fuel_purchases` add constraint `fuel_purchases_price_times_litres_is_amount` check (amount * 100 = litres * price_per_litre_minor)');
+        // The slip's arithmetic, §5.5's rule stated as integers: `amount = ROUND_HALF_UP(litres ×
+        // price ÷ 100)`. Litres are stored ×100 (two decimals at a pump) and the price is currency
+        // minor units, so their product is in *hundredths* of a minor unit and only lands on a
+        // whole cent when it happens to be a multiple of 100 — 25.30 L at BWP 19.75 is BWP 499.675,
+        // which the register must carry as 499.68, not refuse. Writing the constraint as the bare
+        // identity `amount × 100 = litres × price` therefore failed ~99 slips in 100.
+        //
+        // Half-up means `100 × amount − litres × price` is in [−49, +50], and since that window is
+        // 100 integers wide it pins exactly one figure: the amount the slip's own two numbers
+        // produce. The band is written as two additions rather than a subtraction so neither side
+        // can go negative (a `BIGINT UNSIGNED` difference raises instead of comparing), and it is
+        // portable to the test engine, where `DIV` is not. A transposed digit still fails on the
+        // row that carries it instead of at reconciliation.
+        DB::statement('alter table `fuel_purchases` add constraint `fuel_purchases_price_times_litres_is_amount` check (amount * 100 <= litres * price_per_litre_minor + 50 and litres * price_per_litre_minor <= amount * 100 + 49)');
     }
 
     public function down(): void
