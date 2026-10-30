@@ -3,12 +3,15 @@
 declare(strict_types=1);
 
 use App\Domain\Fleet\Models\Truck;
+use App\Domain\Fuel\Actions\CreateBulkTank;
 use App\Domain\Fuel\Actions\CreateFuelPurchase;
 use App\Domain\Fuel\Actions\CreateFuelStation;
 use App\Domain\Fuel\Actions\CreateFuelTank;
+use App\Domain\Fuel\Actions\ReconcileBulkTank;
 use App\Domain\Fuel\Data\FuelPurchaseDto;
 use App\Domain\Fuel\FuelIssueStatus;
 use App\Domain\Fuel\FuelTankKind;
+use App\Domain\Fuel\Models\BulkTank;
 use App\Domain\Fuel\Models\FuelIssue;
 use App\Domain\Fuel\Models\FuelPurchase;
 use App\Domain\Fuel\Models\FuelStation;
@@ -29,12 +32,14 @@ use Livewire\WithPagination;
 
 /*
  * The fuel register (§3.2, §4.3): the slips the fleet bought, the stations that sold them, the
- * tanks the trucks carry, and the issues those tanks have dispensed.
+ * tanks the trucks carry, the yard tank the deliveries go into, and the issues those tanks have
+ * dispensed.
  *
  * An issue is not recorded here. It belongs to a trip — the trip names the truck, the truck names
  * the tank, and the cost accounts 5100 requires the trip dimension (§6.1) — so issuing happens on
  * the trip's own fuel panel. What this screen answers is the office's question before a trip
- * leaves: which slips still have litres on them, and which trucks are actually fitted for fuel.
+ * leaves: which slips still have litres on them, which trucks are actually fitted for fuel, and what
+ * the yard tank holds after the last delivery and the last dip.
  *
  * Writing is `fuel.record` (§9.3 — Owner, Operations Manager, Workshop Manager, Stores Clerk);
  * the Accountant reads with `fuel.view`. Every write is a dialog of its own, because each Action
@@ -55,7 +60,21 @@ new #[Title('Fuel')] class extends Component {
 
     public ?string $tankCapacity = null;
 
+    public string $bulkTankName = '';
+
+    public ?string $bulkTankCapacity = null;
+
+    public string $dipTankId = '';
+
+    public string $dipLitres = '';
+
+    public string $dipDate = '';
+
+    public string $dipNote = '';
+
     public ?string $slipStationId = null;
+
+    public ?string $slipBulkTankId = null;
 
     public string $slipDate = '';
 
@@ -74,6 +93,7 @@ new #[Title('Fuel')] class extends Component {
     public function mount(): void
     {
         $this->slipDate = Carbon::now(CurrentCompany::timezone())->toDateString();
+        $this->dipDate = $this->slipDate;
         $this->slipCurrency = $this->baseCurrency();
     }
 
@@ -136,16 +156,77 @@ new #[Title('Fuel')] class extends Component {
         $this->dispatch('toast', message: __(':tank fitted.', ['tank' => $tank->label()]), kind: 'success');
     }
 
+    public function addBulkTank(CreateBulkTank $open): void
+    {
+        abort_unless($this->canRecord(), 403);
+
+        $this->bulkTankCapacity = trim((string) $this->bulkTankCapacity) === '' ? null : $this->bulkTankCapacity;
+
+        $validated = $this->validate([
+            'bulkTankName' => ['required', 'string', 'max:80'],
+            'bulkTankCapacity' => ['required', 'integer', 'min:1', 'max:65535'],
+        ]);
+
+        try {
+            $tank = $open($validated['bulkTankName'], (int) $validated['bulkTankCapacity']);
+        } catch (InvalidArgumentException $refused) {
+            $this->addError('bulkTank', $refused->getMessage());
+
+            return;
+        }
+
+        $this->reset(['bulkTankName', 'bulkTankCapacity']);
+        unset($this->bulkTanks);
+        $this->dispatch('close-bulk-tank');
+        $this->dispatch('toast', message: __(':tank opened, empty.', ['tank' => $tank->name]), kind: 'success');
+    }
+
+    public function reconcile(ReconcileBulkTank $reconcile): void
+    {
+        abort_unless($this->canRecord(), 403);
+
+        $validated = $this->validate([
+            'dipTankId' => ['required', 'integer', Rule::exists('bulk_tanks', 'id')->where('company_id', CurrentCompany::id())],
+            'dipLitres' => ['required', 'string'],
+            'dipDate' => ['required', 'date'],
+            'dipNote' => ['nullable', 'string', 'max:160'],
+        ]);
+
+        $tank = BulkTank::query()->findOrFail((int) $validated['dipTankId']);
+
+        try {
+            $movement = $reconcile(
+                $tank,
+                $this->scaledHundredths($validated['dipLitres'], __('The dip reading')),
+                Carbon::parse($validated['dipDate']),
+                $validated['dipNote'] ?? null,
+                (int) auth()->id(),
+            );
+        } catch (InvalidArgumentException $refused) {
+            $this->addError('dip', $refused->getMessage());
+
+            return;
+        }
+
+        $this->reset(['dipTankId', 'dipLitres', 'dipNote']);
+        $this->dipDate = Carbon::now(CurrentCompany::timezone())->toDateString();
+        unset($this->bulkTanks, $this->purchases);
+        $this->dispatch('close-bulk-dip');
+        $this->dispatch('toast', message: __('Book adjusted by :litres L.', ['litres' => $movement->litresDeltaMajor()]), kind: 'success');
+    }
+
     public function recordSlip(CreateFuelPurchase $create): void
     {
         abort_unless($this->canRecord(), 403);
 
         $this->slipStationId = trim((string) $this->slipStationId) === '' ? null : $this->slipStationId;
+        $this->slipBulkTankId = trim((string) $this->slipBulkTankId) === '' ? null : $this->slipBulkTankId;
 
         $validated = $this->validate([
             'slipDate' => ['required', 'date'],
             'slipInvoice' => ['nullable', 'string', 'max:60'],
             'slipStationId' => ['nullable', 'integer', Rule::exists('fuel_stations', 'id')->where('company_id', CurrentCompany::id())],
+            'slipBulkTankId' => ['nullable', 'integer', Rule::exists('bulk_tanks', 'id')->where('company_id', CurrentCompany::id())],
             'slipLitres' => ['required', 'string'],
             'slipPrice' => ['required', 'string'],
             'slipCurrency' => ['required', 'string', 'size:3', Rule::exists('currencies', 'code')],
@@ -175,6 +256,7 @@ new #[Title('Fuel')] class extends Component {
                 pricePerLitreMinor: $priceMinor,
                 stationId: ($validated['slipStationId'] ?? null) === null ? null : (int) $validated['slipStationId'],
                 invoiceNo: $validated['slipInvoice'] ?? null,
+                bulkTankId: ($validated['slipBulkTankId'] ?? null) === null ? null : (int) $validated['slipBulkTankId'],
             ), (int) auth()->id());
         } catch (InvalidArgumentException $refused) {
             $this->addError('slip', $refused->getMessage());
@@ -182,11 +264,11 @@ new #[Title('Fuel')] class extends Component {
             return;
         }
 
-        $this->reset(['slipInvoice', 'slipLitres', 'slipPrice', 'slipRate', 'slipRateSource']);
+        $this->reset(['slipInvoice', 'slipLitres', 'slipPrice', 'slipRate', 'slipRateSource', 'slipBulkTankId']);
         $this->slipDate = Carbon::now(CurrentCompany::timezone())->toDateString();
         $this->slipRate = '1';
         $this->slipRateSource = FxRateSource::Manual->value;
-        unset($this->purchases);
+        unset($this->purchases, $this->bulkTanks);
         $this->dispatch('close-fuel-slip');
         $this->dispatch('toast', message: __('Slip recorded: :litres L.', ['litres' => $slip->litresMajor()]), kind: 'success');
     }
@@ -220,10 +302,17 @@ new #[Title('Fuel')] class extends Component {
     public function purchases(): LengthAwarePaginator
     {
         return FuelPurchase::query()
-            ->with(['station', 'issues'])
+            ->with(['station', 'issues', 'bulkTank'])
             ->orderByDesc('purchased_on')
             ->orderByDesc('created_at')
             ->paginate(15, pageName: 'slips');
+    }
+
+    /** @return Collection<int, BulkTank> */
+    #[Computed]
+    public function bulkTanks(): Collection
+    {
+        return BulkTank::query()->orderBy('name')->get();
     }
 
     /** @return Collection<int, FuelStation> */
@@ -303,6 +392,16 @@ new #[Title('Fuel')] class extends Component {
     {
         return number_format($hundredths / 100, 2, '.', '');
     }
+
+    /** A bulk tank's book in a sentence the card can print without another query. */
+    public function tankSummary(BulkTank $tank): string
+    {
+        return sprintf(
+            '%s L at %s',
+            $tank->stockLitres(),
+            $tank->averageMoney()->format($this->baseCurrency()),
+        );
+    }
 }; ?>
 
 <div class="grid gap-6">
@@ -337,13 +436,20 @@ new #[Title('Fuel')] class extends Component {
                     <x-ui.table.td>
                         <span class="text-fg-ink">{{ $slip->invoice_no ?? __('No invoice number') }}</span>
                         <span class="block text-xs text-fg-ink-muted">{{ $slip->station?->label() ?? __('No station named') }}</span>
+                        @if ($slip->bulkTank !== null)
+                            <span class="block text-xs text-fg-ink-muted">{{ __('into :tank', ['tank' => $slip->bulkTank->name]) }}</span>
+                        @endif
                     </x-ui.table.td>
                     <x-ui.table.td nowrap>{{ $slip->purchased_on?->format('d M Y') ?? '—' }}</x-ui.table.td>
                     <x-ui.table.td numeric>{{ $slip->litresMajor() }}</x-ui.table.td>
                     <x-ui.table.td numeric>{{ $this->money($slip->pricePerLitre()) }}</x-ui.table.td>
                     <x-ui.table.td numeric>{{ $this->money($slip->amountMoney()) }}</x-ui.table.td>
                     <x-ui.table.td numeric>
-                        <span class="{{ $remaining === 0 ? 'text-fg-ink-muted' : 'text-fg-ink' }}">{{ $this->litres($remaining) }}</span>
+                        @if ($slip->isBulkDelivery())
+                            <span class="text-xs text-fg-ink-muted">{{ __('in the tank') }}</span>
+                        @else
+                            <span class="{{ $remaining === 0 ? 'text-fg-ink-muted' : 'text-fg-ink' }}">{{ $this->litres($remaining) }}</span>
+                        @endif
                     </x-ui.table.td>
                     <x-ui.table.td>
                         @if ($slip->posted_to_ledger)
@@ -370,6 +476,60 @@ new #[Title('Fuel')] class extends Component {
             <div class="mt-4 grid gap-3">
                 {{ $this->purchases->links() }}
             </div>
+        @endif
+    </x-ui.card>
+
+    <x-ui.card :title="__('Bulk tank')" class="min-w-0">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <x-ui.text size="sm" color="muted">
+                {{ __('Diesel delivered into the yard tank is stock until a trip draws from it, at the tank’s moving average. A slip is a purchase the trucks draw from; a delivery into a tank is an asset the moment it is unloaded.') }}
+            </x-ui.text>
+
+            @if ($this->canRecord())
+                <div class="flex flex-wrap items-center gap-2">
+                    <x-ui.button size="sm" variant="outline" x-on:click="$dispatch('open-bulk-tank')">{{ __('Open a tank') }}</x-ui.button>
+
+                    @if ($this->bulkTanks->isNotEmpty())
+                        <x-ui.button size="sm" variant="outline" x-on:click="$dispatch('open-bulk-dip')">{{ __('Record a dip') }}</x-ui.button>
+                    @endif
+                </div>
+            @endif
+        </div>
+
+        @if ($this->bulkTanks->isEmpty())
+            <x-ui.empty-state
+                icon="circle-stack"
+                title="{{ __('No bulk tank yet') }}"
+                description="{{ __('Deliveries go onto slips by default. Open a tank to hold diesel in stock instead — its litres, its value and its moving average move together, and a dip reconciles the book against the gauge.') }}"
+            />
+        @else
+            <x-ui.table :caption="__('Every bulk tank, with the stock it holds, the average it is worth and its reconciliation state')">
+                <x-slot name="head">
+                    <x-ui.table.th>{{ __('Tank') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Capacity') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('In stock') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Average / L') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Value') }}</x-ui.table.th>
+                    <x-ui.table.th>{{ __('State') }}</x-ui.table.th>
+                </x-slot>
+
+                @foreach ($this->bulkTanks as $tank)
+                    <tr wire:key="bulk-tank-{{ $tank->id }}">
+                        <x-ui.table.td>{{ $tank->name }}</x-ui.table.td>
+                        <x-ui.table.td numeric>{{ $tank->capacity_litres }} L</x-ui.table.td>
+                        <x-ui.table.td numeric>{{ $tank->stockLitres() }} L</x-ui.table.td>
+                        <x-ui.table.td numeric>{{ $tank->averageMoney()->format($this->baseCurrency()) }}</x-ui.table.td>
+                        <x-ui.table.td numeric>{{ $tank->valueMoney()->format($this->baseCurrency()) }}</x-ui.table.td>
+                        <x-ui.table.td>
+                            @if ($tank->isOverCapacity())
+                                <x-ui.badge tone="warning">{{ __('over capacity') }}</x-ui.badge>
+                            @else
+                                <x-ui.badge tone="success">{{ __('in balance') }}</x-ui.badge>
+                            @endif
+                        </x-ui.table.td>
+                    </tr>
+                @endforeach
+            </x-ui.table>
         @endif
     </x-ui.card>
 
@@ -539,6 +699,60 @@ new #[Title('Fuel')] class extends Component {
             </form>
         </x-ui.dialog>
 
+        <x-ui.dialog name="bulk-tank" :title="__('Open a bulk tank')">
+            <form wire:submit="addBulkTank" class="grid gap-4 p-5">
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <x-ui.input name="bulkTankName" wire:model="bulkTankName" :label="__('Name')" placeholder="{{ __('Yard tank 1') }}" />
+                    <x-ui.input name="bulkTankCapacity" wire:model="bulkTankCapacity" numeric :label="__('Capacity in litres')" :hint="__('A delivery past this figure is flagged, not refused (§7 R7).')" />
+                </div>
+
+                <p class="text-xs text-fg-ink-muted">
+                    {{ __('A tank opens empty and worth nothing. Its stock only moves through a delivery, an issue to a trip, or a dip — there is no way to open one holding fuel nobody can account for.') }}
+                </p>
+
+                @error('bulkTank')
+                    <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                @enderror
+
+                <div class="flex items-center justify-between gap-3">
+                    <x-ui.button type="submit">{{ __('Open the tank') }}</x-ui.button>
+                    <x-ui.button type="button" variant="ghost" x-on:click="$dispatch('close-bulk-tank')">{{ __('Cancel') }}</x-ui.button>
+                </div>
+            </form>
+        </x-ui.dialog>
+
+        <x-ui.dialog name="bulk-dip" :title="__('Reconcile a bulk tank')">
+            <form wire:submit="reconcile" class="grid gap-4 p-5">
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <x-ui.select name="dipTankId" id="dip-tank" wire:model="dipTankId" :label="__('Tank')">
+                        <option value="">{{ __('Choose a tank') }}</option>
+                        @foreach ($this->bulkTanks as $tank)
+                            <option value="{{ $tank->id }}">{{ $tank->name }} · {{ $this->tankSummary($tank) }}</option>
+                        @endforeach
+                    </x-ui.select>
+
+                    <x-ui.input name="dipLitres" wire:model="dipLitres" numeric :label="__('Litres on the gauge')" placeholder="{{ __('3 500.00') }}" />
+
+                    <x-ui.input name="dipDate" wire:model="dipDate" :label="__('Counted on')" type="date" />
+
+                    <x-ui.input name="dipNote" wire:model="dipNote" :label="__('Note (optional)')" />
+                </div>
+
+                <p class="text-xs text-fg-ink-muted">
+                    {{ __('The difference between the gauge and the book is valued at the tank’s average and posted to 5110 Fuel stock variance — short is a debit, a gain is a credit. A dip that agrees is still recorded.') }}
+                </p>
+
+                @error('dip')
+                    <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                @enderror
+
+                <div class="flex items-center justify-between gap-3">
+                    <x-ui.button type="submit">{{ __('Record the dip') }}</x-ui.button>
+                    <x-ui.button type="button" variant="ghost" x-on:click="$dispatch('close-bulk-dip')">{{ __('Cancel') }}</x-ui.button>
+                </div>
+            </form>
+        </x-ui.dialog>
+
         <x-ui.dialog name="fuel-slip" :title="__('Record a fuel slip')" max-width="2xl">
             <form wire:submit="recordSlip" class="grid gap-4 p-5">
                 <div class="grid gap-3 sm:grid-cols-2">
@@ -552,6 +766,15 @@ new #[Title('Fuel')] class extends Component {
                     <x-ui.input name="slipDate" wire:model="slipDate" :label="__('Bought on')" type="date" />
 
                     <x-ui.input name="slipInvoice" wire:model="slipInvoice" :label="__('Invoice or slip number')" />
+
+                    <div class="sm:col-span-2">
+                        <x-ui.select name="slipBulkTankId" id="slip-bulk-tank" wire:model.live="slipBulkTankId" :label="__('Where the diesel went')" :hint="__('A slip is drained by trips; a delivery into a tank becomes stock and posts Dr 1180 / Cr 2110 on delivery.')">
+                            <option value="">{{ __('Into slips the trucks draw from') }}</option>
+                            @foreach ($this->bulkTanks as $tank)
+                                <option value="{{ $tank->id }}">{{ $tank->name }} · {{ $tank->capacity_litres }} L</option>
+                            @endforeach
+                        </x-ui.select>
+                    </div>
 
                     <x-ui.input name="slipLitres" wire:model="slipLitres" numeric :label="__('Litres')" placeholder="{{ __('400.00') }}" />
 
@@ -577,7 +800,11 @@ new #[Title('Fuel')] class extends Component {
                 @endif
 
                 <p class="text-xs text-fg-ink-muted">
-                    {{ __('The amount is litres × price, computed here — the register refuses a slip whose figures disagree. The slip is posted to the ledger with the supplier bill (§6.8, Phase 5).') }}
+                    @if (trim((string) $this->slipBulkTankId) !== '')
+                        {{ __('This delivery enters stock: the amount posts Dr 1180 Bulk fuel stock / Cr 2110 Supplier payable, and the tank’s moving average becomes what a trip pays per litre.') }}
+                    @else
+                        {{ __('The amount is litres × price, computed here — the register refuses a slip whose figures disagree. The slip is posted to the ledger with the supplier bill (§6.8, Phase 5).') }}
+                    @endif
                 </p>
 
                 @error('slip')

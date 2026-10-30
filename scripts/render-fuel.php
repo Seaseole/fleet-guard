@@ -21,6 +21,7 @@ require __DIR__.'/../vendor/autoload.php';
 
 use App\Domain\Fleet\Actions\CreateTruck;
 use App\Domain\Fleet\Data\TruckDto;
+use App\Domain\Fuel\Actions\CreateBulkTank;
 use App\Domain\Fuel\Actions\CreateFuelPurchase;
 use App\Domain\Fuel\Actions\CreateFuelStation;
 use App\Domain\Fuel\Actions\CreateFuelTank;
@@ -196,6 +197,22 @@ final class FuelRenderSweep extends TestCase
         ), 1);
         $this->issueIds[] = $issue->id;
 
+        $bulk = (app(CreateBulkTank::class))('FUE Yard Tank', 20_000);
+
+        // 5,000.00 L at BWP 20.00 = BWP 100,000.00 → 10,000,000 minor units, posted on delivery.
+        (app(CreateFuelPurchase::class))(new FuelPurchaseDto(
+            amount: Money::ofMinor(10_000_000, $base),
+            rate: '1',
+            rateSource: FxRateSource::Manual,
+            rateDate: Carbon::now(),
+            purchasedOn: Carbon::now(),
+            litresX100: 500_000,
+            pricePerLitreMinor: 2000,
+            stationId: $station->id,
+            invoiceNo: 'FUE-BULK-1',
+            bulkTankId: $bulk->id,
+        ), 1);
+
         echo "== The fuel register renders, and a slip's remaining litres are on it ==\n";
 
         $this->attempt('the owner opens /fuel and sees the slip, the station, the issue and 149.50 L left', function () use ($owner): void {
@@ -220,7 +237,7 @@ final class FuelRenderSweep extends TestCase
                 throw new Exception('the accountant cannot see the register (§9.3 gives fuel.view)');
             }
 
-            foreach (['open-fuel-slip', 'open-fuel-station', 'open-fuel-tank', 'Record a slip'] as $control) {
+            foreach (['open-fuel-slip', 'open-fuel-station', 'open-fuel-tank', 'open-bulk-tank', 'open-bulk-dip', 'Record a slip'] as $control) {
                 if (str_contains($html, $control)) {
                     throw new Exception("the register offered a recording control ({$control}) to a seat without fuel.record");
                 }
@@ -230,8 +247,23 @@ final class FuelRenderSweep extends TestCase
         $this->attempt('the dispatcher sees the register but not the recording dialogs', function () use ($dispatcher): void {
             $html = (string) $this->actingAs($dispatcher, 'web')->get('/fuel')->assertOk()->getContent();
 
-            if (! str_contains($html, 'FUE-SLIP-1') || str_contains($html, 'open-fuel-slip')) {
+            if (
+                ! str_contains($html, 'FUE-SLIP-1')
+                || str_contains($html, 'open-fuel-slip')
+                || str_contains($html, 'open-bulk-tank')
+                || str_contains($html, 'open-bulk-dip')
+            ) {
                 throw new Exception('the dispatcher either lost the register or was offered a write it does not hold');
+            }
+        });
+
+        $this->attempt('the bulk tank card carries the delivery, its stock and its average', function () use ($owner): void {
+            $html = (string) $this->actingAs($owner, 'web')->get('/fuel')->assertOk()->getContent();
+
+            foreach (['FUE Yard Tank', 'FUE-BULK-1', 'in the tank', '5000.00 L'] as $needle) {
+                if (! str_contains($html, $needle)) {
+                    throw new Exception("the fuel register is missing {$needle} from its bulk tank card");
+                }
             }
         });
 
@@ -334,7 +366,137 @@ final class FuelRenderSweep extends TestCase
                 ->assertHasErrors('slip');
         });
 
+        echo "\n== The bulk tank dialogs: open, dip, and deliver into stock (§15.2) ==\n";
+
+        $this->attempt('a bulk tank opened through the dialog lands empty, and its name is refused twice', function () use ($clerk): void {
+            Livewire::actingAs($clerk)
+                ->test('pages::fuel.index')
+                ->set('bulkTankName', 'FUE Dip Tank')
+                ->set('bulkTankCapacity', '5000')
+                ->call('addBulkTank')
+                ->assertHasNoErrors('bulkTank')
+                ->assertDispatched('close-bulk-tank');
+
+            $row = DB::table('bulk_tanks')->where('name', 'FUE Dip Tank')->first();
+
+            if ($row === null || (int) $row->capacity_litres !== 5_000 || (int) $row->stock_litres_x100 !== 0 || (int) $row->stock_value_base !== 0) {
+                throw new Exception('the dialog did not open an empty 5,000 L tank');
+            }
+
+            Livewire::actingAs($clerk)
+                ->test('pages::fuel.index')
+                ->set('bulkTankName', 'FUE Yard Tank')
+                ->set('bulkTankCapacity', '1000')
+                ->call('addBulkTank')
+                ->assertHasErrors('bulkTank');
+        });
+
+        $this->attempt('a dip through the dialog moves the book and posts the variance to 5110', function () use ($clerk, $bulk): void {
+            Livewire::actingAs($clerk)
+                ->test('pages::fuel.index')
+                ->set('dipTankId', (string) $bulk->id)
+                ->set('dipLitres', '4990')
+                ->set('dipDate', Carbon::now()->toDateString())
+                ->set('dipNote', 'FUE dip')
+                ->call('reconcile')
+                ->assertHasNoErrors('dip')
+                ->assertDispatched('close-bulk-dip');
+
+            $tank = DB::table('bulk_tanks')->where('id', $bulk->id)->first();
+
+            if ((int) $tank->stock_litres_x100 !== 499_000 || (int) $tank->stock_value_base !== 9_980_000) {
+                throw new Exception('the dip did not take 10.00 L and BWP 200.00 off the book');
+            }
+
+            $movementId = DB::table('bulk_tank_movements')
+                ->where('bulk_tank_id', $bulk->id)
+                ->where('kind', 'dip')
+                ->orderByDesc('created_at')
+                ->value('id');
+
+            if (DB::table('gl_journal_entries')->where('source_type', 'bulk_tank_dip')->where('source_id', $movementId)->count() !== 1) {
+                throw new Exception('the dip posted no variance entry');
+            }
+        });
+
+        $this->attempt('a slip marked for the tank becomes stock and posts on delivery', function () use ($clerk, $bulk): void {
+            Livewire::actingAs($clerk)
+                ->test('pages::fuel.index')
+                ->set('slipBulkTankId', (string) $bulk->id)
+                ->set('slipLitres', '100')
+                ->set('slipPrice', '21.00')
+                ->set('slipInvoice', 'FUE-BULK-2')
+                ->call('recordSlip')
+                ->assertHasNoErrors('slip')
+                ->assertDispatched('close-fuel-slip');
+
+            $delivery = FuelPurchase::query()->where('invoice_no', 'FUE-BULK-2')->first();
+            $tank = DB::table('bulk_tanks')->where('id', $bulk->id)->first();
+
+            if ($delivery === null || $delivery->posted_to_ledger !== true) {
+                throw new Exception('the delivery dialog did not post the stock receipt');
+            }
+
+            if ((int) $tank->stock_litres_x100 !== 509_000 || (int) $tank->stock_value_base !== 10_190_000) {
+                throw new Exception('the delivery dialog did not add 100.00 L and BWP 2,100.00 to the tank');
+            }
+        });
+
         echo "\n== The trip panel issues fuel through RecordFuelIssue, and refuses what it must ==\n";
+
+        $this->attempt('the clerk issues from the yard tank, and the panel names the tank', function () use ($clerk, $trip, $bulk): void {
+            $tankId = (int) DB::table('fuel_tanks')->where('truck_id', $trip->truck_id)->where('kind', 'main')->value('id');
+
+            Livewire::actingAs($clerk)
+                ->test('pages::fuel.trip-panel', ['trip' => $trip])
+                ->set('source', 'bulk_tank')
+                ->set('bulkTankId', (string) $bulk->id)
+                ->set('tankId', (string) $tankId)
+                ->set('litres', '100')
+                ->set('odometer', '131100')
+                ->set('occurredOn', Carbon::now()->toDateString())
+                ->call('record')
+                ->assertHasNoErrors('fuel')
+                ->assertDispatched('trip-fuel-recorded');
+
+            /** @var FuelIssue|null $issued */
+            $issued = FuelIssue::query()->where('trip_id', $trip->id)->where('bulk_tank_id', $bulk->id)->first();
+
+            if ($issued === null) {
+                throw new Exception('the panel did not record a bulk issue');
+            }
+
+            $this->issueIds[] = $issued->id;
+
+            if ($issued->cost_base !== 200_200 || $issued->trip_cost_id === null) {
+                throw new Exception('the panel did not charge 100.00 L at the tank average (200200)');
+            }
+
+            $html = (string) Livewire::actingAs($clerk)->test('pages::fuel.trip-panel', ['trip' => $trip])->html();
+
+            if (! str_contains($html, 'FUE Yard Tank')) {
+                throw new Exception('the trip panel does not say which tank the fuel came from');
+            }
+        });
+
+        $this->attempt('the panel refuses more litres than the yard tank holds, by name', function () use ($clerk, $trip, $bulk): void {
+            $tankId = (int) DB::table('fuel_tanks')->where('truck_id', $trip->truck_id)->where('kind', 'main')->value('id');
+
+            $refused = Livewire::actingAs($clerk)
+                ->test('pages::fuel.trip-panel', ['trip' => $trip])
+                ->set('source', 'bulk_tank')
+                ->set('bulkTankId', (string) $bulk->id)
+                ->set('tankId', (string) $tankId)
+                ->set('litres', '9999')
+                ->set('odometer', '131200')
+                ->set('occurredOn', Carbon::now()->toDateString())
+                ->call('record')
+                ->assertHasErrors('fuel');
+
+            if (! str_contains((string) $refused->errors()->first('fuel'), '4990.00')) {
+                throw new Exception('the refusal does not say what the tank holds: '.$refused->errors()->first('fuel'));
+            }
+        });
 
         $this->attempt('the clerk issues 50 L from the second slip and the trip cost is posted', function () use ($clerk, $trip): void {
             $second = FuelPurchase::query()->where('invoice_no', 'FUE-SLIP-2')->firstOrFail();
@@ -563,8 +725,27 @@ final class FuelRenderSweep extends TestCase
             ->pluck('id')
             ->all();
 
+        $bulkTankIds = DB::table('bulk_tanks')->where('name', 'like', 'FUE %')->pluck('id')->all();
+        $purchaseIds = DB::table('fuel_purchases')->where('invoice_no', 'like', 'FUE-%')->pluck('id')->all();
+        $movementIds = $bulkTankIds === [] ? [] : DB::table('bulk_tank_movements')->whereIn('bulk_tank_id', $bulkTankIds)->pluck('id')->all();
+
+        foreach ([
+            ['fuel_purchase', $purchaseIds],
+            ['bulk_tank_dip', $movementIds],
+        ] as [$sourceType, $sourceIds]) {
+            if ($sourceIds === []) {
+                continue;
+            }
+
+            $entryIds = array_merge($entryIds, DB::table('gl_journal_entries')
+                ->where('source_type', $sourceType)
+                ->whereIn('source_id', array_map('strval', $sourceIds))
+                ->pluck('id')
+                ->all());
+        }
+
         if ($entryIds !== []) {
-            LedgerBarrier::withLiftedGuard('render-fuel: remove this sweep\'s trip-cost entries', null, function () use ($entryIds): void {
+            LedgerBarrier::withLiftedGuard('render-fuel: remove this sweep\'s journal entries', null, function () use ($entryIds): void {
                 DB::table('gl_journal_lines')->whereIn('entry_id', $entryIds)->delete();
                 DB::table('gl_journal_entries')->whereIn('id', $entryIds)->delete();
             });
@@ -572,6 +753,8 @@ final class FuelRenderSweep extends TestCase
 
         $this->deleteIn('fuel_issues', 'id', $issueIds);
         DB::table('fuel_purchases')->where('invoice_no', 'like', 'FUE-%')->delete();
+        $this->deleteIn('bulk_tank_movements', 'bulk_tank_id', $bulkTankIds);
+        $this->deleteIn('bulk_tanks', 'id', $bulkTankIds);
         $this->deleteIn('fuel_tanks', 'truck_id', $truckIds);
         $this->deleteIn('trip_costs', 'trip_id', $tripIds);
         $this->deleteIn('vehicle_assignments', 'trip_id', $tripIds);
@@ -648,6 +831,10 @@ final class FuelRenderSweep extends TestCase
             'fuel issues' => (int) DB::table('fuel_issues')->whereIn('id', $this->issueIds ?: ['0'])->count(),
             'fuel purchases' => (int) DB::table('fuel_purchases')->where('invoice_no', 'like', 'FUE-%')->count(),
             'fuel tanks' => (int) DB::table('fuel_tanks')->whereIn('truck_id', $this->truckIds ?: [0])->count(),
+            'bulk tanks' => (int) DB::table('bulk_tanks')->where('name', 'like', 'FUE %')->count(),
+            'bulk tank movements' => (int) DB::table('bulk_tank_movements')
+                ->whereIn('bulk_tank_id', DB::table('bulk_tanks')->where('name', 'like', 'FUE %')->pluck('id') ?: [0])
+                ->count(),
             'fuel stations' => (int) DB::table('fuel_stations')->where('name', 'like', 'FUE %')->count(),
             'trips' => (int) DB::table('trips')->whereIn('id', $this->tripIds ?: ['0'])->count(),
             'jobs' => (int) DB::table('freight_jobs')->whereIn('id', $this->jobIds ?: ['0'])->count(),

@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Domain\Fleet\Models\Truck;
 use App\Domain\Fuel\Actions\RecordFuelIssue;
 use App\Domain\Fuel\Data\FuelIssueDto;
+use App\Domain\Fuel\FuelIssueSource;
+use App\Domain\Fuel\Models\BulkTank;
 use App\Domain\Fuel\Models\FuelIssue;
 use App\Domain\Fuel\Models\FuelPurchase;
 use App\Domain\Fuel\Models\FuelTank;
@@ -14,6 +16,7 @@ use App\Domain\Operations\Models\Trip;
 use App\Domain\Operations\TripStatus;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -37,7 +40,11 @@ new class extends Component {
 
     public string $tankId = '';
 
+    public string $source = 'pump_card';
+
     public string $purchaseId = '';
+
+    public string $bulkTankId = '';
 
     public string $litres = '';
 
@@ -83,12 +90,16 @@ new class extends Component {
 
         $validated = $this->validate([
             'tankId' => ['required', 'integer'],
-            'purchaseId' => ['required', 'string'],
+            'source' => ['required', Rule::in([FuelIssueSource::PumpCard->value, FuelIssueSource::BulkTank->value])],
+            'purchaseId' => ['nullable', 'string', 'required_if:source,'.FuelIssueSource::PumpCard->value],
+            'bulkTankId' => ['nullable', 'integer', 'required_if:source,'.FuelIssueSource::BulkTank->value],
             'litres' => ['required', 'string'],
             'odometer' => ['required', 'integer', 'min:0', 'max:9999999'],
             'occurredOn' => ['required', 'date'],
             'note' => ['nullable', 'string', 'max:120'],
         ]);
+
+        $source = FuelIssueSource::from($validated['source']);
 
         try {
             $created = $issue($this->trip, new FuelIssueDto(
@@ -96,8 +107,10 @@ new class extends Component {
                 litresX100: $this->scaledHundredths($validated['litres']),
                 odometerKm: (int) $validated['odometer'],
                 occurredOn: Carbon::parse($validated['occurredOn']),
-                purchaseId: $validated['purchaseId'],
+                purchaseId: $source === FuelIssueSource::BulkTank ? null : $validated['purchaseId'],
+                source: $source,
                 note: $validated['note'] ?? null,
+                bulkTankId: $source === FuelIssueSource::BulkTank ? (int) $validated['bulkTankId'] : null,
             ), (int) auth()->id());
         } catch (InvalidArgumentException $refused) {
             $this->addError('fuel', $refused->getMessage());
@@ -107,7 +120,7 @@ new class extends Component {
 
         $this->reset(['litres', 'note']);
         $this->occurredOn = Carbon::now(CurrentCompany::timezone())->toDateString();
-        unset($this->issues, $this->slips);
+        unset($this->issues, $this->slips, $this->bulkTanks);
 
         $this->dispatch('close-trip-fuel');
         $this->dispatch('trip-fuel-recorded');
@@ -131,7 +144,7 @@ new class extends Component {
     public function issues(): array
     {
         return FuelIssue::query()
-            ->with(['tank', 'purchase:id,invoice_no'])
+            ->with(['tank', 'purchase:id,invoice_no', 'bulkTank:id,name'])
             ->where('trip_id', $this->trip->id)
             ->orderByDesc('created_at')
             ->get()
@@ -161,6 +174,28 @@ new class extends Component {
             ->filter(static fn (FuelPurchase $purchase): bool => $purchase->litresRemainingX100() > 0)
             ->values()
             ->all();
+    }
+
+    /** @return list<BulkTank> */
+    #[Computed]
+    public function bulkTanks(): array
+    {
+        return BulkTank::query()
+            ->where('active', true)
+            ->where('stock_litres_x100', '>', 0)
+            ->orderBy('name')
+            ->get()
+            ->all();
+    }
+
+    public function tankStock(BulkTank $tank): string
+    {
+        return $tank->stockLitres();
+    }
+
+    public function tankAverage(BulkTank $tank): string
+    {
+        return $tank->averageMoney()->format(CurrentCompany::model()->base_currency_code);
     }
 
     public function remaining(FuelPurchase $purchase): string
@@ -205,7 +240,7 @@ new class extends Component {
                 <x-ui.table :caption="__('Fuel issued on this trip, newest first, with the state of each issue')">
                     <x-slot name="head">
                         <x-ui.table.th>{{ __('Tank') }}</x-ui.table.th>
-                        <x-ui.table.th>{{ __('Slip') }}</x-ui.table.th>
+                        <x-ui.table.th>{{ __('Source') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Litres') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Odometer') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Cost') }}</x-ui.table.th>
@@ -215,7 +250,7 @@ new class extends Component {
                     @foreach ($this->issues as $issued)
                         <tr wire:key="trip-fuel-{{ $issued->id }}">
                             <x-ui.table.td>{{ $issued->tank?->kind->label() ?? '—' }}</x-ui.table.td>
-                            <x-ui.table.td>{{ $issued->purchase?->invoice_no ?? __('pump card') }}</x-ui.table.td>
+                            <x-ui.table.td>{{ $issued->purchase?->invoice_no ?? $issued->bulkTank?->name ?? __('pump card') }}</x-ui.table.td>
                             <x-ui.table.td numeric>{{ $issued->litresMajor() }}</x-ui.table.td>
                             <x-ui.table.td numeric>{{ $issued->odometer_km }}</x-ui.table.td>
                             <x-ui.table.td numeric>{{ $this->money($issued->cost_base) }}</x-ui.table.td>
@@ -256,12 +291,26 @@ new class extends Component {
                                 @endforeach
                             </x-ui.select>
 
-                            <x-ui.select name="purchaseId" id="trip-fuel-slip" wire:model="purchaseId" :label="__('Slip it comes from')">
-                                <option value="">{{ __('Choose a slip') }}</option>
-                                @foreach ($this->slips as $slip)
-                                    <option value="{{ $slip->id }}">{{ $slip->invoice_no ?? substr($slip->id, -8) }} · {{ $this->remaining($slip) }} L left</option>
-                                @endforeach
+                            <x-ui.select name="source" id="trip-fuel-source" wire:model.live="source" :label="__('From')">
+                                <option value="pump_card">{{ __('A pump slip') }}</option>
+                                <option value="bulk_tank">{{ __('The bulk tank') }}</option>
                             </x-ui.select>
+
+                            @if ($this->source === 'bulk_tank')
+                                <x-ui.select name="bulkTankId" id="trip-fuel-bulk-tank" wire:model="bulkTankId" :label="__('Bulk tank')">
+                                    <option value="">{{ __('Choose a tank') }}</option>
+                                    @foreach ($this->bulkTanks as $bulkTank)
+                                        <option value="{{ $bulkTank->id }}">{{ $bulkTank->name }} · {{ $this->tankStock($bulkTank) }} L at {{ $this->tankAverage($bulkTank) }}</option>
+                                    @endforeach
+                                </x-ui.select>
+                            @else
+                                <x-ui.select name="purchaseId" id="trip-fuel-slip" wire:model="purchaseId" :label="__('Slip it comes from')">
+                                    <option value="">{{ __('Choose a slip') }}</option>
+                                    @foreach ($this->slips as $slip)
+                                        <option value="{{ $slip->id }}">{{ $slip->invoice_no ?? substr($slip->id, -8) }} · {{ $this->remaining($slip) }} L left</option>
+                                    @endforeach
+                                </x-ui.select>
+                            @endif
 
                             <x-ui.input name="litres" wire:model="litres" numeric :label="__('Litres')" placeholder="{{ __('250.00') }}" />
 
@@ -273,7 +322,11 @@ new class extends Component {
                         </div>
 
                         <p class="text-xs text-fg-ink-muted">
-                            {{ __('The cost is the slip’s price at the slip’s rate, frozen onto the issue. It posts to 5100 for this trip, on the supplier account a pump card is billed to.') }}
+                            @if ($this->source === 'bulk_tank')
+                                {{ __('The cost is the bulk tank’s moving average at this moment, frozen onto the issue. It posts to 5100 for this trip, credited against 1180 Bulk fuel stock — the diesel was paid for when it was delivered.') }}
+                            @else
+                                {{ __('The cost is the slip’s price at the slip’s rate, frozen onto the issue. It posts to 5100 for this trip, on the supplier account a pump card is billed to.') }}
+                            @endif
                         </p>
 
                         @error('fuel')

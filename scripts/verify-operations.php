@@ -64,6 +64,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -299,6 +300,32 @@ $created['job_ids'][] = $job->id;
 
 check($job->status === JobStatus::Enquiry, 'a new job starts as an enquiry');
 check(preg_match('/\AJOB-\d{5}\z/', $job->job_no) === 1, '...and carries its allocated reference ('.$job->job_no.', §7.1)');
+
+/*
+ * §9.5 — the row a job writes has to leave an audit behind, and the trail's key column has to be
+ * able to hold it. `audits.auditable_id` shipped as `morphs('auditable')`'s BIGINT while a job is
+ * keyed by a ULID, so the audit insert died with `1265 Data truncated for column 'auditable_id'`
+ * **inside the creating transaction** and took the job down with it. The console does not audit
+ * (`audit.console` false), which is exactly why every harness stayed green while the browser could
+ * not create a job: this block turns auditing on for one write and puts it back.
+ */
+check(Schema::getColumnType('audits', 'auditable_id') === 'char', 'audits.auditable_id is a ULID column, not a BIGINT (§9.5 char26)');
+
+config(['audit.console' => true]);
+
+try {
+    $job->forceFill(['notes' => 'OPX audit probe'])->save();
+} finally {
+    config(['audit.console' => false]);
+}
+
+$jobAudits = DB::table('audits')->where('auditable_type', Job::class)->where('auditable_id', $job->id)->get();
+
+check($jobAudits->count() === 1, 'a ULID-keyed write leaves exactly one audit row (§9.5)');
+check($jobAudits->isNotEmpty() && (string) $jobAudits->first()->auditable_id === $job->id, '...keyed by the whole ULID, not truncated to an integer');
+check($jobAudits->isNotEmpty() && str_contains((string) $jobAudits->first()->new_values, 'OPX audit probe'), '...and carrying the value that changed');
+
+$job->forceFill(['notes' => 'OPX fixture job'])->save();
 
 $second = $createJob(new JobDto(customerId: $customer->id, routeId: $route->id, notes: 'OPX fixture job two'), 1);
 $created['job_ids'][] = $second->id;

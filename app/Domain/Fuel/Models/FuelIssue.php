@@ -39,6 +39,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
  * @property int $litres_x100
  * @property int $odometer_km
  * @property string|null $purchase_id
+ * @property int|null $bulk_tank_id
  * @property int $cost_base
  * @property string $base_currency_code
  * @property FuelIssueSource $source
@@ -71,6 +72,7 @@ final class FuelIssue extends Model implements AuditableContract
         'litres_x100',
         'odometer_km',
         'purchase_id',
+        'bulk_tank_id',
         'cost_base',
         'base_currency_code',
         'source',
@@ -90,6 +92,7 @@ final class FuelIssue extends Model implements AuditableContract
             'company_id' => 'integer',
             'truck_id' => 'integer',
             'fuel_tank_id' => 'integer',
+            'bulk_tank_id' => 'integer',
             'litres_x100' => 'integer',
             'odometer_km' => 'integer',
             'cost_base' => 'integer',
@@ -126,6 +129,12 @@ final class FuelIssue extends Model implements AuditableContract
     public function purchase(): BelongsTo
     {
         return $this->belongsTo(FuelPurchase::class, 'purchase_id');
+    }
+
+    /** @return BelongsTo<BulkTank, $this> */
+    public function bulkTank(): BelongsTo
+    {
+        return $this->belongsTo(BulkTank::class, 'bulk_tank_id');
     }
 
     /** @return BelongsTo<Trip, $this> */

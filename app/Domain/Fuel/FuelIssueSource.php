@@ -7,10 +7,10 @@ namespace App\Domain\Fuel;
 /**
  * §4.3 FUEL_ISSUE `source` — where the fuel came from.
  *
- * `bulk_tank` is in the vocabulary from the start because the CHECK accepts it from the start; the
- * bulk tank itself (moving-average stock and reconciliation) is Phase 3b, and the Action refuses a
- * bulk issue until the tank that would own its cost exists. A vocabulary that grows later is a
- * migration; one that is complete now is a refusal with a sentence.
+ * `bulk_tank` is a real source from slice 3b: the issue names the yard tank it drew from, its cost is
+ * the tank's moving average at that moment, and the journal credits `1180 Bulk fuel stock` rather
+ * than a cash or payable account. `kiosk` is still only vocabulary — the driver's screen arrives with
+ * slice 3d, and the Action refuses it by name until then.
  */
 enum FuelIssueSource: string
 {

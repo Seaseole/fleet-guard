@@ -125,6 +125,10 @@ final class ChartOfAccountsSeeder extends Seeder
             ['code' => '1150', 'name' => 'Accounts receivable — customers', 'type' => AccountType::Asset, 'normal' => Side::Debit, 'parent' => '1100', 'is_postable' => true, 'requires' => [Dimension::Customer]],
             ['code' => '1160', 'name' => 'Driver advances receivable', 'type' => AccountType::Asset, 'normal' => Side::Debit, 'parent' => '1100', 'is_postable' => true, 'requires' => [Dimension::Driver]],
             ['code' => '1170', 'name' => 'Prepaid permits and customs deposits', 'type' => AccountType::Asset, 'normal' => Side::Debit, 'parent' => '1100', 'is_postable' => true],
+            // Phase 3 slice 3b: diesel in a bulk tank is an asset until a trip burns it (§6.8). No
+            // dimensions — a tank is not a truck, a trip or a customer, and a dip book-keeping entry
+            // has no leg to carry.
+            ['code' => '1180', 'name' => 'Bulk fuel stock', 'type' => AccountType::Asset, 'normal' => Side::Debit, 'parent' => '1100', 'is_postable' => true],
             ['code' => '1200', 'name' => 'Fixed assets', 'type' => AccountType::Asset, 'normal' => Side::Debit, 'parent' => '1000', 'is_postable' => false],
             ['code' => '1210', 'name' => 'Trucks and trailers', 'type' => AccountType::Asset, 'normal' => Side::Debit, 'parent' => '1200', 'is_postable' => true],
             ['code' => '1220', 'name' => 'Workshop equipment', 'type' => AccountType::Asset, 'normal' => Side::Debit, 'parent' => '1200', 'is_postable' => true],
@@ -156,6 +160,9 @@ final class ChartOfAccountsSeeder extends Seeder
             // ── Expenses ──
             ['code' => '5000', 'name' => 'Expenses', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'is_postable' => false],
             ['code' => '5100', 'name' => 'Fuel', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true, 'requires' => [Dimension::Truck, Dimension::Trip]],
+            // The tank, not the trip, disagrees with the book: a dip variance is measured in litres
+            // the truck never burned, so 5100's truck+trip rule cannot carry it (§15.2 phase 3).
+            ['code' => '5110', 'name' => 'Fuel stock variance', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true],
             ['code' => '5200', 'name' => 'Driver wages and allowances', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true, 'requires' => [Dimension::Driver]],
             ['code' => '5300', 'name' => 'Maintenance and repairs', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true, 'requires' => [Dimension::Truck]],
             ['code' => '5310', 'name' => 'Parts consumed', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true, 'requires' => [Dimension::Truck]],

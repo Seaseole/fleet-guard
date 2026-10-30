@@ -7,13 +7,16 @@ namespace App\Domain\Fuel\Actions;
 use App\Domain\Fleet\Actions\RecordOdometerReading;
 use App\Domain\Fleet\Data\OdometerReadingDto;
 use App\Domain\Fleet\OdometerSource;
+use App\Domain\Fuel\BulkTankMovementKind;
 use App\Domain\Fuel\Data\FuelIssueDto;
 use App\Domain\Fuel\FuelIssueSource;
 use App\Domain\Fuel\FuelIssueStatus;
+use App\Domain\Fuel\Models\BulkTank;
 use App\Domain\Fuel\Models\FuelIssue;
 use App\Domain\Fuel\Models\FuelPurchase;
 use App\Domain\Fuel\Models\FuelTank;
 use App\Domain\Kernel\Money\Fx;
+use App\Domain\Kernel\Money\FxRateSource;
 use App\Domain\Kernel\Money\Money;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Operations\Actions\RecordTripCost;
@@ -37,18 +40,17 @@ use InvalidArgumentException;
  * - the **odometer** is `RecordOdometerReading`'s, so the plausibility rule (a reading below the
  *   truck's projection is stored `suspect`, never silently accepted as truth) is the same one the
  *   departure and arrival readings get;
- * - the **cost** is the purchase's own price and rate, frozen onto the issue. Deriving it later
- *   would answer with today's conversion for money posted at the slip's.
+ * - the **cost** is the slip's own price and rate, or the bulk tank's moving average, frozen onto the
+ *   issue. Deriving it later would answer with today's conversion for money posted at the slip's.
  *
  * What this Action owns is the issue's own refusals. The trip must have a truck and the tank must be
- * that truck's; the purchase must exist, be in the same company, and still have litres left on it —
- * a slip cannot dispense more than it bought. Above everything, the issue is **on a trip**: §4.3
- * allows a null `trip_id` for the bulk tank, and account 5100 requires the trip dimension (§6.1), so
- * fuel that is not on a trip has no account to post to until the bulk tank's `1310` exists in 3b.
+ * that truck's; a slip must exist, be in the same company, and still have litres left on it — a slip
+ * cannot dispense more than it bought. A bulk tank must hold the litres asked for: stock may not go
+ * negative, because a tank that owes litres is not a number anybody can reconcile.
  *
- * Bulk-tank and kiosk sources are refused by name: the tank that would own a moving average, and the
- * kiosk screen that would raise one, are later slices. A row written now would be a cost with no
- * source of truth behind it.
+ * Above everything, the issue is **on a trip**: §4.3 allows a null `trip_id` for stock consumed off a
+ * trip, but account 5100 requires the trip dimension (§6.1), so this door still demands one. The
+ * kiosk source arrives with its own screen in slice 3d and is refused by name until then.
  */
 final class RecordFuelIssue
 {
@@ -88,41 +90,81 @@ final class RecordFuelIssue
                 $trip->trip_no,
             ));
 
-        $purchase = FuelPurchase::query()->whereKey($dto->purchaseId)->first()
-            ?? throw new InvalidArgumentException('That fuel purchase is not in this company\'s register, so the issue has no cost to carry.');
-
-        $remaining = $purchase->litresRemainingX100();
-
-        if ($dto->litresX100 > $remaining) {
-            throw new InvalidArgumentException(sprintf(
-                'Purchase %s has %s litres left and this issue asks for %s. Record a second slip, or correct the figure.',
-                $purchase->invoice_no ?? substr($purchase->id, -8),
-                number_format($remaining / 100, 2, '.', ''),
-                number_format($dto->litresX100 / 100, 2, '.', ''),
-            ));
-        }
-
         $baseCurrency = CurrentCompany::model()->base_currency_code;
 
-        // The slip's price is in the purchase's currency; the issue's cost is a minor-unit figure in
-        // that currency, rounded half-up once, then converted at the purchase's own rate. Two
-        // roundings would let the issue and the slip disagree by a cent that compounds per litre.
-        $foreignMinor = intdiv($dto->litresX100 * $purchase->price_per_litre_minor + 50, 100);
+        return DB::transaction(function () use ($trip, $truckId, $tank, $dto, $actorId, $baseCurrency): FuelIssue {
+            $purchase = null;
+            $bulkTank = null;
 
-        if ($foreignMinor <= 0) {
-            throw new InvalidArgumentException('That many litres at the slip\'s price is less than one minor unit, which the ledger cannot carry.');
-        }
+            if ($dto->source === FuelIssueSource::BulkTank) {
+                $bulkTank = BulkTank::query()
+                    ->whereKey($dto->bulkTankId)
+                    ->where('active', true)
+                    ->lockForUpdate()
+                    ->first()
+                    ?? throw new InvalidArgumentException('That bulk tank is not an active tank in this company\'s register.');
 
-        $fx = Fx::foreignToBase(
-            $foreignMinor,
-            $purchase->currency_code,
-            $purchase->fx_rate,
-            $baseCurrency,
-            $purchase->fx_rate_source,
-            $purchase->fx_rate_date,
-        );
+                if ($dto->litresX100 > $bulkTank->stock_litres_x100) {
+                    throw new InvalidArgumentException(sprintf(
+                        '%s holds %s litres and this issue asks for %s. A tank cannot give what it does not have.',
+                        $bulkTank->name,
+                        $bulkTank->stockLitres(),
+                        number_format($dto->litresX100 / 100, 2, '.', ''),
+                    ));
+                }
 
-        return DB::transaction(function () use ($trip, $truckId, $tank, $purchase, $dto, $actorId, $foreignMinor, $fx, $baseCurrency): FuelIssue {
+                $costMoney = Money::ofMinor($bulkTank->costForIssue($dto->litresX100), $baseCurrency);
+                $baseMinor = $costMoney->minorUnits;
+                $rate = '1';
+                $rateSource = FxRateSource::Manual;
+                $rateDate = $dto->occurredOn;
+                $paidWith = TripCostPayment::Stock;
+            } else {
+                $purchase = FuelPurchase::query()->whereKey($dto->purchaseId)->first()
+                    ?? throw new InvalidArgumentException('That fuel purchase is not in this company\'s register, so the issue has no cost to carry.');
+
+                $remaining = $purchase->litresRemainingX100();
+
+                if ($dto->litresX100 > $remaining) {
+                    throw new InvalidArgumentException(sprintf(
+                        'Purchase %s has %s litres left and this issue asks for %s. Record a second slip, or correct the figure.',
+                        $purchase->invoice_no ?? substr($purchase->id, -8),
+                        number_format($remaining / 100, 2, '.', ''),
+                        number_format($dto->litresX100 / 100, 2, '.', ''),
+                    ));
+                }
+
+                // The slip's price is in the purchase's currency; the issue's cost is a minor-unit
+                // figure in that currency, rounded half-up once, then converted at the purchase's own
+                // rate. Two roundings would let the issue and the slip disagree by a cent per litre.
+                $foreignMinor = intdiv($dto->litresX100 * $purchase->price_per_litre_minor + 50, 100);
+
+                if ($foreignMinor <= 0) {
+                    throw new InvalidArgumentException('That many litres at the slip\'s price is less than one minor unit, which the ledger cannot carry.');
+                }
+
+                $costMoney = Money::ofMinor($foreignMinor, $purchase->currency_code);
+
+                $fx = Fx::foreignToBase(
+                    $foreignMinor,
+                    $purchase->currency_code,
+                    (string) $purchase->fx_rate,
+                    $baseCurrency,
+                    $purchase->fx_rate_source,
+                    $purchase->fx_rate_date,
+                );
+
+                if ($fx->baseAmount()->minorUnits <= 0) {
+                    throw new InvalidArgumentException('That many litres at the slip\'s price converts to less than one base minor unit, which the ledger cannot carry.');
+                }
+
+                $baseMinor = $fx->baseAmount()->minorUnits;
+                $rate = (string) $purchase->fx_rate;
+                $rateSource = $purchase->fx_rate_source;
+                $rateDate = $purchase->fx_rate_date;
+                $paidWith = $this->paidWith($dto->source);
+            }
+
             $issue = FuelIssue::create([
                 'id' => (string) Str::ulid(),
                 'truck_id' => $truckId,
@@ -130,8 +172,9 @@ final class RecordFuelIssue
                 'trip_id' => $trip->id,
                 'litres_x100' => $dto->litresX100,
                 'odometer_km' => $dto->odometerKm,
-                'purchase_id' => $purchase->id,
-                'cost_base' => $fx->baseAmount()->minorUnits,
+                'purchase_id' => $purchase?->id,
+                'bulk_tank_id' => $bulkTank?->id,
+                'cost_base' => $baseMinor,
                 'base_currency_code' => $baseCurrency,
                 'source' => $dto->source,
                 'status' => FuelIssueStatus::Recorded,
@@ -150,16 +193,31 @@ final class RecordFuelIssue
 
             $cost = ($this->recordCost)($trip, new TripCostDto(
                 type: TripCostType::Fuel,
-                amount: Money::ofMinor($foreignMinor, $purchase->currency_code),
-                rate: $purchase->fx_rate,
-                rateSource: $purchase->fx_rate_source,
-                rateDate: $purchase->fx_rate_date,
+                amount: $costMoney,
+                rate: $rate,
+                rateSource: $rateSource,
+                rateDate: $rateDate,
                 occurredOn: $dto->occurredOn,
-                paidWith: $this->paidWith($dto->source),
-                description: $this->description($tank, $purchase, $dto),
+                paidWith: $paidWith,
+                description: $this->description($tank, $purchase, $bulkTank, $dto),
                 sourceType: 'fuel_issue',
                 sourceId: $issue->id,
             ), $actorId);
+
+            if ($bulkTank !== null) {
+                // The stock falls by exactly the money the ledger just credited to 1180, so the
+                // account's balance and the tank's value cannot drift by a rounding cent.
+                $bulkTank->recordMovement(
+                    BulkTankMovementKind::Issue,
+                    -$dto->litresX100,
+                    -$cost->base_amount,
+                    $dto->occurredOn,
+                    'fuel_issue',
+                    $issue->id,
+                    $dto->note,
+                    $actorId,
+                );
+            }
 
             $issue->forceFill([
                 'trip_cost_id' => $cost->id,
@@ -173,10 +231,6 @@ final class RecordFuelIssue
 
     private function assertSourceIsBuilt(FuelIssueSource $source): void
     {
-        if ($source === FuelIssueSource::BulkTank) {
-            throw new InvalidArgumentException('A bulk-tank issue is Phase 3b: the tank that would own its moving-average cost has not been built yet. Record the pump-card purchase and issue from that.');
-        }
-
         if ($source === FuelIssueSource::Kiosk) {
             throw new InvalidArgumentException('Fuel captured at the kiosk arrives with the driver\'s fuel screen (Phase 3d). Record it on the office fuel panel until then.');
         }
@@ -187,16 +241,16 @@ final class RecordFuelIssue
         return match ($source) {
             FuelIssueSource::PumpCard => TripCostPayment::SupplierCredit,
             FuelIssueSource::Advance, FuelIssueSource::Kiosk => TripCostPayment::PettyCash,
-            FuelIssueSource::BulkTank => TripCostPayment::SupplierCredit,
+            FuelIssueSource::BulkTank => TripCostPayment::Stock,
         };
     }
 
-    private function description(FuelTank $tank, FuelPurchase $purchase, FuelIssueDto $dto): string
+    private function description(FuelTank $tank, ?FuelPurchase $purchase, ?BulkTank $bulkTank, FuelIssueDto $dto): string
     {
         $parts = [
             number_format($dto->litresX100 / 100, 2, '.', '').' L into '.$tank->kind->label(),
-            $purchase->station?->label(),
-            $purchase->invoice_no,
+            $bulkTank !== null ? 'from '.$bulkTank->name : $purchase?->station?->label(),
+            $purchase?->invoice_no,
         ];
 
         $text = implode(' · ', array_filter($parts, static fn (?string $part): bool => $part !== null && $part !== ''));

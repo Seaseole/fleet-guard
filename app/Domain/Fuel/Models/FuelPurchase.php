@@ -58,6 +58,7 @@ final class FuelPurchase extends Model implements AuditableContract
         'id',
         'fuel_station_id',
         'fuel_card_id',
+        'bulk_tank_id',
         'currency_code',
         'amount',
         'fx_rate',
@@ -81,6 +82,7 @@ final class FuelPurchase extends Model implements AuditableContract
             'company_id' => 'integer',
             'fuel_station_id' => 'integer',
             'fuel_card_id' => 'integer',
+            'bulk_tank_id' => 'integer',
             'amount' => 'integer',
             'base_amount' => 'integer',
             'fx_rate_source' => FxRateSource::class,
@@ -103,6 +105,18 @@ final class FuelPurchase extends Model implements AuditableContract
     public function card(): BelongsTo
     {
         return $this->belongsTo(FuelCard::class, 'fuel_card_id');
+    }
+
+    /** @return BelongsTo<BulkTank, $this> */
+    public function bulkTank(): BelongsTo
+    {
+        return $this->belongsTo(BulkTank::class, 'bulk_tank_id');
+    }
+
+    /** A delivery into stock rather than a slip the trucks draw from (§15.2 phase 3). */
+    public function isBulkDelivery(): bool
+    {
+        return $this->bulk_tank_id !== null;
     }
 
     /** @return HasMany<FuelIssue, $this> */
@@ -132,9 +146,17 @@ final class FuelPurchase extends Model implements AuditableContract
         return Money::ofMinor($this->price_per_litre_minor, $this->currency_code);
     }
 
-    /** What is left on the slip after every issue that named it — the number the screen must show. */
+    /**
+     * What is left on the slip after every issue that named it — the number the screen must show.
+     * A delivery into a bulk tank has nothing left to issue: its litres are the tank's stock, and
+     * offering them as a slip as well would let the same diesel be counted twice.
+     */
     public function litresRemainingX100(): int
     {
+        if ($this->isBulkDelivery()) {
+            return 0;
+        }
+
         $dispensed = (int) $this->issues()->sum('litres_x100');
 
         return $this->litres - $dispensed;

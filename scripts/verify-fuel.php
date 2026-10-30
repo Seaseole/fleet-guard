@@ -4,15 +4,19 @@ declare(strict_types=1);
 
 use App\Domain\Fleet\Actions\CreateTruck;
 use App\Domain\Fleet\Data\TruckDto;
+use App\Domain\Fuel\Actions\CreateBulkTank;
 use App\Domain\Fuel\Actions\CreateFuelPurchase;
 use App\Domain\Fuel\Actions\CreateFuelStation;
 use App\Domain\Fuel\Actions\CreateFuelTank;
+use App\Domain\Fuel\Actions\ReconcileBulkTank;
 use App\Domain\Fuel\Actions\RecordFuelIssue;
+use App\Domain\Fuel\BulkTankMovementKind;
 use App\Domain\Fuel\Data\FuelIssueDto;
 use App\Domain\Fuel\Data\FuelPurchaseDto;
 use App\Domain\Fuel\FuelIssueSource;
 use App\Domain\Fuel\FuelIssueStatus;
 use App\Domain\Fuel\FuelTankKind;
+use App\Domain\Fuel\Models\BulkTank;
 use App\Domain\Fuel\Models\FuelIssue;
 use App\Domain\Fuel\Models\FuelPurchase;
 use App\Domain\Fuel\Models\FuelStation;
@@ -20,6 +24,7 @@ use App\Domain\Fuel\Models\FuelTank;
 use App\Domain\Invoicing\Actions\CreateCustomer;
 use App\Domain\Invoicing\Data\CustomerDto;
 use App\Domain\Kernel\Identity\RoleKey;
+use App\Domain\Kernel\Ledger\ChartOfAccounts;
 use App\Domain\Kernel\Ledger\Models\LedgerBarrier;
 use App\Domain\Kernel\Money\FxRateSource;
 use App\Domain\Kernel\Money\Money;
@@ -102,6 +107,26 @@ function fuelCostJournalEntries(array $costIds): array
         ->all();
 }
 
+/**
+ * The entries a non-trip-cost source posted — a stock receipt names its purchase, a dip names its
+ * movement — so an interrupted run is cleared by the rows it created rather than by date.
+ *
+ * @param  list<string>  $sourceIds
+ * @return list<string>
+ */
+function fuelSourceJournalEntries(string $sourceType, array $sourceIds): array
+{
+    if ($sourceIds === []) {
+        return [];
+    }
+
+    return DB::table('gl_journal_entries')
+        ->where('source_type', $sourceType)
+        ->whereIn('source_id', array_map('strval', $sourceIds))
+        ->pluck('id')
+        ->all();
+}
+
 /** @param list<string> $entryIds */
 function purgeFuelJournalEntries(array $entryIds, string $why): void
 {
@@ -113,6 +138,15 @@ function purgeFuelJournalEntries(array $entryIds, string $why): void
         DB::table('gl_journal_lines')->whereIn('entry_id', $entryIds)->delete();
         DB::table('gl_journal_entries')->whereIn('id', $entryIds)->delete();
     });
+}
+
+/** One account's signed balance, debit minus credit, in base minor units. */
+function ledgerBalance(int $accountId): int
+{
+    $debits = (int) DB::table('gl_journal_lines')->where('account_id', $accountId)->where('direction', 'debit')->sum('amount_base');
+    $credits = (int) DB::table('gl_journal_lines')->where('account_id', $accountId)->where('direction', 'credit')->sum('amount_base');
+
+    return $debits - $credits;
 }
 
 /** Delete rows by an id list, refusing to run on an empty list. */
@@ -137,12 +171,19 @@ $xflIssueIds = $xflTripIds === [] ? [] : DB::table('fuel_issues')->whereIn('trip
 $xflTruckIds = DB::table('trucks')->where('registration_no', 'like', '%XFL')->pluck('id')->all();
 $xflEmployeeIds = DB::table('employees')->where('employee_no', 'like', 'EMP-XFL%')->pluck('id')->all();
 $xflDriverIds = $xflEmployeeIds === [] ? [] : DB::table('drivers')->whereIn('employee_id', $xflEmployeeIds)->pluck('id')->all();
+$xflPurchaseIds = DB::table('fuel_purchases')->where('invoice_no', 'like', 'XFL-%')->pluck('id')->all();
+$xflBulkTankIds = DB::table('bulk_tanks')->where('name', 'like', 'XFL %')->pluck('id')->all();
+$xflMovementIds = $xflBulkTankIds === [] ? [] : DB::table('bulk_tank_movements')->whereIn('bulk_tank_id', $xflBulkTankIds)->pluck('id')->all();
 
 purgeFuelJournalEntries(fuelCostJournalEntries($xflCostIds), 'verify-fuel: clear an interrupted run\'s entries');
+purgeFuelJournalEntries(fuelSourceJournalEntries('fuel_purchase', $xflPurchaseIds), 'verify-fuel: clear an interrupted run\'s stock receipts');
+purgeFuelJournalEntries(fuelSourceJournalEntries('bulk_tank_dip', $xflMovementIds), 'verify-fuel: clear an interrupted run\'s dips');
 
 wipeFuelIds('fuel_issues', 'id', $xflIssueIds);
 wipeFuelIds('fuel_purchases', 'recorded_by', []);
 DB::table('fuel_purchases')->where('invoice_no', 'like', 'XFL-%')->delete();
+wipeFuelIds('bulk_tank_movements', 'bulk_tank_id', $xflBulkTankIds);
+wipeFuelIds('bulk_tanks', 'id', $xflBulkTankIds);
 DB::table('fuel_tanks')->whereIn('truck_id', $xflTruckIds ?: [0])->delete();
 wipeFuelIds('trip_costs', 'trip_id', $xflTripIds);
 wipeFuelIds('loads', 'trip_id', $xflTripIds);
@@ -159,6 +200,10 @@ wipeFuelIds('trucks', 'id', $xflTruckIds);
 DB::table('fuel_stations')->where('name', 'like', 'XFL %')->delete();
 DB::table('routes')->where('code', 'like', 'XFL%')->delete();
 DB::table('customers')->where('code', 'like', 'XFL%')->delete();
+// A fixture company this file creates has no chart of its own; a hand-seeded one would block the
+// delete below, so the accounts go first.
+$xflCompanyIds = DB::table('companies')->where('name', 'Verify XFL Second Company')->pluck('id')->all();
+wipeFuelIds('gl_accounts', 'company_id', $xflCompanyIds);
 DB::table('companies')->where('name', 'Verify XFL Second Company')->delete();
 
 $alignCounters = static function (string $when): void {
@@ -177,6 +222,33 @@ $alignCounters = static function (string $when): void {
             ->where('company_id', 1)
             ->where('scope', $scope)
             ->update(['next_value' => $highest + 1, 'updated_at' => now()]);
+    }
+
+    /*
+     * The journal counter needs the same treatment, for the same reason: this file posts entries and
+     * purges them, so a counter left ahead of the highest surviving entry collides the moment the
+     * ledger posts again — `1062 Duplicate entry '1-JV-FY26/27-000005'`, which is not a bug in the
+     * allocator but debris from a run that died between allocating and cleaning. Scoped by the
+     * sequence's own period key, so a prior fiscal year's numbers never raise this one's.
+     */
+    $journal = DB::table('number_sequences')
+        ->where('company_id', 1)
+        ->where('scope', 'journal_entry')
+        ->first();
+
+    if ($journal !== null) {
+        $prefix = 'JV-'.$journal->period_key.'-';
+
+        $highestEntry = DB::table('gl_journal_entries')
+            ->where('company_id', 1)
+            ->where('entry_no', 'like', $prefix.'%')
+            ->pluck('entry_no')
+            ->map(static fn (string $number): int => (int) substr($number, strlen($prefix)))
+            ->max() ?? 0;
+
+        DB::table('number_sequences')
+            ->where('id', $journal->id)
+            ->update(['next_value' => $highestEntry + 1, 'updated_at' => now()]);
     }
 
     echo "  counters aligned to the surviving rows ({$when})\n";
@@ -237,7 +309,7 @@ CurrentCompany::force(1);
 $created = [
     'truck_ids' => [], 'employee_ids' => [], 'driver_ids' => [],
     'job_ids' => [], 'trip_ids' => [], 'tank_ids' => [], 'station_ids' => [],
-    'purchase_ids' => [], 'issue_ids' => [], 'cost_ids' => [],
+    'bulk_tank_ids' => [], 'purchase_ids' => [], 'issue_ids' => [], 'cost_ids' => [],
 ];
 
 $baseCurrency = CurrentCompany::model()->base_currency_code;
@@ -287,6 +359,24 @@ foreach ([
 }
 
 check(Schema::hasColumns('fuel_issues', ['previous_state', 'state_changed_at', 'reversal_of_id']), '...and §10.1/§10.9\'s state columns, including the reversal link');
+
+echo "\n== §4.3/§15.2 phase 3 the bulk tank's promises are CHECKs too ==\n";
+
+$bulkTankDdl = (string) ((array) DB::select('show create table bulk_tanks')[0])['Create Table'];
+check(str_contains($bulkTankDdl, 'bulk_tanks_company_name_unique'), 'a bulk tank is unique per company by name');
+check(str_contains($bulkTankDdl, 'bulk_tanks_capacity_positive'), '...and its capacity is a CHECK, not a convention');
+check(str_contains($bulkTankDdl, 'bulk_tanks_empty_is_zero'), '...and an empty tank is worth nothing and has no average — the residue cannot hide in a column');
+
+$movementDdl = (string) ((array) DB::select('show create table bulk_tank_movements')[0])['Create Table'];
+check(str_contains($movementDdl, 'bulk_tank_movements_kind_allowed'), 'the stock book\'s vocabulary is a receipt, an issue or a dip');
+check(str_contains($movementDdl, 'bulk_tank_movements_moved_something') && str_contains($movementDdl, 'bulk_tank_movements_signs_agree'), '...a movement moves something, and litres and value move the same way');
+check(str_contains($movementDdl, 'bulk_tank_movements_source_unique'), '...and a purchase or issue can only move the tank once');
+
+check(Schema::hasColumn('fuel_purchases', 'bulk_tank_id') && str_contains($purchaseDdl, 'fuel_purchases_bulk_delivery_posted'), 'a delivery into stock must be posted the moment it is recorded');
+check(Schema::hasColumn('fuel_issues', 'bulk_tank_id') && str_contains($issueDdl, 'fuel_issues_bulk_tank_matches_source'), '...and a bulk issue names its tank, a slip issue names no tank');
+
+$costDdl = (string) ((array) DB::select('show create table trip_costs')[0])['Create Table'];
+check(str_contains($costDdl, "'stock'"), 'a trip cost can be settled from stock, and the table knows the word');
 
 /* ------------------------------------------------------------------------- */
 echo "\n== §4.3 stations: master data, refused before it can split a pump's history ==\n";
@@ -555,17 +645,31 @@ echo "\n== §4.3 issuing fuel: onto a trip, from that trip's own truck ==\n";
 $issue = app(RecordFuelIssue::class);
 
 refuses(
-    'a bulk-tank issue is refused by the slice that will build it',
-    fn () => $issue($trip, new FuelIssueDto(
+    'a bulk-tank issue that names no tank is refused before it reaches the database',
+    fn () => new FuelIssueDto(
         tankId: $mainTank->id,
         litresX100: 10_000,
         odometerKm: 120_400,
         occurredOn: Carbon::now(),
         purchaseId: null,
         source: FuelIssueSource::BulkTank,
-    )),
+    ),
     InvalidArgumentException::class,
-    'Phase 3b'
+    'has to name the tank'
+);
+
+refuses(
+    'a slip issue that names a bulk tank is refused — one diesel, one source',
+    fn () => new FuelIssueDto(
+        tankId: $mainTank->id,
+        litresX100: 10_000,
+        odometerKm: 120_400,
+        occurredOn: Carbon::now(),
+        purchaseId: $purchase->id,
+        bulkTankId: 1,
+    ),
+    InvalidArgumentException::class,
+    'Only a bulk-tank issue'
 );
 
 refuses(
@@ -698,6 +802,307 @@ check($overCapacity->exception_reason !== null && str_contains((string) $overCap
 check($overCapacity->status === FuelIssueStatus::Posted, '...and still posts, because refusing would push the discrepancy into a wrong number');
 
 /* ------------------------------------------------------------------------- */
+echo "\n== §4.3/§15.2 phase 3 a bulk tank: opened empty, fed by delivery, valued by average ==\n";
+
+$createBulkTank = app(CreateBulkTank::class);
+
+refuses(
+    'a bulk tank with a blank name is refused',
+    fn () => $createBulkTank('   ', 1_000),
+    InvalidArgumentException::class,
+    'up to 80 characters'
+);
+
+refuses(
+    'a bulk tank with no capacity is refused',
+    fn () => $createBulkTank('XFL Empty Tank', 0),
+    InvalidArgumentException::class,
+    'between 1 and 65,535'
+);
+
+$bulk = $createBulkTank('XFL Yard Tank', 20_000);
+$created['bulk_tank_ids'][] = $bulk->id;
+
+check(
+    $bulk->stock_litres_x100 === 0 && $bulk->stock_value_base === 0 && $bulk->average_cost_per_litre_minor === 0,
+    'a bulk tank opens empty and worth nothing — stock only moves through a movement'
+);
+
+refuses(
+    'the same tank name is refused in the same company',
+    fn () => $createBulkTank('XFL Yard Tank', 5_000),
+    InvalidArgumentException::class,
+    'already has a bulk tank'
+);
+
+$chart = app(ChartOfAccounts::class)->byCode();
+$stockAccountId = $chart['1180']?->id ?? throw new RuntimeException('1180 Bulk fuel stock is missing from the chart');
+$varianceAccountId = $chart['5110']?->id ?? throw new RuntimeException('5110 Fuel stock variance is missing from the chart');
+$payableAccountId = $chart['2110']?->id ?? throw new RuntimeException('2110 Accounts payable is missing from the chart');
+
+// 10,000.00 L at BWP 20.00 = BWP 200,000.00 → 20,000,000 minor units.
+$delivery = $createPurchase(new FuelPurchaseDto(
+    amount: Money::ofMinor(20_000_000, $baseCurrency),
+    rate: '1',
+    rateSource: FxRateSource::Manual,
+    rateDate: Carbon::now(),
+    purchasedOn: Carbon::now(),
+    litresX100: 1_000_000,
+    pricePerLitreMinor: 2000,
+    stationId: $station->id,
+    invoiceNo: 'XFL-BULK-1',
+    bulkTankId: $bulk->id,
+));
+$created['purchase_ids'][] = $delivery->id;
+
+check($delivery->posted_to_ledger === true, 'a delivery into a tank is posted in the same transaction as its row (§6.8)');
+check($delivery->isBulkDelivery(), '...and the row knows it went into stock');
+check($delivery->litresRemainingX100() === 0, '...so its litres are not also offered as a slip the trucks could drain');
+
+$bulk->refresh();
+check($bulk->stock_litres_x100 === 1_000_000 && $bulk->stock_value_base === 20_000_000, '10,000 L at BWP 20.00 is BWP 200,000 of stock');
+check($bulk->average_cost_per_litre_minor === 2000, '...and the average is the price that was paid');
+
+$receiptEntry = DB::table('gl_journal_entries')
+    ->where('source_type', 'fuel_purchase')
+    ->where('source_id', $delivery->id)
+    ->first();
+
+check($receiptEntry !== null, 'the delivery has a journal entry that names it');
+
+if ($receiptEntry !== null) {
+    $receiptLines = DB::table('gl_journal_lines')->where('entry_id', $receiptEntry->id)->get()->all();
+    $debit = collect($receiptLines)->firstWhere('direction', 'debit');
+    $credit = collect($receiptLines)->firstWhere('direction', 'credit');
+
+    check(
+        count($receiptLines) === 2
+            && $debit !== null && (int) $debit->account_id === (int) $stockAccountId && (int) $debit->amount_base === 20_000_000
+            && $credit !== null && (int) $credit->account_id === (int) $payableAccountId && (int) $credit->amount_base === 20_000_000,
+        '...Dr 1180 Bulk fuel stock / Cr 2110 Supplier payable, to the minor unit'
+    );
+}
+
+// 5,000.00 L at BWP 24.00 = BWP 120,000.00 → 12,000,000 minor units.
+$secondDelivery = $createPurchase(new FuelPurchaseDto(
+    amount: Money::ofMinor(12_000_000, $baseCurrency),
+    rate: '1',
+    rateSource: FxRateSource::Manual,
+    rateDate: Carbon::now(),
+    purchasedOn: Carbon::now(),
+    litresX100: 500_000,
+    pricePerLitreMinor: 2400,
+    stationId: $station->id,
+    invoiceNo: 'XFL-BULK-2',
+    bulkTankId: $bulk->id,
+));
+$created['purchase_ids'][] = $secondDelivery->id;
+
+$bulk->refresh();
+check($bulk->stock_litres_x100 === 1_500_000 && $bulk->stock_value_base === 32_000_000, 'a second delivery adds litres and money, not an average of averages');
+check($bulk->average_cost_per_litre_minor === 2133, '...and the moving average is value over litres: 2,133 minor a litre ('.$bulk->average_cost_per_litre_minor.')');
+
+/* ------------------------------------------------------------------------- */
+echo "\n== §6.8/§15.2 a truck takes diesel out of the tank, at the tank's own average ==\n";
+
+$bulkIssue = $issue($trip, new FuelIssueDto(
+    tankId: $mainTank->id,
+    litresX100: 10_000,
+    odometerKm: 121_200,
+    occurredOn: Carbon::now(),
+    source: FuelIssueSource::BulkTank,
+    bulkTankId: $bulk->id,
+), 1);
+$created['issue_ids'][] = $bulkIssue->id;
+$created['cost_ids'][] = $bulkIssue->trip_cost_id;
+
+check($bulkIssue->cost_base === 213_300, '100.00 L at BWP 21.33 is BWP 2,133.00, frozen on the issue ('.$bulkIssue->cost_base.')');
+check($bulkIssue->bulk_tank_id === $bulk->id && $bulkIssue->purchase_id === null, '...and the issue names the tank it emptied, never a slip');
+check($bulkIssue->status === FuelIssueStatus::Posted, '...and it posts like any other issue');
+
+$bulkCost = TripCost::query()->findOrFail($bulkIssue->trip_cost_id);
+check($bulkCost->paid_with === TripCostPayment::Stock, 'the cost is settled from stock, not paid for a second time (§6.8)');
+
+$bulkEntry = DB::table('gl_journal_entries')
+    ->where('source_type', 'trip_cost')
+    ->where('source_id', $bulkCost->id)
+    ->first();
+
+$bulkCredit = $bulkEntry === null
+    ? null
+    : DB::table('gl_journal_lines')->where('entry_id', $bulkEntry->id)->where('direction', 'credit')->first();
+
+check($bulkCredit !== null && (int) $bulkCredit->account_id === (int) $stockAccountId, '...and it credits 1180 Bulk fuel stock, the account the diesel was paid into');
+check($bulkCredit !== null && (int) $bulkCredit->amount_base === 213_300, '...by exactly the issue\'s cost, so the stock value and the account cannot drift');
+
+$bulk->refresh();
+check($bulk->stock_litres_x100 === 1_490_000 && $bulk->stock_value_base === 31_786_700, 'the tank holds 100 L less and exactly BWP 2,133.00 less value');
+
+refuses(
+    'an issue larger than the tank holds is refused, naming the stock',
+    fn () => $issue($trip, new FuelIssueDto(
+        tankId: $mainTank->id,
+        litresX100: 1_500_000,
+        odometerKm: 121_250,
+        occurredOn: Carbon::now(),
+        source: FuelIssueSource::BulkTank,
+        bulkTankId: $bulk->id,
+    ), 1),
+    InvalidArgumentException::class,
+    'cannot give what it does not have'
+);
+
+$bulk->forceFill(['active' => false])->save();
+
+refuses(
+    'an inactive bulk tank refuses an issue',
+    fn () => $issue($trip, new FuelIssueDto(
+        tankId: $mainTank->id,
+        litresX100: 1_000,
+        odometerKm: 121_250,
+        occurredOn: Carbon::now(),
+        source: FuelIssueSource::BulkTank,
+        bulkTankId: $bulk->id,
+    ), 1),
+    InvalidArgumentException::class,
+    'not an active tank'
+);
+
+refuses(
+    '...and refuses a delivery',
+    fn () => $createPurchase(new FuelPurchaseDto(
+        amount: Money::ofMinor(2_000_000, $baseCurrency),
+        rate: '1',
+        rateSource: FxRateSource::Manual,
+        rateDate: Carbon::now(),
+        purchasedOn: Carbon::now(),
+        litresX100: 100_000,
+        pricePerLitreMinor: 2000,
+        invoiceNo: 'XFL-BULK-OFF',
+        bulkTankId: $bulk->id,
+    )),
+    InvalidArgumentException::class,
+    'no longer in use'
+);
+
+$bulk->forceFill(['active' => true])->save();
+
+/* ------------------------------------------------------------------------- */
+echo "\n== §15.2 a dip is a fact to record, and its variance goes to 5110 ==\n";
+
+$reconcile = app(ReconcileBulkTank::class);
+
+$short = $reconcile($bulk->fresh(), 1_488_000, Carbon::now(), 'XFL dip', 1);
+check($short->kind === BulkTankMovementKind::Dip && $short->litres_delta_x100 === -2_000, 'a dip is recorded as the difference between the book and the dipstick (-20.00 L)');
+check($short->value_delta_base === -42_660, '...valued at the tank average, 2,133 minor a litre ('.$short->value_delta_base.')');
+check($short->stock_litres_x100_after === 1_488_000 && $short->stock_value_base_after === 31_744_040, '...with the figures the tank held afterwards, stored rather than re-derived');
+
+$dipEntry = DB::table('gl_journal_entries')
+    ->where('source_type', 'bulk_tank_dip')
+    ->where('source_id', $short->id)
+    ->first();
+
+check($dipEntry !== null, 'a shortage posts an entry that names the movement');
+
+if ($dipEntry !== null) {
+    $dipLines = DB::table('gl_journal_lines')->where('entry_id', $dipEntry->id)->get()->all();
+    $dipDebit = collect($dipLines)->firstWhere('direction', 'debit');
+    $dipCredit = collect($dipLines)->firstWhere('direction', 'credit');
+
+    check(
+        count($dipLines) === 2
+            && $dipDebit !== null && (int) $dipDebit->account_id === (int) $varianceAccountId && (int) $dipDebit->amount_base === 42_660
+            && $dipCredit !== null && (int) $dipCredit->account_id === (int) $stockAccountId,
+        '...Dr 5110 Fuel stock variance / Cr 1180 Bulk fuel stock'
+    );
+}
+
+$gain = $reconcile($bulk->fresh(), 1_490_000, Carbon::now(), 'XFL dip found more', 1);
+check($gain->litres_delta_x100 === 2_000 && $gain->value_delta_base === 42_660, 'a dip that finds more puts the litres and their value back');
+
+$gainEntry = DB::table('gl_journal_entries')
+    ->where('source_type', 'bulk_tank_dip')
+    ->where('source_id', $gain->id)
+    ->first();
+
+check($gainEntry !== null, '...and posts the reverse: the value comes back out of 5110');
+
+if ($gainEntry !== null) {
+    $gainDebit = DB::table('gl_journal_lines')->where('entry_id', $gainEntry->id)->where('direction', 'debit')->first();
+    $gainCredit = DB::table('gl_journal_lines')->where('entry_id', $gainEntry->id)->where('direction', 'credit')->first();
+
+    check(
+        $gainDebit !== null && $gainCredit !== null
+            && (int) $gainDebit->account_id === (int) $stockAccountId
+            && (int) $gainCredit->account_id === (int) $varianceAccountId,
+        '...Dr 1180 / Cr 5110'
+    );
+}
+
+$agree = $reconcile($bulk->fresh(), 1_490_000, Carbon::now(), 'XFL dip agrees', 1);
+check($agree->litres_delta_x100 === 0 && $agree->value_delta_base === 0, 'a dip that agrees with the book is still recorded, with two zeroes');
+check(
+    DB::table('gl_journal_entries')->where('source_type', 'bulk_tank_dip')->where('source_id', $agree->id)->count() === 0,
+    '...and posts nothing, because there is no variance to book'
+);
+
+refuses(
+    'a negative dip reading is refused',
+    fn () => $reconcile($bulk->fresh(), -1, Carbon::now(), null, 1),
+    InvalidArgumentException::class,
+    'cannot be negative'
+);
+
+$stockBalance = ledgerBalance((int) $stockAccountId);
+
+check($stockBalance === $bulk->fresh()->stock_value_base, '1180\'s ledger balance equals the tank\'s value — the account and the book are one figure ('.$stockBalance.')');
+
+/* ------------------------------------------------------------------------- */
+echo "\n== §15.2 draining the tank takes the exact value, so an empty tank is worth nothing ==\n";
+
+$beforeDrain = $bulk->fresh();
+
+$drain = $issue($trip, new FuelIssueDto(
+    tankId: $mainTank->id,
+    litresX100: $beforeDrain->stock_litres_x100,
+    odometerKm: 121_300,
+    occurredOn: Carbon::now(),
+    source: FuelIssueSource::BulkTank,
+    bulkTankId: $bulk->id,
+), 1);
+$created['issue_ids'][] = $drain->id;
+$created['cost_ids'][] = $drain->trip_cost_id;
+
+check($drain->cost_base === $beforeDrain->stock_value_base, 'emptying the tank costs the value the book says it holds, to the minor unit');
+
+$emptied = $bulk->fresh();
+check(
+    $emptied->stock_litres_x100 === 0 && $emptied->stock_value_base === 0 && $emptied->average_cost_per_litre_minor === 0,
+    '...and the empty tank is zero of everything, so the CHECK holds rather than leaving a rounding residue'
+);
+
+$stockBalanceAfterDrain = ledgerBalance((int) $stockAccountId);
+
+check($stockBalanceAfterDrain === 0, '...and 1180 holds nothing when the tank does ('.$stockBalanceAfterDrain.')');
+
+refuses(
+    'an issue from an empty tank is refused',
+    fn () => $issue($trip, new FuelIssueDto(
+        tankId: $mainTank->id,
+        litresX100: 1_000,
+        odometerKm: 121_400,
+        occurredOn: Carbon::now(),
+        source: FuelIssueSource::BulkTank,
+        bulkTankId: $bulk->id,
+    ), 1),
+    InvalidArgumentException::class,
+    'cannot give what it does not have'
+);
+
+$ledgerCheck = Artisan::call('ledger:verify');
+check($ledgerCheck === 0, 'the ledger recomputes from its own lines with no drift', mb_substr(str_replace("\n", ' ', Artisan::output()), 0, 200));
+
+/* ------------------------------------------------------------------------- */
 echo "\n== §10.2 a frozen trip cannot acquire fuel ==\n";
 
 $frozenTrip = (app(CreateTrip::class))($job, 1);
@@ -768,6 +1173,7 @@ check(FuelStation::query()->count() === 0, 'a second company sees none of the fi
 check(FuelPurchase::query()->count() === 0, '...nor its purchases');
 check(FuelIssue::query()->count() === 0, '...nor its issues');
 check(FuelTank::query()->count() === 0, '...nor its tanks');
+check(BulkTank::query()->count() === 0, '...nor its bulk tanks');
 
 CurrentCompany::force(1);
 
@@ -794,6 +1200,23 @@ refuses(
     'not in this company'
 );
 
+refuses(
+    'a delivery naming another company\'s bulk tank is refused',
+    fn () => $createPurchase(new FuelPurchaseDto(
+        amount: Money::ofMinor(20_000_000, $baseCurrency),
+        rate: '1',
+        rateSource: FxRateSource::Manual,
+        rateDate: Carbon::now(),
+        purchasedOn: Carbon::now(),
+        litresX100: 1_000_000,
+        pricePerLitreMinor: 2000,
+        invoiceNo: 'XFL-CROSS-BULK',
+        bulkTankId: $bulk->id,
+    )),
+    InvalidArgumentException::class,
+    'not in this company'
+);
+
 CurrentCompany::force(1);
 
 /* ------------------------------------------------------------------------- */
@@ -803,12 +1226,21 @@ $runIssueIds = $created['issue_ids'];
 $runPurchaseIds = $created['purchase_ids'];
 $runCostIds = $created['cost_ids'];
 $runTripIds = $created['trip_ids'];
+$runBulkTankIds = $created['bulk_tank_ids'];
+$runMovementIds = $runBulkTankIds === [] ? [] : DB::table('bulk_tank_movements')->whereIn('bulk_tank_id', $runBulkTankIds)->pluck('id')->all();
 $runEntries = fuelCostJournalEntries($runCostIds);
+$runReceiptEntries = fuelSourceJournalEntries('fuel_purchase', $runPurchaseIds);
+$runDipEntries = fuelSourceJournalEntries('bulk_tank_dip', $runMovementIds);
+$allRunEntries = array_values(array_unique(array_merge($runEntries, $runReceiptEntries, $runDipEntries)));
 
 purgeFuelJournalEntries($runEntries, 'verify-fuel: remove this run\'s posted entries');
+purgeFuelJournalEntries($runReceiptEntries, 'verify-fuel: remove this run\'s stock receipts');
+purgeFuelJournalEntries($runDipEntries, 'verify-fuel: remove this run\'s dip entries');
 
 wipeFuelIds('fuel_issues', 'id', $runIssueIds);
 wipeFuelIds('fuel_purchases', 'id', $runPurchaseIds);
+wipeFuelIds('bulk_tank_movements', 'bulk_tank_id', $runBulkTankIds);
+wipeFuelIds('bulk_tanks', 'id', $runBulkTankIds);
 wipeFuelIds('fuel_tanks', 'id', $created['tank_ids']);
 wipeFuelIds('trip_costs', 'trip_id', $runTripIds);
 
@@ -826,6 +1258,7 @@ $runOrphanEntries = DB::table('gl_journal_entries')
     ->all();
 purgeFuelJournalEntries($runOrphanEntries, 'verify-fuel: entries whose cost this run already removed');
 $runEntries = array_values(array_unique(array_merge($runEntries, $runOrphanEntries)));
+$allRunEntries = array_values(array_unique(array_merge($allRunEntries, $runOrphanEntries)));
 wipeFuelIds('loads', 'trip_id', $runTripIds);
 wipeFuelIds('odometer_readings', 'trip_id', $runTripIds);
 wipeFuelIds('odometer_readings', 'truck_id', $created['truck_ids']);
@@ -851,6 +1284,14 @@ DB::table('model_has_roles')->where('model_type', User::class)->whereIn('model_i
 DB::table('audits')->where('auditable_type', User::class)->whereIn('auditable_id', array_map('strval', $probeIds) ?: ['0'])->delete();
 DB::table('users')->whereIn('id', $probeIds ?: [0])->delete();
 
+/*
+ * The §8 tenancy block inserts a second company by hand, and until now nothing removed it: the row
+ * survived every run and the next `verify-operations` died on `1062 Duplicate entry '2' for key
+ * companies.PRIMARY` before it could assert anything. A harness that leaves a company behind is a
+ * harness that breaks its neighbours.
+ */
+DB::table('companies')->where('name', 'Verify XFL Second Company')->delete();
+
 $alignCounters('after cleanup');
 
 $afterExit = Artisan::call('documents:number-integrity');
@@ -863,8 +1304,10 @@ $leftovers = [
     'fuel_tanks' => (int) DB::table('fuel_tanks')->whereIn('truck_id', $created['truck_ids'] ?: [0])->count(),
     'fuel_stations' => (int) DB::table('fuel_stations')->where('name', 'like', 'XFL %')->count(),
     'trip_costs' => (int) DB::table('trip_costs')->whereIn('id', $runCostIds ?: ['0'])->count(),
-    'journal_entries' => (int) DB::table('gl_journal_entries')->whereIn('id', $runEntries ?: ['0'])->count(),
-    'journal_lines' => (int) DB::table('gl_journal_lines')->whereIn('entry_id', $runEntries ?: ['0'])->count(),
+    'bulk_tanks' => (int) DB::table('bulk_tanks')->whereIn('id', $runBulkTankIds ?: [0])->count(),
+    'bulk tank movements' => (int) DB::table('bulk_tank_movements')->whereIn('bulk_tank_id', $runBulkTankIds ?: [0])->count(),
+    'journal_entries' => (int) DB::table('gl_journal_entries')->whereIn('id', $allRunEntries ?: ['0'])->count(),
+    'journal_lines' => (int) DB::table('gl_journal_lines')->whereIn('entry_id', $allRunEntries ?: ['0'])->count(),
     'trips' => (int) DB::table('trips')->whereIn('id', $runTripIds ?: ['0'])->count(),
     'freight_jobs' => (int) DB::table('freight_jobs')->whereIn('id', $created['job_ids'] ?: ['0'])->count(),
     'trucks' => (int) DB::table('trucks')->whereIn('id', $created['truck_ids'] ?: [0])->count(),

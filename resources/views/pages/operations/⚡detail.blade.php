@@ -446,7 +446,7 @@ new #[Title('Trip')] class extends Component
             'costCurrency' => ['required', 'string', Rule::exists('currencies', 'code')],
             'costRate' => ['nullable', 'numeric', 'gt:0'],
             'costRateSource' => ['required', Rule::in(array_map(static fn (FxRateSource $source): string => $source->value, FxRateSource::cases()))],
-            'costPaidWith' => ['required', Rule::in(array_map(static fn (TripCostPayment $payment): string => $payment->value, TripCostPayment::cases()))],
+            'costPaidWith' => ['required', Rule::in(array_map(static fn (array $option): string => $option['value'], TripCostPayment::manualOptions()))],
             'costOccurredOn' => ['required', 'date'],
             'costDescription' => ['nullable', 'string', 'max:160'],
         ]);
@@ -671,7 +671,7 @@ new #[Title('Trip')] class extends Component
             'chargeCurrency' => ['required', 'string', Rule::exists('currencies', 'code')],
             'chargeRate' => ['nullable', 'numeric', 'gt:0'],
             'chargeRateSource' => ['required', Rule::in(array_map(static fn (FxRateSource $source): string => $source->value, FxRateSource::cases()))],
-            'chargePaidWith' => ['required', Rule::in(array_map(static fn (TripCostPayment $payment): string => $payment->value, TripCostPayment::cases()))],
+            'chargePaidWith' => ['required', Rule::in(array_map(static fn (array $option): string => $option['value'], TripCostPayment::manualOptions()))],
             'chargeOccurredOn' => ['required', 'date'],
             'chargeDescription' => ['nullable', 'string', 'max:160'],
         ]);
@@ -875,7 +875,7 @@ new #[Title('Trip')] class extends Component
     /** @return list<array{value: string, label: string}> */
     public function paymentOptions(): array
     {
-        return TripCostPayment::options();
+        return TripCostPayment::manualOptions();
     }
 
     /** @return list<array{value: string, label: string}> */
