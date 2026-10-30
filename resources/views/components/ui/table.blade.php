@@ -8,6 +8,16 @@
             <caption class="sr-only">{{ $caption }}</caption>
         @endif
 
-        {{ $slot }}
+        {{--
+            The header is a slot, not part of `$slot`: without this the `<x-slot name="head">` every
+            list screen passes was silently discarded and no table in the app printed its columns.
+        --}}
+        @isset($head)
+            <thead>{{ $head }}</thead>
+        @endisset
+
+        <tbody>
+            {{ $slot }}
+        </tbody>
     </table>
 </div>

@@ -44,10 +44,15 @@ use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Operations\Actions\AcceptJob;
 use App\Domain\Operations\Actions\CreateJob;
 use App\Domain\Operations\Actions\CreateRoute;
+use App\Domain\Operations\Actions\CreateTrip;
+use App\Domain\Operations\Actions\DepartTrip;
+use App\Domain\Operations\Actions\DispatchTrip;
+use App\Domain\Operations\Actions\PlanTrip;
 use App\Domain\Operations\Actions\QuoteJob;
 use App\Domain\Operations\Data\JobDto;
 use App\Domain\Operations\Data\JobQuoteDto;
 use App\Domain\Operations\Data\RouteDto;
+use App\Domain\Operations\Data\TripDto;
 use App\Domain\Operations\JobStatus;
 use App\Domain\Operations\Models\BorderCost;
 use App\Domain\Operations\Models\BorderCrossing;
@@ -71,6 +76,8 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Bootstrap\HandleExceptions;
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
@@ -103,6 +110,9 @@ final class OperationsRenderSweep extends TestCase
 
     /** The trip the board dispatched, so the hold tests act on it instead of booking the truck twice. */
     private string $assignedTripId = '';
+
+    /** The trip the simulator tracked, so the map assertions read the same journey. */
+    private string $gpsTripId = '';
 
     public function createApplication(): Application
     {
@@ -1352,6 +1362,139 @@ final class OperationsRenderSweep extends TestCase
             }
         });
 
+        echo "\n== §14.3/§16 R6 the live map: a truck on the road, the simulator, and what the page prints ==\n";
+
+        $this->attempt('a trip goes on the road and the simulator files five fixes under it', function () use ($owner, $customer, $truck, $driver, $monday): void {
+            // The border section ends acting as the dispatcher, and the truck's state event is written
+            // against whoever is on the guard — so the fixture is created as the owner, who owns it.
+            Auth::login($owner);
+            CurrentCompany::force($this->ownerCompany ?? 1);
+
+            // A corridor whose endpoints are real places, so the simulator walks the place table
+            // instead of the --from/--to escape hatch (which verify-telematics proves separately).
+            $corridor = (app(CreateRoute::class))(new RouteDto(
+                code: 'OPR-GBE-FRW',
+                origin: 'Gaborone',
+                destination: 'Francistown',
+                originCountryCode: 'BW',
+                destinationCountryCode: 'BW',
+                distanceKm: '430',
+            ));
+
+            // A distinctive quote: if any figure from the job can reach a `gps.view` screen, this is it.
+            $job = (app(CreateJob::class))(new JobDto(
+                customerId: $customer->id,
+                routeId: $corridor->id,
+                commodity: 'tracked pallets',
+                tonnes: 14.0,
+                requiredLoadOn: $monday->toDateString(),
+                requiredDeliveryOn: $monday->addDays(2)->toDateString(),
+                notes: 'OPR gps job',
+            ), 1);
+            $this->jobIds[] = $job->id;
+
+            $job = (app(QuoteJob::class))($job, new JobQuoteDto(
+                rateType: RouteRateType::PerTrip,
+                amountMajor: '555555',
+                currencyCode: CurrentCompany::model()->base_currency_code,
+            ), 1);
+            $job = (app(AcceptJob::class))($job, 1);
+
+            $trip = (app(CreateTrip::class))($job, 1);
+            $this->tripIds[] = $trip->id;
+
+            $trip = (app(PlanTrip::class))($trip, new TripDto(
+                jobId: $job->id,
+                truckId: $truck->id,
+                driverId: $driver->id,
+                plannedDepartureAt: $monday->toDateTimeString(),
+            ), 1);
+            $trip = (app(DispatchTrip::class))($trip->fresh(), 1);
+            $trip = (app(DepartTrip::class))($trip->fresh(), 151_000, 430.0, 1);
+
+            $exit = Artisan::call('gps:simulate', ['trip' => $trip->fresh()->trip_no, '--pings' => 5]);
+            $output = str_replace("\n", ' ', Artisan::output());
+
+            if ($exit !== 0 || ! str_contains($output, '5 stored')) {
+                throw new Exception('the simulator did not file five fixes: '.$output);
+            }
+
+            if ((int) DB::table('gps_positions')->where('trip_id', $trip->id)->count() !== 5) {
+                throw new Exception('five pings produced '.DB::table('gps_positions')->where('trip_id', $trip->id)->count().' rows');
+            }
+
+            $this->gpsTripId = $trip->id;
+        });
+
+        $this->attempt('the map prints the truck, the trip and the fix — and no money from the job behind it', function () use ($owner): void {
+            $html = (string) $this->actingAs($owner, 'web')->get('/telematics')->assertOk()->getContent();
+
+            foreach (['Live map', 'B 941 OPR', 'km/h', 'Schematic', 'wire:poll'] as $needle) {
+                if (! str_contains($html, $needle)) {
+                    throw new Exception("the live map is missing {$needle}");
+                }
+            }
+
+            // §9.3: `gps.view` is held by seats that may not read a price. The corridor is on the page;
+            // the quote behind it is not.
+            foreach (['555555', '5 555', '555 555'] as $forbidden) {
+                if (str_contains($html, $forbidden)) {
+                    throw new Exception("the live map leaked the job's quote ({$forbidden}) to a gps.view seat");
+                }
+            }
+        });
+
+        $this->attempt('selecting a truck draws its track, oldest first, with the provider message on each row', function () use ($owner): void {
+            if ($this->gpsTripId === '') {
+                throw new Exception('no tracked trip to select');
+            }
+
+            $component = Livewire::actingAs($owner)
+                ->test('pages::telematics.live')
+                ->set('trip', $this->gpsTripId);
+
+            $html = (string) $component->html();
+
+            foreach (['Fixed at (UTC)', 'SIM-', 'polyline', '5 fix(es) on file'] as $needle) {
+                if (! str_contains($html, $needle)) {
+                    throw new Exception("the track panel is missing {$needle}");
+                }
+            }
+
+            // The toggle has to close as well as open, or the panel is a trap on a polled screen.
+            $component->call('selectTrip', $this->gpsTripId);
+
+            if (str_contains((string) $component->html(), 'Fixed at (UTC)')) {
+                throw new Exception('selecting the same trip again did not close the track');
+            }
+        });
+
+        $this->attempt('a dispatcher reads the map, and a seat without gps.view is refused the route', function () use ($dispatcher, $reader): void {
+            $this->actingAs($dispatcher, 'web')->get('/telematics')->assertOk()->assertSee('B 941 OPR', false);
+
+            $status = $this->actingAs($reader, 'web')->get('/telematics')->getStatusCode();
+
+            if ($status !== 403) {
+                throw new Exception("a seat with no gps.view got {$status} from /telematics, not 403");
+            }
+        });
+
+        $this->attempt('a company with no feed says so instead of drawing an empty grid', function (): void {
+            CurrentCompany::force(2);
+
+            $html = (string) Livewire::test('pages::telematics.live')->html();
+
+            CurrentCompany::force($this->ownerCompany ?? 1);
+
+            if (! str_contains($html, 'No positions yet')) {
+                throw new Exception('company 2 with no fixes did not get the empty state');
+            }
+
+            if (str_contains($html, 'B 941 OPR')) {
+                throw new Exception('company 2 read another tenant\'s trucks off the projection');
+            }
+        });
+
         echo "\n== §15.2's cross-phase rule: the phase ships dashboard figures, counted from real rows ==\n";
 
         $this->attempt('the overview carries the four operations cards, and the planned count is the register\'s', function () use ($owner): void {
@@ -1712,6 +1855,14 @@ final class OperationsRenderSweep extends TestCase
         $this->deleteIn('border_costs', 'border_crossing_id', $crossingIds);
         $this->deleteIn('border_crossings', 'id', $crossingIds);
 
+        // The map's rows go before the trucks they name: `gps_positions.truck_id` is a real foreign key,
+        // and the projection cites a fix that is about to disappear.
+        $this->deleteIn('latest_positions', 'trip_id', $ids['trip_ids']);
+        $this->deleteIn('gps_positions', 'trip_id', $ids['trip_ids']);
+        $this->deleteIn('latest_positions', 'truck_id', $ids['truck_ids']);
+        $this->deleteIn('gps_positions', 'truck_id', $ids['truck_ids']);
+        DB::table('gps_provider_accounts')->where('adapter', 'simulator')->delete();
+
         $this->deleteIn('chargeables', 'trip_id', $ids['trip_ids']);
         $this->deleteIn('trip_costs', 'trip_id', $ids['trip_ids']);
         $this->deleteIn('loads', 'trip_id', $ids['trip_ids']);
@@ -1737,6 +1888,10 @@ final class OperationsRenderSweep extends TestCase
 
         $checkIds = DB::table('users')->where('email', 'like', 'render-ops-check-%@fleetguard.local')->pluck('id')->all();
         $this->deleteIn('model_has_roles', 'model_id', $checkIds, ['model_type' => User::class]);
+        // A probe seat that acted on the guard leaves its id on the trail it wrote (`operational_events`
+        // has a real FK to `users`), and a truck's state event names the truck, not the trip — so the
+        // sweeps above cannot reach it. The seat's own rows go with the seat.
+        $this->deleteIn('operational_events', 'actor_id', $checkIds);
         // A counter remembers who last drew from it; the probe seats drew the run's job and trip
         // numbers, so that pointer must let go before the account can (§7.4's FK is a real one).
         if ($checkIds !== []) {
@@ -1819,6 +1974,11 @@ final class OperationsRenderSweep extends TestCase
                 ->where('aggregate_type', 'border_crossing')
                 ->whereRaw('`aggregate_id` not in (select `id` from `border_crossings`)')
                 ->count(),
+            // The map's rows: a surviving fix or projection would put a truck on the live map that the
+            // fleet register no longer has, and a surviving feed would keep ingesting for it.
+            'gps fixes' => (int) DB::table('gps_positions')->where('provider_message_id', 'like', 'SIM-%')->count(),
+            'gps projections' => (int) DB::table('latest_positions')->count(),
+            'gps feeds' => (int) DB::table('gps_provider_accounts')->where('adapter', 'simulator')->count(),
         ];
 
         foreach ($leftovers as $what => $count) {

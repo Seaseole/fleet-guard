@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+use App\Domain\Telematics\Adapters\SimulatorProvider;
 
 /*
  * Module-level knobs that must be data rather than code, so that an open question in DESIGN.md
@@ -116,9 +117,63 @@ return [
         'pin_attempts_per_minute' => (int) env('FLEET_KIOSK_PIN_ATTEMPTS', 5),
     ],
 
+    /*
+     * §4.4 / §14.3 / §16 R6 — the GPS seam.
+     *
+     * `adapters` maps a `gps_provider_accounts.adapter` value to the class that parses that
+     * provider's payload. Phase 2 ships the simulator only; Phase 7 adds `teltonika`, `gaia` and
+     * `flespi` here and nothing else about ingest changes (§16 Q7's pull fallback lands as a second
+     * entry point into the same Action).
+     *
+     * `places` is the simulator's corridor reference, not business master data: a route stores place
+     * *names*, and the simulator needs two points to walk between. Coordinates are the published
+     * centres of the corridor cities the demo fleet runs; a route whose endpoint is not listed is
+     * refused with a message asking for `--from`/`--to` rather than guessed at. Depots and customer
+     * sites get their real coordinates in Phase 7's geofence setup (§16 Q7).
+     */
+    'telematics' => [
+        'adapters' => [
+            'simulator' => SimulatorProvider::class,
+        ],
+
+        // §12.2 defers Reverb: a 60 s poll is the whole live-map transport at this fleet size, and
+        // the page reads the projection table, never the history table (§14.3).
+        'poll_seconds' => (int) env('FLEET_GPS_POLL_SECONDS', 60),
+
+        // A fix older than this is shown as stale rather than as the truck's current place. The
+        // figure is generous for a corridor: a truck out of signal at Kazungula is still trackable,
+        // a truck silent for an hour is a question for dispatch.
+        'stale_after_minutes' => (int) env('FLEET_GPS_STALE_MINUTES', 15),
+
+        'simulator' => [
+            'speed_kph' => (int) env('FLEET_GPS_SIMULATOR_SPEED', 80),
+            'places' => [
+                'Gaborone' => [-24.6282, 25.9231],
+                'Francistown' => [-21.1670, 27.5120],
+                'Kazungula' => [-17.7920, 25.2320],
+                'Kasane' => [-17.8167, 25.1500],
+                'Maun' => [-19.9833, 23.4167],
+                'Windhoek' => [-22.5609, 17.0658],
+                'Walvis Bay' => [-22.9576, 14.5053],
+                'Johannesburg' => [-26.2041, 28.0473],
+                'Durban' => [-29.8587, 31.0218],
+                'Beitbridge' => [-22.2167, 30.0000],
+                'Lusaka' => [-15.3875, 28.3228],
+                'Ndola' => [-12.9587, 28.6366],
+                'Harare' => [-17.8252, 31.0335],
+                'Bulawayo' => [-20.1535, 28.5738],
+                'Beira' => [-19.8436, 34.8389],
+                'Maputo' => [-25.9692, 32.5732],
+                'Dar es Salaam' => [-6.7924, 39.2083],
+            ],
+        ],
+    ],
+
     'modules' => [
-        // Phase flags let a screen ship disabled rather than half-built.
-        'telematics' => env('FLEET_MODULE_TELEMATICS', false),
+        // Phase flags let a screen ship disabled rather than half-built. Telematics is on since
+        // Phase 2 slice 2g: the simulator, the ingest door and the trip map are real. The flag now
+        // only tells a deployment whether provider accounts are expected (§16 R6).
+        'telematics' => env('FLEET_MODULE_TELEMATICS', true),
         'payroll' => env('FLEET_MODULE_PAYROLL', false),
     ],
 
