@@ -2749,10 +2749,11 @@ opens one, so the check now strips them all.
 `render-cutover` RENDER OK — the last three because the fleet, people, vehicle, kiosk and cutover screens all
 contain a submit whose rendered weight just changed.
 
-**Honest gaps.** `lint-ui.php`'s rules U2 (no raw `<select>`) and U3 (every table carries `:caption`) are
-written but **pending** — the file prints them as pending rather than enabling them and failing 75 checks the
-select and caption packages have not paid for yet, because a gate that fails on known future work gets
-switched off. On `settings/security` the password form is now `outline` and *Enable 2FA* — the action §9.1
+**Honest gaps.** `lint-ui.php`'s rules U2 (no raw `<select>`) and U3 (every table carries `:caption`) were
+written but **pending** at this entry's commit — the file printed them as pending rather than enabling them and
+failing 75 checks the select and caption packages had not paid for yet, because a gate that fails on known future
+work gets switched off. Both are enabled now: U2 landed with §20.23 and U3 with §20.24. On `settings/security` the
+password form is now `outline` and *Enable 2FA* — the action §9.1
 makes mandatory — is the screen's only filled control, which is a judgement a reviewer may reverse; it is
 written in the file rather than implied by a default. Danger-treatment of terminal trip decisions is not done:
 with the flip, the "Say why" dialog's *Hold*, *Stop the trip* and *Re-open* all resolve to `outline`, so the
@@ -2832,8 +2833,8 @@ they are coverage, not gates, and a script that never fails is a script that get
 `options` for whether a placeholder is the right empty state, and where a page already rendered its own `<label>`
 the component's `label` prop stays unused. `hint` was not invented for any of them. Nothing proves a select is
 *reachable* in the sense of P0-3's kiosk contract — this slice fixed the control's error semantics, not its
-keyboard path, and no browser pass was run. U3 (every `x-ui.table` carries a `:caption`) is still pending and lands
-with #17, which is the other half of the form-and-table cleanup.
+keyboard path, and no browser pass was run. U3 (every `x-ui.table` carries a `:caption`) was still pending at this
+entry's commit; it landed in §20.24, the other half of the form-and-table cleanup.
 
 ### 20.24 Design-system fix — 2026-10-30, one way to ask a column for its figures, and a name for every table
 
