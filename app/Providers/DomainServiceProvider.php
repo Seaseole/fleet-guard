@@ -24,6 +24,7 @@ use App\Domain\Kernel\Money\RateResolver;
 use App\Domain\Kernel\Money\StoredRateResolver;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Maintenance\Actions\ImportParts;
+use App\Domain\Maintenance\Alerts\ServiceDueSource;
 use App\Domain\Operations\Actions\ImportRates;
 use App\Domain\Operations\Actions\ImportRoutes;
 use App\Domain\People\Actions\ImportDrivers;
@@ -94,7 +95,8 @@ final class DomainServiceProvider extends ServiceProvider
         // import anywhere under `app/Domain/Kernel`.
         $this->app->singleton(DocumentExpirySource::class);
         $this->app->singleton(DriverPaperExpirySource::class);
-        $this->app->tag([DocumentExpirySource::class, DriverPaperExpirySource::class], 'reminder_sources');
+        $this->app->singleton(ServiceDueSource::class);
+        $this->app->tag([DocumentExpirySource::class, DriverPaperExpirySource::class, ServiceDueSource::class], 'reminder_sources');
 
         $this->app->bind(ReminderRunner::class, function (): ReminderRunner {
             /** @var array<ReminderSource> $sources */

@@ -34,7 +34,13 @@ final class ArchitectureLint
         'Operations' => ['Invoicing'],
         // §4.3 gives a part an optional "specific part" truck, and §3 draws MAINT --> FLEET. The
         // edge is one nullable FK and the label the catalogue prints, nothing more.
-        'Maintenance' => ['Fleet'],
+        //
+        // §10.6's work order widens it, each edge one nullable FK: a breakdown names the `trip_id` it
+        // stopped (Operations), an outside repair names the `supplier_id` that bills it (Accounting),
+        // and the mechanic is an `employees` row (People). None of them writes into the other module —
+        // they are the five columns §4.3's sketch already lists, made explicit here rather than hidden
+        // in imports a reader would have to find.
+        'Maintenance' => ['Fleet', 'Operations', 'Accounting', 'People'],
         // §3 draws FUEL --> OPS: an issue is fuel onto a trip, and the cost it posts is the trip's.
         // §4.3's FUEL_TANK/FUEL_ISSUE both carry `truck_id`, so Fleet is a second edge the map does
         // not draw but the schema does. A station or a card names the supplier that bills it

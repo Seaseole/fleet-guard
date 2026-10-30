@@ -6,7 +6,7 @@
         ['label' => __('New job'), 'route' => 'jobs.create', 'permission' => 'jobs.create', 'icon' => 'clipboard-document-list'],
         ['label' => __('Dispatch trip'), 'route' => 'trips.create', 'permission' => 'trips.create', 'icon' => 'map'],
         ['label' => __('Record fuel'), 'route' => 'fuel.index', 'permission' => 'fuel.record', 'icon' => 'circle-stack'],
-        ['label' => __('New work order'), 'route' => 'work-orders.create', 'permission' => 'work-orders.create', 'icon' => 'wrench'],
+        ['label' => __('New work order'), 'route' => 'maintenance.index', 'permission' => 'work_orders.create', 'icon' => 'wrench'],
         ['label' => __('New invoice'), 'route' => 'invoices.create', 'permission' => 'invoices.create', 'icon' => 'receipt-percent'],
     ])->filter(fn (array $a) => Route::has($a['route']) && Gate::allows($a['permission']))->all();
 @endphp

@@ -66,11 +66,13 @@ return [
             // 'invoice' => ['table' => 'invoices', 'number_column' => 'number', 'status_column' => 'status', 'draft_status' => 'draft'],
 
             // Operational references are numbered **at creation**, not at issue (§7: "never reused
-            // matters more here than no gaps"), so neither declares a `status_column`. A draft trip
+            // matters more here than no gaps"), so none declares a `status_column`. A draft trip
             // already carries its `TRP-` number, which is what lets a dispatcher quote it to the
-            // yard over the phone before anyone has chosen a truck.
+            // yard over the phone before anyone has chosen a truck; a work order is quoted the same
+            // way when the fitter rings the supplier, so `WO-` is allocated when it is raised.
             'trip' => ['table' => 'trips', 'number_column' => 'trip_no'],
             'job' => ['table' => 'freight_jobs', 'number_column' => 'job_no'],
+            'work_order' => ['table' => 'work_orders', 'number_column' => 'wo_no'],
         ],
 
         'integrity' => [
@@ -338,5 +340,26 @@ return [
             array_map('trim', explode(',', (string) env('FLEET_FUEL_VARIANCE_RECIPIENTS', 'owner,operations_manager'))),
             static fn (string $role): bool => $role !== '',
         )),
+    ],
+
+    /*
+     * §10.6 and §15.2 phase 3 — the workshop's two numbers.
+     *
+     * `work_order_approval_threshold_base` is the single control the design calls out: an order whose
+     * estimate is above it cannot be worked until somebody holding `work_orders.approve` says yes.
+     * BWP 5,000.00 is the default because it sits above a routine service and below a gearbox — the
+     * owner can change it without a deploy, and the value in force is copied onto each row so changing
+     * it never re-writes history.
+     *
+     * The three `due_soon_*` windows are how far before the due point the register says "due soon".
+     * They are not the alert's day bands (those are §14.1 threshold rows, editable by the Owner); they
+     * are the register's own colour, and they differ per kind because 1,000 km is two days on a
+     * corridor truck and a month on a yard bakkie.
+     */
+    'maintenance' => [
+        'work_order_approval_threshold_base' => (int) env('FLEET_WORK_ORDER_APPROVAL_THRESHOLD', 500_000),
+        'due_soon_km' => (int) env('FLEET_SERVICE_DUE_SOON_KM', 1_000),
+        'due_soon_hours' => (int) env('FLEET_SERVICE_DUE_SOON_HOURS', 50),
+        'due_soon_days' => (int) env('FLEET_SERVICE_DUE_SOON_DAYS', 14),
     ],
 ];
