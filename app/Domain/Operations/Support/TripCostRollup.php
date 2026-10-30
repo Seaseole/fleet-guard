@@ -39,15 +39,30 @@ final class TripCostRollup
 
         $revenue = 0;
 
+        /*
+         * Turnover arrives grouped by account *and* direction, but a cost is a net figure: a
+         * reversal (§6.4) posts the mirror line — a credit on 5100 carrying the same trip — and
+         * reading the two halves separately called every corrected cost a refund. The halves are
+         * summed here before the sign is judged, so a mirrored pair nets to zero and only a trip
+         * genuinely credited more than it was charged is refused below.
+         *
+         * @var array<string, int> $signed
+         */
+        $signed = [];
+
+        foreach ($rows as $row) {
+            $signed[$row->accountCode] = ($signed[$row->accountCode] ?? 0) + $row->signedDebit();
+        }
+
         /** @var array<string, int> $buckets */
         $buckets = array_fill_keys(TripCostBucket::values(), 0);
 
-        foreach ($rows as $row) {
-            $signed = $row->signedDebit();
-            $code = $row->accountCode;
+        foreach ($signed as $code => $amount) {
+            // PHP turns "5100" into an int array key; the chart's codes are strings.
+            $code = (string) $code;
 
             if (str_starts_with($code, '4')) {
-                $revenue -= $signed;
+                $revenue -= $amount;
 
                 continue;
             }
@@ -58,18 +73,18 @@ final class TripCostRollup
                 continue;
             }
 
-            if ($signed < 0) {
+            if ($amount < 0) {
                 throw new RuntimeException(sprintf(
                     'Trip %s has a net credit of %d on account %s (%s). A refund belongs in a reversing '
                     .'entry against a receivable or a contra account, not as a negative direct cost (§6.6).',
                     $trip->trip_no,
-                    -$signed,
+                    -$amount,
                     $code,
                     $bucket->label(),
                 ));
             }
 
-            $buckets[$bucket->value] += $signed;
+            $buckets[$bucket->value] += $amount;
         }
 
         $direct = array_sum($buckets);

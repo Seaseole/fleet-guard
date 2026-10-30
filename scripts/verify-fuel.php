@@ -4,25 +4,36 @@ declare(strict_types=1);
 
 use App\Domain\Fleet\Actions\CreateTruck;
 use App\Domain\Fleet\Data\TruckDto;
+use App\Domain\Fleet\FleetStatus;
 use App\Domain\Fuel\Actions\CreateBulkTank;
 use App\Domain\Fuel\Actions\CreateFuelPurchase;
 use App\Domain\Fuel\Actions\CreateFuelStation;
 use App\Domain\Fuel\Actions\CreateFuelTank;
+use App\Domain\Fuel\Actions\DecideFuelVariance;
+use App\Domain\Fuel\Actions\EvaluateFuelVariance;
 use App\Domain\Fuel\Actions\ReconcileBulkTank;
 use App\Domain\Fuel\Actions\RecordFuelIssue;
+use App\Domain\Fuel\Actions\ReverseFuelIssue;
 use App\Domain\Fuel\BulkTankMovementKind;
 use App\Domain\Fuel\Data\FuelIssueDto;
 use App\Domain\Fuel\Data\FuelPurchaseDto;
 use App\Domain\Fuel\FuelIssueSource;
 use App\Domain\Fuel\FuelIssueStatus;
 use App\Domain\Fuel\FuelTankKind;
+use App\Domain\Fuel\FuelVarianceState;
 use App\Domain\Fuel\Models\BulkTank;
 use App\Domain\Fuel\Models\FuelIssue;
 use App\Domain\Fuel\Models\FuelPurchase;
 use App\Domain\Fuel\Models\FuelStation;
 use App\Domain\Fuel\Models\FuelTank;
+use App\Domain\Fuel\Models\FuelVariance;
+use App\Domain\Fuel\Support\FuelConsumption;
 use App\Domain\Invoicing\Actions\CreateCustomer;
 use App\Domain\Invoicing\Data\CustomerDto;
+use App\Domain\Kernel\Alerts\AlertSeverity;
+use App\Domain\Kernel\Alerts\AlertState;
+use App\Domain\Kernel\Alerts\AlertType;
+use App\Domain\Kernel\Alerts\Models\Alert;
 use App\Domain\Kernel\Identity\RoleKey;
 use App\Domain\Kernel\Ledger\ChartOfAccounts;
 use App\Domain\Kernel\Ledger\Models\LedgerBarrier;
@@ -30,12 +41,15 @@ use App\Domain\Kernel\Money\FxRateSource;
 use App\Domain\Kernel\Money\Money;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Operations\Actions\AcceptJob;
+use App\Domain\Operations\Actions\AddLoad;
+use App\Domain\Operations\Actions\CompleteTrip;
 use App\Domain\Operations\Actions\CreateJob;
 use App\Domain\Operations\Actions\CreateRoute;
 use App\Domain\Operations\Actions\CreateTrip;
 use App\Domain\Operations\Actions\QuoteJob;
 use App\Domain\Operations\Data\JobDto;
 use App\Domain\Operations\Data\JobQuoteDto;
+use App\Domain\Operations\Data\LoadDto;
 use App\Domain\Operations\Data\RouteDto;
 use App\Domain\Operations\Models\Trip;
 use App\Domain\Operations\Models\TripCost;
@@ -136,6 +150,8 @@ function purgeFuelJournalEntries(array $entryIds, string $why): void
 
     LedgerBarrier::withLiftedGuard($why, null, function () use ($entryIds): void {
         DB::table('gl_journal_lines')->whereIn('entry_id', $entryIds)->delete();
+        // A reversal names the entry it mirrors; the child has to go before the parent.
+        DB::table('gl_journal_entries')->whereIn('id', $entryIds)->whereNotNull('reverses_entry_id')->delete();
         DB::table('gl_journal_entries')->whereIn('id', $entryIds)->delete();
     });
 }
@@ -174,11 +190,22 @@ $xflDriverIds = $xflEmployeeIds === [] ? [] : DB::table('drivers')->whereIn('emp
 $xflPurchaseIds = DB::table('fuel_purchases')->where('invoice_no', 'like', 'XFL-%')->pluck('id')->all();
 $xflBulkTankIds = DB::table('bulk_tanks')->where('name', 'like', 'XFL %')->pluck('id')->all();
 $xflMovementIds = $xflBulkTankIds === [] ? [] : DB::table('bulk_tank_movements')->whereIn('bulk_tank_id', $xflBulkTankIds)->pluck('id')->all();
+$xflVarianceIds = $xflTripIds === [] ? [] : DB::table('fuel_variances')->whereIn('trip_id', $xflTripIds)->pluck('id')->all();
+$xflAlertIds = $xflVarianceIds === [] ? [] : DB::table('alerts')
+    ->where('subject_type', 'fuel_variance')
+    ->whereIn('subject_id', array_map('strval', $xflVarianceIds))
+    ->pluck('id')
+    ->all();
 
+purgeFuelJournalEntries(fuelSourceJournalEntries('fuel_issue_reversal', $xflIssueIds), 'verify-fuel: clear an interrupted run\'s reversals');
 purgeFuelJournalEntries(fuelCostJournalEntries($xflCostIds), 'verify-fuel: clear an interrupted run\'s entries');
 purgeFuelJournalEntries(fuelSourceJournalEntries('fuel_purchase', $xflPurchaseIds), 'verify-fuel: clear an interrupted run\'s stock receipts');
 purgeFuelJournalEntries(fuelSourceJournalEntries('bulk_tank_dip', $xflMovementIds), 'verify-fuel: clear an interrupted run\'s dips');
 
+wipeFuelIds('alerts', 'id', $xflAlertIds);
+wipeFuelIds('operational_events', 'aggregate_id', array_map('strval', $xflAlertIds));
+wipeFuelIds('operational_events', 'aggregate_id', array_map('strval', $xflVarianceIds));
+wipeFuelIds('fuel_variances', 'id', $xflVarianceIds);
 wipeFuelIds('fuel_issues', 'id', $xflIssueIds);
 wipeFuelIds('fuel_purchases', 'recorded_by', []);
 DB::table('fuel_purchases')->where('invoice_no', 'like', 'XFL-%')->delete();
@@ -310,6 +337,7 @@ $created = [
     'truck_ids' => [], 'employee_ids' => [], 'driver_ids' => [],
     'job_ids' => [], 'trip_ids' => [], 'tank_ids' => [], 'station_ids' => [],
     'bulk_tank_ids' => [], 'purchase_ids' => [], 'issue_ids' => [], 'cost_ids' => [],
+    'variance_ids' => [],
 ];
 
 $baseCurrency = CurrentCompany::model()->base_currency_code;
@@ -1099,6 +1127,318 @@ refuses(
     'cannot give what it does not have'
 );
 
+/* ------------------------------------------------------------------------- */
+echo "\n== §10.9 consumption is judged per 100 km, rounded half-up on both sides of zero ==\n";
+
+$flat = FuelConsumption::compare(30_000, 1_000, 30.0);
+check($flat['actual_x100'] === 3_000 && $flat['expected_x100'] === 3_000 && $flat['variance_pct_x100'] === 0, '300.00 L over 1,000 km at an expected 30.00 L/100 is no variance at all');
+
+$high = FuelConsumption::compare(80_100, 10_000, 8.0);
+check($high['actual_x100'] === 801 && $high['variance_pct_x100'] === 13, '801 L over 10,000 km against 8.00 is +0.13% — 12.5 rounds up to 13, not down to 12 ('.$high['variance_pct_x100'].')');
+
+$low = FuelConsumption::compare(79_900, 10_000, 8.0);
+check($low['actual_x100'] === 799 && $low['variance_pct_x100'] === -13, '...and -12.5 rounds to -13, so a shortfall prints symmetrically with an overrun');
+
+check(FuelConsumption::litresLabel(801) === '8.01' && FuelConsumption::varianceLabel(13) === '+0.13' && FuelConsumption::varianceLabel(-13) === '-0.13', 'the labels carry two decimals and the sign the screen prints');
+
+/* ------------------------------------------------------------------------- */
+echo "\n== §10.9 a variance is one row per trip, and its figures are CHECKs ==\n";
+
+$varianceDdl = (string) ((array) DB::select('show create table fuel_variances')[0])['Create Table'];
+
+check(str_contains($varianceDdl, 'fuel_variances_company_trip_unique'), 'a trip has one variance, not a second opinion on the same figures');
+check(str_contains($varianceDdl, 'fuel_variances_state_allowed') && str_contains($varianceDdl, 'fuel_variances_previous_state_allowed'), '...and the four states are a CHECK, not a convention');
+check(str_contains($varianceDdl, 'fuel_variances_decided_is_explained'), '...a decided variance must carry the sentence that decided it');
+check(str_contains($varianceDdl, 'fuel_variances_span_positive') && str_contains($varianceDdl, 'fuel_variances_trip_company_fk'), '...and a row with no span, or a trip from another company, cannot be written');
+check(str_contains($issueDdl, 'reversal_reason'), 'a reversed issue carries its reason on the row (§10.1)');
+check(str_contains($movementDdl, "'reversal'"), '...and the stock book knows a reversal as a movement of its own');
+
+/* ------------------------------------------------------------------------- */
+echo "\n== §10.9 a trip inside the noise writes no variance, and one above it does ==\n";
+
+$evaluateVariance = app(EvaluateFuelVariance::class);
+
+// Keep the queue and the bell out of a register check: the alert row is what this proves,
+// delivery by role belongs to verify-alerts.
+$previousRecipients = config('fleet.fuel.variance_recipients');
+config(['fleet.fuel.variance_recipients' => []]);
+
+$truck->forceFill(['expected_consumption_per_100' => 30.0])->save();
+
+$quietTrip = (app(CreateTrip::class))($job, 1);
+$quietTrip->forceFill(['truck_id' => $truck->id, 'driver_id' => $driver->id, 'distance_km_10_2' => 97.0])->save();
+$created['trip_ids'][] = $quietTrip->id;
+
+// 29.00 L over 97 km is 29.90 L/100 — -0.33%, inside the 10% band.
+$quietIssue = $issue($quietTrip->fresh(), new FuelIssueDto(
+    tankId: $mainTank->id,
+    litresX100: 2_900,
+    odometerKm: 121_350,
+    occurredOn: Carbon::now(),
+    purchaseId: $secondSlip->id,
+), 1);
+$created['issue_ids'][] = $quietIssue->id;
+$created['cost_ids'][] = $quietIssue->trip_cost_id;
+
+check($evaluateVariance($quietTrip->fresh()) === null, 'a trip inside the threshold answers with nothing');
+check((int) DB::table('fuel_variances')->where('trip_id', $quietTrip->id)->count() === 0, '...and writes no row, so a clean trip never becomes wallpaper');
+
+app(AddLoad::class)($trip, new LoadDto(commodity: 'cement', tonnes: '28'));
+$trip->forceFill(['distance_km_10_2' => 1000.0])->save();
+
+check($trip->fresh()->tonnes() === 28.0, 'the trip carries 28.00 t, summed from its load');
+
+$variance = $evaluateVariance($trip->fresh()) ?? throw new RuntimeException('the over-threshold trip wrote no variance');
+$created['variance_ids'][] = $variance->id;
+
+check($variance->distance_km === 1000 && $variance->litres_x100 === 1_570_050, 'the row stores the distance and litres it judged, not a re-derivation ('.$variance->litres_x100.')');
+check($variance->litres_per_100_10_2 === '1570.05' && $variance->expected_per_100_10_2 === '30.00', '...1,570.05 L per 100 km against the truck\'s 30.00');
+check($variance->variance_pct_10_2 === '5133.50' && $variance->varianceLabel() === '+5133.50%', '...a +5,133.50% variance, printed with its sign');
+check($variance->tonnes_carried_10_2 === '28.00', '...and the load it carried, so the figure can be read in context');
+check($variance->state === FuelVarianceState::Open && $variance->isOpen(), 'the row opens, waiting for a person to decide');
+
+$varianceAlert = Alert::query()->where('subject_type', 'fuel_variance')->where('subject_id', (string) $variance->id)->first();
+
+check($varianceAlert !== null && $varianceAlert->type === AlertType::FuelVariance, 'the variance raises a fuel_variance alert through §14.1\'s door');
+check($varianceAlert !== null && $varianceAlert->severity === AlertSeverity::Critical, '...critical above the 25% band');
+check($varianceAlert !== null && $varianceAlert->state === AlertState::Open && $varianceAlert->payload['variance_pct'] === '5133.50', '...open, carrying the figure the register shows');
+
+/* ------------------------------------------------------------------------- */
+echo "\n== §10.9 a posted issue is reversed, never edited: the mirror is a journal entry ==\n";
+
+$reverse = app(ReverseFuelIssue::class);
+
+/** @var User $dispatcherProbe */
+$dispatcherProbe = User::query()->firstOrNew(['email' => 'verify-xfl-dispatcher@fleetguard.local']);
+$dispatcherProbe->name = 'Verify XFL Dispatcher';
+$dispatcherProbe->company_id = $owner->company_id;
+$dispatcherProbe->password = Str::random(32);
+$dispatcherProbe->email_verified_at = Carbon::now();
+$dispatcherProbe->save();
+app(ChangeUserRole::class)($dispatcherProbe->fresh(), RoleKey::Dispatcher);
+$dispatcherProbe = $dispatcherProbe->fresh();
+
+check(! Gate::forUser($dispatcherProbe)->allows('fuel.correct'), 'a dispatcher does not hold fuel.correct (§9.3)');
+
+Auth::login($dispatcherProbe);
+refuses(
+    'a dispatcher cannot reverse a posted issue',
+    fn () => $reverse($overCapacity->fresh(), 'XFL dispatcher correction', $dispatcherProbe->id),
+    InvalidArgumentException::class,
+    'operations decision'
+);
+Auth::login($owner);
+
+refuses(
+    'a reversal without a reason is refused',
+    fn () => $reverse($overCapacity->fresh(), '   ', 1),
+    InvalidArgumentException::class,
+    'needs the reason'
+);
+
+$rollupBeforeReversal = (int) DB::table('trips')->where('id', $trip->id)->value('fuel_cost_base');
+
+$reversedFirst = $reverse($first->fresh(), 'XFL: the slip was billed to the wrong truck', 1);
+
+check($reversedFirst->status === FuelIssueStatus::Reversed && $reversedFirst->reversal_reason === 'XFL: the slip was billed to the wrong truck', 'the issue is reversed and carries the sentence that explains it');
+
+$mirror = DB::table('gl_journal_entries')->where('source_type', 'fuel_issue_reversal')->where('source_id', $first->id)->first();
+
+check($mirror !== null && $mirror->reverses_entry_id === $entry->id && $mirror->netting_group === $first->id, '...and the ledger holds a mirror entry that points at the original and nets with it (§6.4)');
+check($mirror !== null && $mirror->status === 'posted' && (int) $mirror->created_by === 1, '...posted, naming the person who corrected it');
+
+$fuelAccountId = $chart['5100']?->id ?? throw new RuntimeException('5100 Fuel is missing from the chart');
+
+if ($mirror !== null) {
+    $mirrorLines = DB::table('gl_journal_lines')->where('entry_id', $mirror->id)->get()->all();
+    $mirrorFuel = collect($mirrorLines)->first(static fn (object $line): bool => (int) $line->account_id === (int) $fuelAccountId);
+
+    check(count($mirrorLines) === 2 && $mirrorFuel !== null && $mirrorFuel->direction === 'credit' && (int) $mirrorFuel->amount_base === 463_425, '...crediting 5100 by the exact cost the original debited');
+    check($mirrorFuel !== null && (int) $mirrorFuel->truck_id === (int) $truck->id && (string) $mirrorFuel->trip_id === $trip->id, '...with the truck and trip dimensions, so the cost leaves the buckets it entered');
+
+    $net5100 = (int) DB::table('gl_journal_lines')
+        ->whereIn('entry_id', [$entry->id, $mirror->id])
+        ->where('account_id', $fuelAccountId)
+        ->selectRaw("coalesce(sum(case when `direction` = 'debit' then amount_base else -amount_base end), 0) as net")
+        ->value('net');
+
+    check($net5100 === 0, '...and the pair nets to zero on the account ('.$net5100.')');
+}
+
+check($purchase->fresh()->litresRemainingX100() === 40_000, 'the slip gets its 250.50 litres back, because a reversed issue is no longer dispensed');
+
+$rollupAfterReversal = (int) DB::table('trips')->where('id', $trip->id)->value('fuel_cost_base');
+check($rollupAfterReversal === $rollupBeforeReversal - 463_425, '...and the §6.6 fuel bucket falls by exactly the reversed cost ('.$rollupAfterReversal.')');
+
+$reversalTrail = DB::table('operational_events')
+    ->where('aggregate_type', 'fuel_issue')
+    ->where('aggregate_id', $first->id)
+    ->orderBy('id')
+    ->get(['from_state', 'to_state', 'reason'])
+    ->all();
+
+check(
+    count($reversalTrail) === 2
+        && $reversalTrail[1]->from_state === 'posted'
+        && $reversalTrail[1]->to_state === 'reversed'
+        && str_contains((string) $reversalTrail[1]->reason, 'wrong truck'),
+    '§10.1: the trail says posted → reversed, with the reason on the row'
+);
+
+refuses(
+    'an already-reversed issue cannot be reversed twice',
+    fn () => $reverse($first->fresh(), 'XFL second attempt', 1),
+    InvalidArgumentException::class,
+    'only a posted issue'
+);
+
+$variance->refresh();
+check($variance->litres_x100 === 1_545_000 && $variance->variance_pct_10_2 === '5050.00', 'while the variance is open it follows the corrected litres (+5,050.00%)');
+
+$varianceAlert->refresh();
+check($varianceAlert->state === AlertState::Open, '...and the alert stays open, because the finding is still on the register');
+
+/* ------------------------------------------------------------------------- */
+echo "\n== §10.9 a bulk-tank reversal puts the litres and their value back ==\n";
+
+$reversedBulk = $reverse($bulkIssue->fresh(), 'XFL: issued to the wrong trip', 1);
+
+check($reversedBulk->status === FuelIssueStatus::Reversed, 'the bulk issue is reversed like any other');
+
+$bulk->refresh();
+check(
+    $bulk->stock_litres_x100 === 10_000 && $bulk->stock_value_base === 213_300 && $bulk->average_cost_per_litre_minor === 2133,
+    'the tank takes back 100.00 L and BWP 2,133.00 at the average it left at'
+);
+
+$reversalMovement = DB::table('bulk_tank_movements')
+    ->where('source_type', 'fuel_issue_reversal')
+    ->where('source_id', $bulkIssue->id)
+    ->first();
+
+check(
+    $reversalMovement !== null
+        && $reversalMovement->kind === BulkTankMovementKind::Reversal->value
+        && (int) $reversalMovement->litres_delta_x100 === 10_000
+        && (int) $reversalMovement->value_delta_base === 213_300,
+    '...recorded as a reversal movement, not as a receipt'
+);
+check(ledgerBalance((int) $stockAccountId) === $bulk->stock_value_base, '...and 1180 agrees with the tank again ('.ledgerBalance((int) $stockAccountId).')');
+
+$variance->refresh();
+check($variance->litres_x100 === 1_535_000 && $variance->variance_pct_10_2 === '5016.67', 'the open variance follows that correction too (+5,016.67%)');
+
+/* ------------------------------------------------------------------------- */
+echo "\n== §10.9 a decision is a sentence, a seat, and a closed alert ==\n";
+
+$decide = app(DecideFuelVariance::class);
+
+check(! Gate::forUser($dispatcherProbe)->allows('fuel.waive_variance'), 'a dispatcher does not hold fuel.waive_variance either');
+
+Auth::login($dispatcherProbe);
+refuses(
+    'a dispatcher cannot decide a variance',
+    fn () => $decide($variance->fresh(), FuelVarianceState::Acknowledged, 'XFL dispatcher decision', $dispatcherProbe->id),
+    InvalidArgumentException::class,
+    'operations decision'
+);
+Auth::login($owner);
+
+refuses(
+    'a decision with no sentence is refused',
+    fn () => $decide($variance->fresh(), FuelVarianceState::Acknowledged, '  ', 1),
+    InvalidArgumentException::class,
+    'needs the sentence'
+);
+
+refuses(
+    'a decision longer than 160 characters is refused',
+    fn () => $decide($variance->fresh(), FuelVarianceState::Acknowledged, str_repeat('x', 161), 1),
+    InvalidArgumentException::class,
+    '160 characters'
+);
+
+refuses(
+    'a variance does not go back to open',
+    fn () => $decide($variance->fresh(), FuelVarianceState::Open, 'XFL reopen', 1),
+    InvalidArgumentException::class,
+    'does not go back to open'
+);
+
+$variance = $decide($variance->fresh(), FuelVarianceState::Acknowledged, 'XFL: rerouted around roadworks; the extra diesel is explained', 1);
+check(
+    $variance->state === FuelVarianceState::Acknowledged
+        && $variance->acknowledgement_note === 'XFL: rerouted around roadworks; the extra diesel is explained'
+        && $variance->decided_by === 1
+        && $variance->decided_at !== null,
+    'acknowledging stores the sentence and the person, not just the state'
+);
+
+$variance = $decide($variance->fresh(), FuelVarianceState::Disputed, 'XFL: the odometer reading is being checked', 1);
+check($variance->state === FuelVarianceState::Disputed, 'a disputed variance can move again');
+
+$variance = $decide($variance->fresh(), FuelVarianceState::Acknowledged, 'XFL: reading checked; the figure stands', 1);
+check($variance->state === FuelVarianceState::Acknowledged, '...to acknowledged once the check is done');
+
+$variance = $decide($variance->fresh(), FuelVarianceState::Resolved, 'XFL: accepted; the load was heavier than planned', 1);
+check($variance->state === FuelVarianceState::Resolved && $variance->previous_state === 'acknowledged', 'resolving is the leaf, and the previous state is on the row');
+
+$varianceAlert->refresh();
+check($varianceAlert->state === AlertState::Resolved, 'resolving the variance closes the alert it raised (§14.1)');
+
+// A decided row is a judgement about figures already examined; a later re-completion must not
+// quietly rewrite the numbers the person signed off on.
+$trip->forceFill(['distance_km_10_2' => 500.0])->save();
+$decidedAgain = $evaluateVariance($trip->fresh());
+
+check($decidedAgain !== null && $decidedAgain->id === $variance->id && $decidedAgain->distance_km === 1000, '...and re-evaluating a decided trip leaves its figures as they were decided');
+
+/* ------------------------------------------------------------------------- */
+echo "\n== §10.9 completing a trip is what raises the judgement ==\n";
+
+$completionTrip = (app(CreateTrip::class))($job, 1);
+$completionTrip->forceFill([
+    'status' => TripStatus::Delivered->value,
+    'truck_id' => $truck->id,
+    'driver_id' => $driver->id,
+    'odometer_start_km' => 125_000,
+])->save();
+$created['trip_ids'][] = $completionTrip->id;
+
+$truck->forceFill(['status' => FleetStatus::OnTrip->value])->save();
+
+$completionIssue = $issue($completionTrip->fresh(), new FuelIssueDto(
+    tankId: $mainTank->id,
+    litresX100: 5_000,
+    odometerKm: 125_100,
+    occurredOn: Carbon::now(),
+    purchaseId: $secondSlip->id,
+), 1);
+$created['issue_ids'][] = $completionIssue->id;
+$created['cost_ids'][] = $completionIssue->trip_cost_id;
+
+$completedTrip = (app(CompleteTrip::class))($completionTrip->fresh(), 125_500, null, 1);
+
+check($completedTrip->status === TripStatus::Completed && (int) round((float) $completedTrip->distance_km_10_2) === 500, 'the trip completes on its closing reading, 500 km later');
+check($truck->fresh()->status === FleetStatus::Available, '...and the truck comes home');
+
+$completionVariance = FuelVariance::query()->where('trip_id', $completionTrip->id)->first();
+
+if ($completionVariance !== null) {
+    $created['variance_ids'][] = $completionVariance->id;
+}
+
+check($completionVariance !== null && $completionVariance->litres_x100 === 5_000 && $completionVariance->distance_km === 500, 'completing the trip wrote the variance for it, without a second call');
+check($completionVariance !== null && $completionVariance->variance_pct_10_2 === '-66.67', '...50.00 L over 500 km is 10.00 L/100 against 30.00, -66.67%');
+
+$completionAlert = $completionVariance === null
+    ? null
+    : Alert::query()->where('subject_type', 'fuel_variance')->where('subject_id', (string) $completionVariance->id)->first();
+
+check($completionAlert !== null && $completionAlert->severity === AlertSeverity::Critical, '...and a critical alert, because a shortfall of that size is a finding');
+
+config(['fleet.fuel.variance_recipients' => $previousRecipients]);
+
 $ledgerCheck = Artisan::call('ledger:verify');
 check($ledgerCheck === 0, 'the ledger recomputes from its own lines with no drift', mb_substr(str_replace("\n", ' ', Artisan::output()), 0, 200));
 
@@ -1227,16 +1567,28 @@ $runPurchaseIds = $created['purchase_ids'];
 $runCostIds = $created['cost_ids'];
 $runTripIds = $created['trip_ids'];
 $runBulkTankIds = $created['bulk_tank_ids'];
+$runVarianceIds = $created['variance_ids'];
+$runAlertIds = $runVarianceIds === [] ? [] : DB::table('alerts')
+    ->where('subject_type', 'fuel_variance')
+    ->whereIn('subject_id', array_map('strval', $runVarianceIds))
+    ->pluck('id')
+    ->all();
 $runMovementIds = $runBulkTankIds === [] ? [] : DB::table('bulk_tank_movements')->whereIn('bulk_tank_id', $runBulkTankIds)->pluck('id')->all();
 $runEntries = fuelCostJournalEntries($runCostIds);
 $runReceiptEntries = fuelSourceJournalEntries('fuel_purchase', $runPurchaseIds);
 $runDipEntries = fuelSourceJournalEntries('bulk_tank_dip', $runMovementIds);
-$allRunEntries = array_values(array_unique(array_merge($runEntries, $runReceiptEntries, $runDipEntries)));
+$runReversalEntries = fuelSourceJournalEntries('fuel_issue_reversal', $runIssueIds);
+$allRunEntries = array_values(array_unique(array_merge($runEntries, $runReceiptEntries, $runDipEntries, $runReversalEntries)));
 
+purgeFuelJournalEntries($runReversalEntries, 'verify-fuel: remove this run\'s reversal entries');
 purgeFuelJournalEntries($runEntries, 'verify-fuel: remove this run\'s posted entries');
 purgeFuelJournalEntries($runReceiptEntries, 'verify-fuel: remove this run\'s stock receipts');
 purgeFuelJournalEntries($runDipEntries, 'verify-fuel: remove this run\'s dip entries');
 
+wipeFuelIds('alerts', 'id', $runAlertIds);
+wipeFuelIds('operational_events', 'aggregate_id', array_map('strval', $runAlertIds));
+wipeFuelIds('operational_events', 'aggregate_id', array_map('strval', $runVarianceIds));
+wipeFuelIds('fuel_variances', 'id', $runVarianceIds);
 wipeFuelIds('fuel_issues', 'id', $runIssueIds);
 wipeFuelIds('fuel_purchases', 'id', $runPurchaseIds);
 wipeFuelIds('bulk_tank_movements', 'bulk_tank_id', $runBulkTankIds);
@@ -1275,7 +1627,7 @@ DB::table('fuel_stations')->where('name', 'like', 'XFL %')->delete();
 DB::table('routes')->where('code', 'like', 'XFL%')->delete();
 DB::table('customers')->where('code', 'like', 'XFL%')->delete();
 
-foreach ([Trip::class, TripCost::class, FuelIssue::class, FuelPurchase::class, FuelStation::class, FuelTank::class] as $type) {
+foreach ([Trip::class, TripCost::class, FuelIssue::class, FuelPurchase::class, FuelStation::class, FuelTank::class, FuelVariance::class] as $type) {
     DB::table('audits')->where('auditable_type', $type)->where('created_at', '>=', $runStartedAt)->delete();
 }
 
@@ -1306,6 +1658,8 @@ $leftovers = [
     'trip_costs' => (int) DB::table('trip_costs')->whereIn('id', $runCostIds ?: ['0'])->count(),
     'bulk_tanks' => (int) DB::table('bulk_tanks')->whereIn('id', $runBulkTankIds ?: [0])->count(),
     'bulk tank movements' => (int) DB::table('bulk_tank_movements')->whereIn('bulk_tank_id', $runBulkTankIds ?: [0])->count(),
+    'fuel_variances' => (int) DB::table('fuel_variances')->whereIn('id', $runVarianceIds ?: [0])->count(),
+    'variance alerts' => (int) DB::table('alerts')->whereIn('id', $runAlertIds ?: [0])->count(),
     'journal_entries' => (int) DB::table('gl_journal_entries')->whereIn('id', $allRunEntries ?: ['0'])->count(),
     'journal_lines' => (int) DB::table('gl_journal_lines')->whereIn('entry_id', $allRunEntries ?: ['0'])->count(),
     'trips' => (int) DB::table('trips')->whereIn('id', $runTripIds ?: ['0'])->count(),

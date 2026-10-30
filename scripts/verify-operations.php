@@ -106,8 +106,8 @@ DB::table('vehicle_assignments')->where(static fn ($q) => $q->whereIn('truck_id'
 
 $opxJobIds = DB::table('freight_jobs')->where('notes', 'like', 'OPX%')->pluck('id')->all();
 
-DB::table('trips')->whereIn('job_id', $opxJobIds ?: [0])->delete();
-DB::table('freight_jobs')->whereIn('id', $opxJobIds ?: [0])->delete();
+DB::table('trips')->whereIn('job_id', $opxJobIds ?: ['0'])->delete();
+DB::table('freight_jobs')->whereIn('id', $opxJobIds ?: ['0'])->delete();
 DB::table('documents')->where('title', 'like', 'OPX%')->delete();
 DB::table('parts')->where('sku', 'like', 'OPX%')->delete();
 DB::table('customers')->where('code', 'like', 'OPX%')->delete();
@@ -945,13 +945,13 @@ foreach (['job' => count($created['job_ids']), 'trip' => count($runTripIds)] as 
     );
 }
 
-DB::table('odometer_readings')->whereIn('trip_id', $runTripIds ?: [0])->delete();
+DB::table('odometer_readings')->whereIn('trip_id', $runTripIds ?: ['0'])->delete();
 DB::table('odometer_readings')->whereIn('truck_id', $runTruckIds ?: [0])->delete();
 DB::table('vehicle_assignments')->where(static fn ($q) => $q->whereIn('truck_id', $runTruckIds ?: [0])->orWhereIn('driver_id', $runDriverIds ?: [0]))->delete();
-DB::table('operational_events')->whereIn('aggregate_id', $runTripIds ?: [0])->orWhereIn('aggregate_id', $created['job_ids'] ?: [0])->delete();
-DB::table('trips')->whereIn('id', $runTripIds ?: [0])->delete();
-DB::table('documents')->whereIn('id', $created['document_ids'] ?: [0])->delete();
-DB::table('freight_jobs')->whereIn('id', $created['job_ids'] ?: [0])->delete();
+DB::table('operational_events')->whereIn('aggregate_id', $runTripIds ?: ['0'])->orWhereIn('aggregate_id', $created['job_ids'] ?: ['0'])->delete();
+DB::table('trips')->whereIn('id', $runTripIds ?: ['0'])->delete();
+DB::table('documents')->whereIn('id', $created['document_ids'] ?: ['0'])->delete();
+DB::table('freight_jobs')->whereIn('id', $created['job_ids'] ?: ['0'])->delete();
 
 DB::table('drivers')->whereIn('id', $runDriverIds ?: [0])->delete();
 DB::table('employees')->whereIn('id', $created['employee_ids'] ?: [0])->delete();
@@ -1005,7 +1005,7 @@ foreach ($leftovers as $what => $count) {
 }
 
 check((int) DB::table('trucks')->count() >= 21, 'the demo fleet is intact: '.DB::table('trucks')->count().' trucks registered');
-check((int) DB::table('freight_jobs')->count() === 0, 'no fixture jobs remain in the commercial register');
+check((int) DB::table('freight_jobs')->where('notes', 'like', 'OPX%')->count() === 0, 'no fixture jobs remain in the commercial register');
 check(in_array(1, DB::table('users')->pluck('id')->all(), true), 'and the real accounts are still here');
 
 echo "\n== result ==\n";

@@ -316,4 +316,27 @@ return [
             'v1' => env('DB_CRYPT_KEY'),
         ],
     ],
+
+    /*
+     * §10.9 — when a trip's diesel consumption becomes a question somebody must answer.
+     *
+     * The comparison is the trip's litres per 100 km against the truck's own
+     * `expected_consumption_per_100`, so the threshold is a percentage of that figure rather than an
+     * absolute litre count: 10% over on a 45 L/100 km hauler and 10% over on a 12 L/100 km bakkie are
+     * both worth asking about. Inside the threshold writes no row — noise is not a finding.
+     *
+     * The critical band is what makes the alert financial-or-safety rather than a nudge: §14.1 says a
+     * critical alert cannot be opted out of, and a reading 25% over expectation is the shape
+     * siphoning takes.
+     */
+    'fuel' => [
+        'variance_threshold_pct' => (float) env('FLEET_FUEL_VARIANCE_THRESHOLD_PCT', 10),
+        'variance_critical_pct' => (float) env('FLEET_FUEL_VARIANCE_CRITICAL_PCT', 25),
+
+        /** Role keys, same spelling as §9.3's seats; an unknown key throws rather than notifying nobody. */
+        'variance_recipients' => array_values(array_filter(
+            array_map('trim', explode(',', (string) env('FLEET_FUEL_VARIANCE_RECIPIENTS', 'owner,operations_manager'))),
+            static fn (string $role): bool => $role !== '',
+        )),
+    ],
 ];

@@ -10,6 +10,7 @@ use App\Domain\Fleet\Actions\ReleaseTripAssignment;
 use App\Domain\Fleet\Data\OdometerReadingDto;
 use App\Domain\Fleet\OdometerSource;
 use App\Domain\Fleet\Queries\FleetDirectory;
+use App\Domain\Fuel\Actions\EvaluateFuelVariance;
 use App\Domain\Kernel\Audit\ActorKind;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Operations\BorderCrossingStatus;
@@ -41,6 +42,7 @@ final class CompleteTrip
         private readonly RecordOdometerReading $recordOdometer,
         private readonly EndTruckTrip $endTruckTrip,
         private readonly ReleaseTripAssignment $releaseAssignment,
+        private readonly EvaluateFuelVariance $evaluateVariance,
     ) {}
 
     public function __invoke(
@@ -97,7 +99,7 @@ final class CompleteTrip
 
         $recompletion = $trip->status === TripStatus::Reopened;
 
-        return DB::transaction(function () use ($trip, $odometerEndKm, $engineHoursEnd, $start, $recompletion, $actorId, $actorKind): Trip {
+        $completed = DB::transaction(function () use ($trip, $odometerEndKm, $engineHoursEnd, $start, $recompletion, $actorId, $actorKind): Trip {
             // A first completion records the closing reading and brings the truck home. A
             // *re*-completion after a re-open is the same checklist run again on a trip whose facts
             // were already in: re-issuing the reading would write a second arrival for the same day,
@@ -135,5 +137,11 @@ final class CompleteTrip
 
             return $trip->refresh();
         });
+
+        // After the commit, not inside it: the variance is a judgement about facts the ledger has
+        // already accepted, and an alert that failed to deliver must not roll back a completed trip.
+        ($this->evaluateVariance)($completed);
+
+        return $completed;
     }
 }

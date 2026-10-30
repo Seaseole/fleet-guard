@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Fuel\Models;
 
+use App\Domain\Fuel\FuelIssueStatus;
 use App\Domain\Kernel\Money\FxRateSource;
 use App\Domain\Kernel\Money\Money;
 use App\Domain\Kernel\Tenancy\BelongsToCompany;
@@ -150,6 +151,9 @@ final class FuelPurchase extends Model implements AuditableContract
      * What is left on the slip after every issue that named it — the number the screen must show.
      * A delivery into a bulk tank has nothing left to issue: its litres are the tank's stock, and
      * offering them as a slip as well would let the same diesel be counted twice.
+     *
+     * A reversed issue puts its litres back on the slip: the reversal says the diesel never left,
+     * so counting it against the slip would keep stock that the ledger has already forgiven.
      */
     public function litresRemainingX100(): int
     {
@@ -157,7 +161,9 @@ final class FuelPurchase extends Model implements AuditableContract
             return 0;
         }
 
-        $dispensed = (int) $this->issues()->sum('litres_x100');
+        $dispensed = (int) $this->issues()
+            ->where('status', '!=', FuelIssueStatus::Reversed->value)
+            ->sum('litres_x100');
 
         return $this->litres - $dispensed;
     }

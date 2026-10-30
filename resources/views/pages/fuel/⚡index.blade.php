@@ -7,15 +7,18 @@ use App\Domain\Fuel\Actions\CreateBulkTank;
 use App\Domain\Fuel\Actions\CreateFuelPurchase;
 use App\Domain\Fuel\Actions\CreateFuelStation;
 use App\Domain\Fuel\Actions\CreateFuelTank;
+use App\Domain\Fuel\Actions\DecideFuelVariance;
 use App\Domain\Fuel\Actions\ReconcileBulkTank;
 use App\Domain\Fuel\Data\FuelPurchaseDto;
 use App\Domain\Fuel\FuelIssueStatus;
 use App\Domain\Fuel\FuelTankKind;
+use App\Domain\Fuel\FuelVarianceState;
 use App\Domain\Fuel\Models\BulkTank;
 use App\Domain\Fuel\Models\FuelIssue;
 use App\Domain\Fuel\Models\FuelPurchase;
 use App\Domain\Fuel\Models\FuelStation;
 use App\Domain\Fuel\Models\FuelTank;
+use App\Domain\Fuel\Models\FuelVariance;
 use App\Domain\Kernel\Money\Currency;
 use App\Domain\Kernel\Money\FxRateSource;
 use App\Domain\Kernel\Money\Money;
@@ -90,6 +93,12 @@ new #[Title('Fuel')] class extends Component {
 
     public string $slipRateSource = FxRateSource::Manual->value;
 
+    public string $varianceId = '';
+
+    public string $varianceDecision = FuelVarianceState::Acknowledged->value;
+
+    public string $varianceNote = '';
+
     public function mount(): void
     {
         $this->slipDate = Carbon::now(CurrentCompany::timezone())->toDateString();
@@ -100,6 +109,11 @@ new #[Title('Fuel')] class extends Component {
     public function canRecord(): bool
     {
         return Gate::allows('fuel.record');
+    }
+
+    public function canDecideVariance(): bool
+    {
+        return Gate::allows('fuel.waive_variance');
     }
 
     public function addStation(CreateFuelStation $create): void
@@ -278,6 +292,54 @@ new #[Title('Fuel')] class extends Component {
         return Currency::normalise($this->slipCurrency) !== $this->baseCurrency();
     }
 
+    /** Open the decision dialog on one variance, with the note field empty. */
+    public function startVariance(int $id): void
+    {
+        abort_unless($this->canDecideVariance(), 403);
+
+        $this->varianceId = (string) $id;
+        $this->varianceDecision = FuelVarianceState::Acknowledged->value;
+        $this->varianceNote = '';
+        $this->resetErrorBag('variance');
+        $this->dispatch('open-fuel-variance');
+    }
+
+    public function decideVariance(DecideFuelVariance $decide): void
+    {
+        abort_unless($this->canDecideVariance(), 403);
+
+        $validated = $this->validate([
+            'varianceDecision' => ['required', Rule::in([
+                FuelVarianceState::Acknowledged->value,
+                FuelVarianceState::Disputed->value,
+                FuelVarianceState::Resolved->value,
+            ])],
+            'varianceNote' => ['required', 'string', 'max:160'],
+        ]);
+
+        $variance = FuelVariance::query()->findOrFail((int) $this->varianceId);
+
+        try {
+            $decided = $decide(
+                $variance,
+                FuelVarianceState::from($validated['varianceDecision']),
+                $validated['varianceNote'],
+                (int) auth()->id(),
+            );
+        } catch (InvalidArgumentException $refused) {
+            $this->addError('variance', $refused->getMessage());
+
+            return;
+        }
+
+        unset($this->variances);
+        $this->reset(['varianceId', 'varianceNote']);
+        $this->dispatch('close-fuel-variance');
+        $this->dispatch('toast', message: __('Variance :state.', [
+            'state' => mb_strtolower($decided->state->label()),
+        ]), kind: 'success');
+    }
+
     public function baseCurrency(): string
     {
         return CurrentCompany::model()->base_currency_code;
@@ -344,6 +406,16 @@ new #[Title('Fuel')] class extends Component {
             ->with(['trip:id,trip_no', 'truck:id,fleet_no,registration_no', 'tank', 'purchase:id,invoice_no'])
             ->orderByDesc('created_at')
             ->paginate(15, pageName: 'issues');
+    }
+
+    /** @return LengthAwarePaginator<int, FuelVariance> */
+    #[Computed]
+    public function variances(): LengthAwarePaginator
+    {
+        return FuelVariance::query()
+            ->with(['trip:id,trip_no', 'truck:id,fleet_no,registration_no'])
+            ->orderByDesc('detected_at')
+            ->paginate(10, pageName: 'variances');
     }
 
     /** @return list<FuelTankKind> */
@@ -530,6 +602,74 @@ new #[Title('Fuel')] class extends Component {
                     </tr>
                 @endforeach
             </x-ui.table>
+        @endif
+    </x-ui.card>
+
+    <x-ui.card :title="__('Consumption variance')" class="min-w-0">
+        <x-ui.text size="sm" color="muted" class="mb-4">
+            {{ __('When a trip’s litres per 100 km differ from its truck’s expected figure by more than the threshold, completing the trip raises a question here. Deciding one records the sentence that settled it; resolving it closes the alert it raised.') }}
+        </x-ui.text>
+
+        @if ($this->variances->isEmpty())
+            <x-ui.empty-state
+                icon="circle-stack"
+                title="{{ __('No variance to answer') }}"
+                description="{{ __('A variance appears when a completed trip burns enough diesel to leave its truck’s expected consumption. The truck’s own figure is on its fleet record.') }}"
+            />
+        @else
+            <x-ui.table :caption="__('Consumption variances, newest first — the trip’s litres per 100 km against the truck’s expected figure')">
+                <x-slot name="head">
+                    <x-ui.table.th>{{ __('Trip') }}</x-ui.table.th>
+                    <x-ui.table.th>{{ __('Truck') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Distance') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Litres') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('L / 100 km') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Expected') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Variance') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Load') }}</x-ui.table.th>
+                    <x-ui.table.th>{{ __('Detected') }}</x-ui.table.th>
+                    <x-ui.table.th>{{ __('State') }}</x-ui.table.th>
+                    @if ($this->canDecideVariance())
+                        <x-ui.table.th>{{ __('Decision') }}</x-ui.table.th>
+                    @endif
+                </x-slot>
+
+                @foreach ($this->variances as $variance)
+                    <tr wire:key="variance-{{ $variance->id }}">
+                        <x-ui.table.td nowrap>
+                            <a href="{{ route('operations.trip', $variance->trip_id) }}" class="fg-identifier text-sm text-accent">{{ $variance->trip?->trip_no ?? '—' }}</a>
+                        </x-ui.table.td>
+                        <x-ui.table.td>{{ $variance->truck?->label() ?? __('Truck #:id', ['id' => $variance->truck_id]) }}</x-ui.table.td>
+                        <x-ui.table.td numeric>{{ number_format($variance->distance_km) }} km</x-ui.table.td>
+                        <x-ui.table.td numeric>{{ $variance->litresMajor() }}</x-ui.table.td>
+                        <x-ui.table.td numeric>{{ $variance->litres_per_100_10_2 }}</x-ui.table.td>
+                        <x-ui.table.td numeric>{{ $variance->expected_per_100_10_2 }}</x-ui.table.td>
+                        <x-ui.table.td numeric>{{ $variance->varianceLabel() }}</x-ui.table.td>
+                        <x-ui.table.td numeric>{{ $variance->tonnes_carried_10_2 }} t</x-ui.table.td>
+                        <x-ui.table.td nowrap>{{ $variance->detected_at?->format('d M Y') ?? '—' }}</x-ui.table.td>
+                        <x-ui.table.td><x-ui.badge :tone="$variance->state->tone()">{{ $variance->state->label() }}</x-ui.badge></x-ui.table.td>
+                        @if ($this->canDecideVariance())
+                            <x-ui.table.td>
+                                @if ($variance->isOpen())
+                                    <x-ui.button size="sm" variant="outline" wire:click="startVariance({{ $variance->id }})">{{ __('Decide') }}</x-ui.button>
+                                @else
+                                    <span class="text-xs text-fg-ink-muted">{{ $variance->acknowledgement_note }}</span>
+                                @endif
+                            </x-ui.table.td>
+                        @endif
+                    </tr>
+                @endforeach
+            </x-ui.table>
+        @endif
+
+        @error('variance')
+            <x-ui.alert tone="danger" :title="__('Refused')" class="mt-4">{{ $message }}</x-ui.alert>
+        @enderror
+
+        @if ($this->variances->isNotEmpty())
+            <div class="mt-4">
+                {{ $this->variances->links() }}
+            </div>
         @endif
     </x-ui.card>
 
@@ -814,6 +954,33 @@ new #[Title('Fuel')] class extends Component {
                 <div class="flex items-center justify-between gap-3">
                     <x-ui.button type="submit">{{ __('Record the slip') }}</x-ui.button>
                     <x-ui.button type="button" variant="ghost" x-on:click="$dispatch('close-fuel-slip')">{{ __('Cancel') }}</x-ui.button>
+                </div>
+            </form>
+        </x-ui.dialog>
+    @endif
+
+    @if ($this->canDecideVariance())
+        <x-ui.dialog name="fuel-variance" :title="__('Decide this variance')">
+            <form wire:submit="decideVariance" class="grid gap-4 p-5">
+                <x-ui.select name="varianceDecision" id="variance-decision" wire:model="varianceDecision" :label="__('Decision')">
+                    <option value="acknowledged">{{ __('Acknowledge — the reason is known and acceptable') }}</option>
+                    <option value="disputed">{{ __('Dispute — the figures themselves are doubted') }}</option>
+                    <option value="resolved">{{ __('Resolve — the matter is closed') }}</option>
+                </x-ui.select>
+
+                <x-ui.input name="varianceNote" wire:model="varianceNote" :label="__('What settled it')" :hint="__('Stored on the row and in the operational trail. A note is required.')" />
+
+                <p class="text-xs text-fg-ink-muted">
+                    {{ __('Resolving closes the fuel-variance alert this row raised. Acknowledging and disputing leave it live until somebody resolves it.') }}
+                </p>
+
+                @error('variance')
+                    <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                @enderror
+
+                <div class="flex items-center justify-between gap-3">
+                    <x-ui.button type="submit">{{ __('Record the decision') }}</x-ui.button>
+                    <x-ui.button type="button" variant="ghost" x-on:click="$dispatch('close-fuel-variance')">{{ __('Cancel') }}</x-ui.button>
                 </div>
             </form>
         </x-ui.dialog>

@@ -47,6 +47,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
  * @property string|null $previous_state
  * @property Carbon|null $state_changed_at
  * @property string|null $exception_reason
+ * @property string|null $reversal_reason
  * @property string|null $trip_cost_id
  * @property string|null $reversal_of_id
  * @property string|null $source_uuid
@@ -80,6 +81,7 @@ final class FuelIssue extends Model implements AuditableContract
         'previous_state',
         'state_changed_at',
         'exception_reason',
+        'reversal_reason',
         'trip_cost_id',
         'reversal_of_id',
         'source_uuid',

@@ -25,6 +25,7 @@ use App\Domain\Fuel\Actions\CreateBulkTank;
 use App\Domain\Fuel\Actions\CreateFuelPurchase;
 use App\Domain\Fuel\Actions\CreateFuelStation;
 use App\Domain\Fuel\Actions\CreateFuelTank;
+use App\Domain\Fuel\Actions\EvaluateFuelVariance;
 use App\Domain\Fuel\Actions\RecordFuelIssue;
 use App\Domain\Fuel\Data\FuelIssueDto;
 use App\Domain\Fuel\Data\FuelPurchaseDto;
@@ -86,6 +87,9 @@ final class FuelRenderSweep extends TestCase
 
     /** @var list<string> */
     private array $issueIds = [];
+
+    /** @var list<int> */
+    private array $varianceIds = [];
 
     public function createApplication(): Application
     {
@@ -213,6 +217,20 @@ final class FuelRenderSweep extends TestCase
             bulkTankId: $bulk->id,
         ), 1);
 
+        // §10.9's judgement, made against the slip fuel the trip has burned so far: 250.50 L over
+        // 1,000 km is 25.05 L/100 against the truck's 30.00 — a -16.50% variance, above the band.
+        $truck->forceFill(['expected_consumption_per_100' => 30.0])->save();
+        $trip->forceFill(['distance_km_10_2' => 1000.0])->save();
+        config(['fleet.fuel.variance_recipients' => []]);
+
+        $variance = (app(EvaluateFuelVariance::class))($trip->fresh());
+
+        if ($variance === null) {
+            throw new Exception('the variance fixture did not raise a row');
+        }
+
+        $this->varianceIds[] = $variance->id;
+
         echo "== The fuel register renders, and a slip's remaining litres are on it ==\n";
 
         $this->attempt('the owner opens /fuel and sees the slip, the station, the issue and 149.50 L left', function () use ($owner): void {
@@ -264,6 +282,28 @@ final class FuelRenderSweep extends TestCase
                 if (! str_contains($html, $needle)) {
                     throw new Exception("the fuel register is missing {$needle} from its bulk tank card");
                 }
+            }
+        });
+
+        $this->attempt('the register carries the consumption variance and offers the owner a decision', function () use ($owner, $trip): void {
+            $html = (string) $this->actingAs($owner, 'web')->get('/fuel')->assertOk()->getContent();
+
+            foreach (['Consumption variance', $trip->trip_no, '-16.50%', 'startVariance', 'Decide'] as $needle) {
+                if (! str_contains($html, $needle)) {
+                    throw new Exception("the fuel register is missing {$needle} from its variance card");
+                }
+            }
+        });
+
+        $this->attempt('the accountant reads the variance but is offered no decision', function () use ($accountant): void {
+            $html = (string) $this->actingAs($accountant, 'web')->get('/fuel')->assertOk()->getContent();
+
+            if (! str_contains($html, '-16.50%')) {
+                throw new Exception('the accountant cannot see the variance register (§9.3 gives fuel.view)');
+            }
+
+            if (str_contains($html, 'fuel-variance') || str_contains($html, 'startVariance')) {
+                throw new Exception('the register offered the decision to a seat without fuel.waive_variance');
             }
         });
 
@@ -603,6 +643,129 @@ final class FuelRenderSweep extends TestCase
                 throw new Exception('a closed, frozen trip still offers the issue dialog');
             }
         });
+
+        echo "\n== §10.9: the trip's consumption, the correction and the decision ==\n";
+
+        $this->attempt('the trip panel states the trip\'s consumption against the truck\'s expected figure', function () use ($owner, $trip): void {
+            $html = (string) Livewire::actingAs($owner)->test('pages::fuel.trip-panel', ['trip' => $trip])->html();
+
+            foreach (['550.00 L over 1,000 km', '55.00 L / 100 km', 'expects 30.00 L / 100 km', '+83.33%', 'Variance · Open'] as $needle) {
+                if (! str_contains($html, $needle)) {
+                    throw new Exception("the trip panel is missing {$needle} from its consumption block");
+                }
+            }
+        });
+
+        $this->attempt('the correction seat is offered Reverse and the clerk is not', function () use ($owner, $clerk, $trip): void {
+            $ownerHtml = (string) Livewire::actingAs($owner)->test('pages::fuel.trip-panel', ['trip' => $trip])->html();
+            $clerkHtml = (string) Livewire::actingAs($clerk)->test('pages::fuel.trip-panel', ['trip' => $trip])->html();
+
+            if (! str_contains($ownerHtml, 'fuel-issue-reversal') || ! str_contains($ownerHtml, 'startReversal')) {
+                throw new Exception('the owner is offered no way to reverse a posted issue');
+            }
+
+            if (str_contains($clerkHtml, 'fuel-issue-reversal') || str_contains($clerkHtml, 'startReversal')) {
+                throw new Exception('the clerk was offered the reversal, which fuel.correct refuses (§9.3)');
+            }
+        });
+
+        $this->attempt('a reversal with no reason is refused before anything posts', function () use ($owner, $trip): void {
+            $fifty = FuelIssue::query()->where('trip_id', $trip->id)->where('litres_x100', 5_000)->firstOrFail();
+
+            Livewire::actingAs($owner)
+                ->test('pages::fuel.trip-panel', ['trip' => $trip])
+                ->call('startReversal', $fifty->id)
+                ->assertDispatched('open-fuel-issue-reversal')
+                ->call('reverse')
+                ->assertHasErrors('reversalReason');
+
+            if ($fifty->fresh()->status->value !== 'posted') {
+                throw new Exception('a reversal without its sentence still moved the issue');
+            }
+        });
+
+        $this->attempt('the owner reverses the fifty-litre issue and the open variance follows it', function () use ($owner, $trip, $variance): void {
+            $fifty = FuelIssue::query()->where('trip_id', $trip->id)->where('litres_x100', 5_000)->firstOrFail();
+
+            Livewire::actingAs($owner)
+                ->test('pages::fuel.trip-panel', ['trip' => $trip])
+                ->call('startReversal', $fifty->id)
+                ->set('reversalReason', 'FUE: filled against the wrong slip')
+                ->call('reverse')
+                ->assertHasNoErrors('reversal')
+                ->assertDispatched('close-fuel-issue-reversal');
+
+            $fifty->refresh();
+
+            if ($fifty->status->value !== 'reversed' || $fifty->reversal_reason !== 'FUE: filled against the wrong slip') {
+                throw new Exception('the issue was not marked reversed with the reason that reversed it');
+            }
+
+            $mirror = DB::table('gl_journal_entries')
+                ->where('source_type', 'fuel_issue_reversal')
+                ->where('source_id', $fifty->id)
+                ->first();
+
+            if ($mirror === null || $mirror->reverses_entry_id === null) {
+                throw new Exception('the reversal posted no mirror entry against the original');
+            }
+
+            $variance->refresh();
+
+            if ($variance->litres_x100 !== 50_000 || $variance->variance_pct_10_2 !== '66.67') {
+                throw new Exception('an open variance did not follow the reversal: '.$variance->litres_x100.' L, '.$variance->variance_pct_10_2.'%');
+            }
+
+            $html = (string) Livewire::actingAs($owner)->test('pages::fuel.trip-panel', ['trip' => $trip])->html();
+
+            foreach (['FUE: filled against the wrong slip', '500.00 L over 1,000 km', '+66.67%'] as $needle) {
+                if (! str_contains($html, $needle)) {
+                    throw new Exception("the trip panel is missing {$needle} after the reversal");
+                }
+            }
+        });
+
+        $this->attempt('the owner decides the variance and resolving closes its alert', function () use ($owner, $variance): void {
+            Livewire::actingAs($owner)
+                ->test('pages::fuel.index')
+                ->call('startVariance', $variance->id)
+                ->assertDispatched('open-fuel-variance')
+                ->set('varianceDecision', 'resolved')
+                ->set('varianceNote', 'FUE: the reversal put the diesel back')
+                ->call('decideVariance')
+                ->assertHasNoErrors('variance')
+                ->assertDispatched('close-fuel-variance');
+
+            $variance->refresh();
+
+            if (
+                $variance->state->value !== 'resolved'
+                || $variance->acknowledgement_note !== 'FUE: the reversal put the diesel back'
+                || (int) $variance->decided_by !== (int) $owner->id
+            ) {
+                throw new Exception('the decision did not land on the variance row');
+            }
+
+            $alert = DB::table('alerts')
+                ->where('type', 'fuel_variance')
+                ->where('subject_type', 'fuel_variance')
+                ->where('subject_id', (string) $variance->id)
+                ->first();
+
+            if ($alert === null || $alert->state !== 'resolved') {
+                throw new Exception('resolving the variance left its alert live');
+            }
+
+            $html = (string) $this->actingAs($owner, 'web')->get('/fuel')->assertOk()->getContent();
+
+            if (! str_contains($html, 'FUE: the reversal put the diesel back')) {
+                throw new Exception('the decided row does not show the sentence that decided it');
+            }
+
+            if (str_contains($html, 'startVariance')) {
+                throw new Exception('a resolved variance is still offered a decision');
+            }
+        });
     }
 
     private function staffAs(User $owner, ?RoleKey $role, string $email): User
@@ -717,6 +880,16 @@ final class FuelRenderSweep extends TestCase
         $costIds = $tripIds === []
             ? []
             : DB::table('trip_costs')->whereIn('trip_id', $tripIds)->pluck('id')->all();
+        $varianceIds = $tripIds === []
+            ? []
+            : DB::table('fuel_variances')->whereIn('trip_id', $tripIds)->pluck('id')->all();
+        $alertIds = $varianceIds === []
+            ? []
+            : DB::table('alerts')
+                ->where('subject_type', 'fuel_variance')
+                ->whereIn('subject_id', array_map('strval', $varianceIds))
+                ->pluck('id')
+                ->all();
 
         $costKeys = array_map(static fn (int|string $id): string => (string) $id, $costIds);
         $entryIds = $costKeys === [] ? [] : DB::table('gl_journal_entries')
@@ -730,6 +903,7 @@ final class FuelRenderSweep extends TestCase
         $movementIds = $bulkTankIds === [] ? [] : DB::table('bulk_tank_movements')->whereIn('bulk_tank_id', $bulkTankIds)->pluck('id')->all();
 
         foreach ([
+            ['fuel_issue_reversal', $issueIds],
             ['fuel_purchase', $purchaseIds],
             ['bulk_tank_dip', $movementIds],
         ] as [$sourceType, $sourceIds]) {
@@ -747,10 +921,16 @@ final class FuelRenderSweep extends TestCase
         if ($entryIds !== []) {
             LedgerBarrier::withLiftedGuard('render-fuel: remove this sweep\'s journal entries', null, function () use ($entryIds): void {
                 DB::table('gl_journal_lines')->whereIn('entry_id', $entryIds)->delete();
+                // A mirror names its original with a foreign key in the same set; it goes first.
+                DB::table('gl_journal_entries')->whereIn('id', $entryIds)->whereNotNull('reverses_entry_id')->delete();
                 DB::table('gl_journal_entries')->whereIn('id', $entryIds)->delete();
             });
         }
 
+        $this->deleteIn('alerts', 'id', $alertIds);
+        $this->deleteIn('operational_events', 'aggregate_id', array_map('strval', $alertIds));
+        $this->deleteIn('operational_events', 'aggregate_id', array_map('strval', $varianceIds));
+        $this->deleteIn('fuel_variances', 'id', $varianceIds);
         $this->deleteIn('fuel_issues', 'id', $issueIds);
         DB::table('fuel_purchases')->where('invoice_no', 'like', 'FUE-%')->delete();
         $this->deleteIn('bulk_tank_movements', 'bulk_tank_id', $bulkTankIds);
@@ -836,6 +1016,11 @@ final class FuelRenderSweep extends TestCase
                 ->whereIn('bulk_tank_id', DB::table('bulk_tanks')->where('name', 'like', 'FUE %')->pluck('id') ?: [0])
                 ->count(),
             'fuel stations' => (int) DB::table('fuel_stations')->where('name', 'like', 'FUE %')->count(),
+            'fuel variances' => (int) DB::table('fuel_variances')->whereIn('id', $this->varianceIds ?: [0])->count(),
+            'variance alerts' => (int) DB::table('alerts')
+                ->where('subject_type', 'fuel_variance')
+                ->whereIn('subject_id', array_map('strval', $this->varianceIds) ?: ['0'])
+                ->count(),
             'trips' => (int) DB::table('trips')->whereIn('id', $this->tripIds ?: ['0'])->count(),
             'jobs' => (int) DB::table('freight_jobs')->whereIn('id', $this->jobIds ?: ['0'])->count(),
             'trucks' => (int) DB::table('trucks')->whereIn('id', $this->truckIds ?: [0])->count(),

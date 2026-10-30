@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 use App\Domain\Fleet\Models\Truck;
 use App\Domain\Fuel\Actions\RecordFuelIssue;
+use App\Domain\Fuel\Actions\ReverseFuelIssue;
 use App\Domain\Fuel\Data\FuelIssueDto;
 use App\Domain\Fuel\FuelIssueSource;
+use App\Domain\Fuel\FuelIssueStatus;
 use App\Domain\Fuel\Models\BulkTank;
 use App\Domain\Fuel\Models\FuelIssue;
 use App\Domain\Fuel\Models\FuelPurchase;
 use App\Domain\Fuel\Models\FuelTank;
+use App\Domain\Fuel\Models\FuelVariance;
+use App\Domain\Fuel\Support\FuelConsumption;
 use App\Domain\Kernel\Money\Money;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Operations\Models\Trip;
@@ -54,6 +58,10 @@ new class extends Component {
 
     public string $note = '';
 
+    public string $reversalIssueId = '';
+
+    public string $reversalReason = '';
+
     public function mount(Trip $trip): void
     {
         $this->trip = $trip;
@@ -75,6 +83,12 @@ new class extends Component {
             && $this->trip->truck_id !== null
             && ! $this->costsAreFrozen()
             && $this->tanks !== [];
+    }
+
+    /** §10.9's correction seat: reversing a posted issue is an operations decision (§9.3). */
+    public function canCorrectFuel(): bool
+    {
+        return Gate::allows('fuel.correct');
     }
 
     /** §10.2: a closed trip, or one that never left, has costs that are final rather than editable. */
@@ -127,6 +141,45 @@ new class extends Component {
         $this->dispatch('toast', message: __(':litres L issued — the cost is posted.', ['litres' => $created->litresMajor()]), kind: 'success');
     }
 
+    public function startReversal(string $issueId): void
+    {
+        abort_unless($this->canCorrectFuel(), 403);
+
+        $this->reversalIssueId = $issueId;
+        $this->reversalReason = '';
+        $this->resetErrorBag('reversal');
+        $this->dispatch('open-fuel-issue-reversal');
+    }
+
+    public function reverse(ReverseFuelIssue $reverse): void
+    {
+        abort_unless($this->canCorrectFuel(), 403);
+
+        $validated = $this->validate([
+            'reversalIssueId' => ['required', 'string'],
+            'reversalReason' => ['required', 'string', 'max:160'],
+        ]);
+
+        $issue = FuelIssue::query()
+            ->whereKey($validated['reversalIssueId'])
+            ->where('trip_id', $this->trip->id)
+            ->firstOrFail();
+
+        try {
+            $reverse($issue, $validated['reversalReason'], (int) auth()->id());
+        } catch (InvalidArgumentException $refused) {
+            $this->addError('reversal', $refused->getMessage());
+
+            return;
+        }
+
+        unset($this->issues, $this->consumption, $this->variance);
+        $this->reset(['reversalIssueId', 'reversalReason']);
+        $this->dispatch('close-fuel-issue-reversal');
+        $this->dispatch('trip-fuel-recorded');
+        $this->dispatch('toast', message: __('Issue reversed — the mirror entry is posted and the stock is back.'), kind: 'success');
+    }
+
     /** "45.32" → 4532, without ever building a float (§20.4). */
     private function scaledHundredths(string $input): int
     {
@@ -149,6 +202,62 @@ new class extends Component {
             ->orderByDesc('created_at')
             ->get()
             ->all();
+    }
+
+    /** The variance row raised when this trip completed, if the figures crossed the threshold. */
+    #[Computed]
+    public function variance(): ?FuelVariance
+    {
+        return FuelVariance::query()->where('trip_id', $this->trip->id)->first();
+    }
+
+    /**
+     * What the issued litres work out to per 100 km while the trip has a distance.
+     *
+     * Reversed issues are excluded: a reversal says the diesel never went on this trip, so counting
+     * it would keep the consumption figure at a number the ledger has already forgiven.
+     *
+     * @return array{distance_km: int, litres_x100: int, actual_x100: int, expected_x100: int|null, variance_pct_x100: int|null}|null
+     */
+    #[Computed]
+    public function consumption(): ?array
+    {
+        $distanceKm = (int) round((float) $this->trip->distance_km_10_2);
+
+        if ($distanceKm <= 0) {
+            return null;
+        }
+
+        $litresX100 = (int) FuelIssue::query()
+            ->where('trip_id', $this->trip->id)
+            ->where('status', FuelIssueStatus::Posted->value)
+            ->sum('litres_x100');
+
+        if ($litresX100 <= 0) {
+            return null;
+        }
+
+        $expected = Truck::query()->whereKey($this->trip->truck_id)->value('expected_consumption_per_100');
+
+        if ($expected === null || (float) $expected <= 0) {
+            return [
+                'distance_km' => $distanceKm,
+                'litres_x100' => $litresX100,
+                'actual_x100' => intdiv($litresX100 * 100 + intdiv($distanceKm, 2), $distanceKm),
+                'expected_x100' => null,
+                'variance_pct_x100' => null,
+            ];
+        }
+
+        $figures = FuelConsumption::compare($litresX100, $distanceKm, (float) $expected);
+
+        return [
+            'distance_km' => $distanceKm,
+            'litres_x100' => $litresX100,
+            'actual_x100' => $figures['actual_x100'],
+            'expected_x100' => $figures['expected_x100'],
+            'variance_pct_x100' => $figures['variance_pct_x100'],
+        ];
     }
 
     /** @return list<FuelTank> */
@@ -209,6 +318,21 @@ new class extends Component {
             ->format(CurrentCompany::model()->base_currency_code);
     }
 
+    public function litresLabel(int $litresX100): string
+    {
+        return number_format($litresX100 / 100, 2, '.', '');
+    }
+
+    public function rateLabel(int $per100X100): string
+    {
+        return FuelConsumption::litresLabel($per100X100);
+    }
+
+    public function varianceLabel(int $pctX100): string
+    {
+        return FuelConsumption::varianceLabel($pctX100);
+    }
+
     public function truckLabel(): string
     {
         return Truck::query()->whereKey($this->trip->truck_id)->first()?->label() ?? __('this trip’s truck');
@@ -234,6 +358,42 @@ new class extends Component {
                 @endif
             </div>
 
+            @php($consumption = $this->consumption)
+
+            @if ($consumption !== null)
+                <div class="grid gap-2 rounded-fg-lg border border-fg-line bg-fg-canvas p-3">
+                    <span class="text-sm text-fg-ink">
+                        {{ __(':litres L over :km km — :rate L / 100 km.', [
+                            'litres' => $this->litresLabel($consumption['litres_x100']),
+                            'km' => number_format($consumption['distance_km']),
+                            'rate' => $this->rateLabel($consumption['actual_x100']),
+                        ]) }}
+                    </span>
+
+                    @if ($consumption['expected_x100'] !== null)
+                        <span class="text-xs text-fg-ink-muted">
+                            {{ __('The truck expects :expected L / 100 km, so this trip is :variance% against it.', [
+                                'expected' => $this->rateLabel($consumption['expected_x100']),
+                                'variance' => $this->varianceLabel($consumption['variance_pct_x100']),
+                            ]) }}
+                        </span>
+                    @else
+                        <span class="text-xs text-fg-ink-muted">
+                            {{ __('This truck has no expected consumption on its record, so there is nothing to compare the figure against.') }}
+                        </span>
+                    @endif
+
+                    @if ($this->variance !== null)
+                        <div class="flex flex-wrap items-center gap-2">
+                            <x-ui.badge :tone="$this->variance->state->tone()">{{ __('Variance') }} · {{ $this->variance->state->label() }}</x-ui.badge>
+                            @if ($this->variance->acknowledgement_note !== null)
+                                <span class="text-xs text-fg-ink-muted">{{ $this->variance->acknowledgement_note }}</span>
+                            @endif
+                        </div>
+                    @endif
+                </div>
+            @endif
+
             @if ($this->issues === [])
                 <x-ui.text>{{ __('No fuel has been issued to this trip yet.') }}</x-ui.text>
             @else
@@ -245,6 +405,9 @@ new class extends Component {
                         <x-ui.table.th numeric>{{ __('Odometer') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Cost') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('State') }}</x-ui.table.th>
+                        @if ($this->canCorrectFuel())
+                            <x-ui.table.th>{{ __('Correction') }}</x-ui.table.th>
+                        @endif
                     </x-slot>
 
                     @foreach ($this->issues as $issued)
@@ -255,6 +418,17 @@ new class extends Component {
                             <x-ui.table.td numeric>{{ $issued->odometer_km }}</x-ui.table.td>
                             <x-ui.table.td numeric>{{ $this->money($issued->cost_base) }}</x-ui.table.td>
                             <x-ui.table.td><x-ui.badge :tone="$issued->status->tone()">{{ $issued->status->label() }}</x-ui.badge></x-ui.table.td>
+                            @if ($this->canCorrectFuel())
+                                <x-ui.table.td>
+                                    @if ($issued->status->value === 'posted')
+                                        <x-ui.button size="sm" variant="outline" wire:click="startReversal('{{ $issued->id }}')">{{ __('Reverse') }}</x-ui.button>
+                                    @elseif ($issued->status->value === 'reversed')
+                                        <span class="text-xs text-fg-ink-muted">{{ $issued->reversal_reason }}</span>
+                                    @else
+                                        <span class="text-xs text-fg-ink-muted">—</span>
+                                    @endif
+                                </x-ui.table.td>
+                            @endif
                         </tr>
                     @endforeach
                 </x-ui.table>
@@ -267,6 +441,10 @@ new class extends Component {
             @endif
 
             @error('fuel')
+                <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+            @enderror
+
+            @error('reversal')
                 <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
             @enderror
 
@@ -336,6 +514,27 @@ new class extends Component {
                         <div class="flex items-center justify-between gap-3">
                             <x-ui.button type="submit">{{ __('Issue and post') }}</x-ui.button>
                             <x-ui.button type="button" variant="ghost" x-on:click="$dispatch('close-trip-fuel')">{{ __('Cancel') }}</x-ui.button>
+                        </div>
+                    </form>
+                </x-ui.dialog>
+            @endif
+
+            @if ($this->canCorrectFuel())
+                <x-ui.dialog name="fuel-issue-reversal" :title="__('Reverse this fuel issue')">
+                    <form wire:submit="reverse" class="grid gap-4 p-5">
+                        <p class="text-sm text-fg-ink-muted">
+                            {{ __('The issue is not edited (§10.9). A mirror journal entry nets the cost, a bulk tank takes its litres and money back, the slip’s litres become available again, and the issue is marked reversed with your reason in the trail.') }}
+                        </p>
+
+                        <x-ui.input name="reversalReason" wire:model="reversalReason" :label="__('Reason for the reversal')" :hint="__('Required — stored on the issue and in the operational trail.')" />
+
+                        @error('reversal')
+                            <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                        @enderror
+
+                        <div class="flex items-center justify-between gap-3">
+                            <x-ui.button type="submit">{{ __('Reverse and post the mirror') }}</x-ui.button>
+                            <x-ui.button type="button" variant="ghost" x-on:click="$dispatch('close-fuel-issue-reversal')">{{ __('Cancel') }}</x-ui.button>
                         </div>
                     </form>
                 </x-ui.dialog>
