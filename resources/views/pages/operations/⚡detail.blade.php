@@ -1293,6 +1293,7 @@ new #[Title('Trip')] class extends Component
         @endif
 
         @if ($this->canDepart())
+            {{-- ui-scope: departure (canDepart and canComplete are disjoint §10.2 states, so these two forms never share a screen) --}}
             <form class="grid gap-3 sm:grid-cols-2" wire:submit="depart">
                     <x-ui.input name="departOdometer" wire:model="departOdometer" :label="__('Odometer at departure (km)')" type="number" />
                     <x-ui.input name="departHours" wire:model="departHours" :label="__('Engine hours at departure')" type="number" step="0.1" />
@@ -1318,6 +1319,7 @@ new #[Title('Trip')] class extends Component
         @endif
 
         @if ($this->canComplete())
+            {{-- ui-scope: completion (the closing reading only appears once the POD is approved, so this form and the departure form are disjoint §10.2 states) --}}
             <form class="grid gap-3 sm:grid-cols-2" wire:submit="complete">
                     <x-ui.input name="endOdometer" wire:model="endOdometer" :label="__('Odometer on arrival (km)')" type="number" />
                     <x-ui.input name="endHours" wire:model="endHours" :label="__('Engine hours at the end')" type="number" step="0.1" />

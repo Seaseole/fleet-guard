@@ -1,6 +1,13 @@
-{{-- docs/DESIGN-SYSTEM.md §5: one primary button per view; destructive is filled only on the confirm step. --}}
+{{--
+    docs/DESIGN-SYSTEM.md §5: one primary button per view; destructive is filled only on the confirm step.
+
+    The default is `outline` on purpose. It used to be `primary`, which meant a button that said nothing
+    about its weight came out as the loudest control on the screen — and a page with three forms then had
+    three filled teal buttons competing (§5's "never two"). Leaving a variant unstated is now the quiet
+    case: a button has to be told it is the affirmative action of its form, dialog or page.
+--}}
 @props([
-    'variant' => 'primary',
+    'variant' => null,
     'size' => 'md',
     'type' => 'button',
     'href' => null,
@@ -21,6 +28,17 @@
         'danger-solid' => 'bg-danger text-on-danger hover:bg-danger-hover',
     ];
 
+    /**
+     * An unstated variant follows the button's job, not a fixed style.
+     *
+     * The default used to be `primary` whatever the button did, which is how a page with three forms ended up
+     * with three filled teal buttons (§5 allows one). `type="submit"` is the affirmative action of a form by
+     * definition, so that is the one case that earns the accent; everything else — navigation, row actions,
+     * cancel buttons — starts quiet and has to be dressed up deliberately. `scripts/lint-ui.php` resolves
+     * the same rule, so changing one without the other is a lint failure rather than a silent drift.
+     */
+    $variant ??= ($type === 'submit' && $href === null) ? 'primary' : 'outline';
+
     $sizes = [
         'sm' => 'h-8 px-2.5 text-xs',      /* icon-only with tooltip */
         'md' => 'h-10 px-3.5 text-sm',
@@ -36,7 +54,7 @@
     @if($tag === 'button' && $isDisabled) disabled @endif
     @if($tag === 'a' && $isDisabled) aria-disabled="true" tabindex="-1" @endif
     data-loading="{{ $loading ? 'true' : 'false' }}"
-    {{ $attributes->class([$base, $variants[$variant] ?? $variants['primary'], $sizes[$size] ?? $sizes['md']]) }}
+    {{ $attributes->class([$base, $variants[$variant] ?? $variants['outline'], $sizes[$size] ?? $sizes['md']]) }}
 >
     @if($loading)
         <x-ui.icon name="loading" class="animate-spin" />

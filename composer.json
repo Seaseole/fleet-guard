@@ -69,13 +69,17 @@
         "lint:section-refs": [
             "@php scripts/lint-section-refs.php"
         ],
+        "lint:ui": [
+            "@php scripts/lint-ui.php"
+        ],
         "ci:check": [
             "Composer\\Config::disableProcessTimeout",
             "@php artisan config:clear --ansi",
             "@lint:check",
             "@types:check",
             "@lint:architecture",
-            "@lint:section-refs"
+            "@lint:section-refs",
+            "@lint:ui"
         ],
         "types:check": [
             "phpstan analyse"
@@ -86,6 +90,7 @@
             "@types:check",
             "@lint:architecture",
             "@lint:section-refs",
+            "@lint:ui",
             "@php artisan test"
         ],
         "post-autoload-dump": [

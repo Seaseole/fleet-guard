@@ -222,7 +222,10 @@ new #[Title('Security settings')] class extends Component
             />
 
             <div class="flex items-center gap-4">
-                <x-ui.button variant="primary" type="submit" data-test="update-password-button">
+                {{-- Outline, not primary: §9.1 makes the factor the affirmative action of this screen, so
+                     the two-weight rule resolves in its favour and a password change stays a secondary
+                     form. --}}
+                <x-ui.button variant="outline" type="submit" data-test="update-password-button">
                     {{ __('Save') }}
                 </x-ui.button>
             </div>

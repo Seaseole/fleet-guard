@@ -759,7 +759,10 @@ new #[Title('Fleet')] class extends Component {
 
                 <div class="flex items-center gap-3">
                     @if ($this->statusTarget['allowed'] !== [])
-                        <x-ui.button type="submit">{{ __('Move status') }}</x-ui.button>
+                        {{-- Outline, not primary: a status move is a transition that has to explain itself
+                             (the reason field below), while the editor form on this page is what creates or
+                             amends the unit. §5 allows one filled action per view. --}}
+                        <x-ui.button variant="outline" type="submit">{{ __('Move status') }}</x-ui.button>
                     @endif
 
                     <x-ui.button variant="ghost" type="button" wire:click="closeStatus">{{ __('Close') }}</x-ui.button>

@@ -538,7 +538,9 @@ new #[Title('People')] class extends Component {
 
                 <div class="flex items-center gap-3">
                     @if ($this->statusTarget['allowed'] !== [])
-                        <x-ui.button type="submit">{{ __('Move status') }}</x-ui.button>
+                        {{-- Outline, matching the fleet register: a status move explains itself, the employee
+                             editor below is the filled action of this page (§5). --}}
+                        <x-ui.button variant="outline" type="submit">{{ __('Move status') }}</x-ui.button>
                     @endif
 
                     <x-ui.button variant="ghost" type="button" wire:click="closeStatus">{{ __('Close') }}</x-ui.button>

@@ -662,7 +662,9 @@ new #[Title('Routes')] class extends Component {
                     @enderror
 
                     <div class="flex items-center gap-3">
-                        <x-ui.button type="submit">{{ $rateEditingId === null ? __('Save rate') : __('Update rate') }}</x-ui.button>
+                        {{-- Outline: the rate card is a price attached to a corridor, so the filled action of
+                             this page stays with the route form below it (§5, one per view). --}}
+                        <x-ui.button variant="outline" type="submit">{{ $rateEditingId === null ? __('Save rate') : __('Update rate') }}</x-ui.button>
 
                         @if ($rateEditingId !== null)
                             <x-ui.button variant="ghost" type="button" wire:click="clearRateForm">{{ __('Cancel') }}</x-ui.button>

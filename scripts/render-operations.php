@@ -1495,6 +1495,47 @@ final class OperationsRenderSweep extends TestCase
             }
         });
 
+        echo "\n== §5 one filled action per view, counted on the page a real state renders ==\n";
+
+        // lint-architecture keeps the modules apart and lint-ui keeps the source honest about variants, but
+        // only a render can say how many filled buttons a user is actually looking at: the static pass
+        // cannot resolve `@if ($this->canDepart())` against `@if ($this->canComplete())`, and it has to treat
+        // a dialog as its own view. Each of these is one real state of one real screen.
+        $this->attempt('the screens that offer work each carry one filled action', function () use ($owner, $week): void {
+            $paths = [
+                "/dispatch?week={$week}",
+                '/jobs',
+                '/routes',
+                '/crossborder',
+                '/telematics',
+                '/fleet',
+                '/people',
+            ];
+
+            foreach ($paths as $path) {
+                $response = $this->actingAs($owner, 'web')->get($path);
+                $status = $response->getStatusCode();
+
+                if ($status !== 200) {
+                    throw new Exception("{$path} answered {$status}, so the count below is not the count a user sees");
+                }
+
+                $this->assertOneFilledAction((string) $response->getContent(), $path);
+            }
+        });
+
+        $this->attempt('the trip page in its working state carries one filled action', function () use ($owner): void {
+            if ($this->assignedTripId === '') {
+                throw new Exception('no trip left to count');
+            }
+
+            $html = (string) Livewire::actingAs($owner)
+                ->test('pages::operations.detail', ['trip' => Trip::query()->findOrFail($this->assignedTripId)])
+                ->html();
+
+            $this->assertOneFilledAction($html, '/trips/{trip}');
+        });
+
         echo "\n== §15.2's cross-phase rule: the phase ships dashboard figures, counted from real rows ==\n";
 
         $this->attempt('the overview carries the four operations cards, and the planned count is the register\'s', function () use ($owner): void {
@@ -1662,6 +1703,47 @@ final class OperationsRenderSweep extends TestCase
         $fresh = $user->fresh();
 
         return $fresh;
+    }
+
+    /**
+     * Counts the filled actions a user actually sees, in a real render of one real state.
+     *
+     * This is the check `scripts/lint-ui.php` cannot make: it is textual and so cannot evaluate
+     * `@if ($this->canDepart())`, and it has to treat a dialog as its own view. Neither limitation applies
+     * once the page is rendered — the dialog markup is inert unless it carries `open`, and the branches have
+     * resolved to whatever the trip's actual state allows. `bg-accent text-on-accent` is the primary
+     * variant's signature in the component (§5's one filled action per view), and danger-solid does not match
+     * it, so a confirm-step's destructive button is not counted as competing.
+     */
+    private function assertOneFilledAction(string $html, string $label): void
+    {
+        // Strip every dialog's content. A server render never opens one — `x-ui.dialog` opens client-side via
+        // `showModal()` — so nothing inside a dialog is on screen, and each dialog is its own view with its
+        // own affirmative action. Testing for an `open` attribute instead is a trap that already fired here:
+        // the component's own attributes contain the word twice (`x-on:open-<name>.window`, `$el.open`), which
+        // made every closed dialog look open and every page look like it had three filled actions.
+        $visible = preg_replace('#<dialog\b[^>]*>.*?</dialog>#s', '', $html) ?? $html;
+
+        // The component's own primary signature is `bg-accent text-on-accent`, shared with the app logo's
+        // mark — so match the element, not the class run, or every page reports one phantom action.
+        preg_match_all('/<(?:button|a)\b[^>]*class="[^"]*bg-accent text-on-accent[^"]*"[^>]*>(.{0,120})/s', $visible, $found);
+
+        $count = count($found[0] ?? []);
+
+        if ($count > 1) {
+            // Named, because "3 filled actions" makes someone hunt; the labels are the fix list.
+            $labels = array_map(
+                static fn (string $tail): string => mb_substr(trim(preg_replace('/\s+/', ' ', strip_tags($tail)) ?? ''), 0, 30) ?: '(icon)',
+                $found[1] ?? [],
+            );
+
+            throw new Exception(sprintf(
+                '%s: %d filled actions on screen together (%s) — §5 allows one per view',
+                $label,
+                $count,
+                implode(' | ', $labels),
+            ));
+        }
     }
 
     private function pageContains(User $user, string $path, string $needle, string $label): void

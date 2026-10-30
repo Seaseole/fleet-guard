@@ -461,7 +461,9 @@ new #[Title('Vehicle')] class extends Component {
                         <x-ui.input wire:model="statusReason" name="statusReason" :label="__('Reason')" :hint="__('Required for out of service and sold.')" />
                     </div>
 
-                    <x-ui.button type="submit">{{ __('Move status') }}</x-ui.button>
+                    {{-- Outline: this transition has to carry its reason, and the odometer form below is the
+                         action this page exists for (§4.3: one reading, one owner). --}}
+                    <x-ui.button variant="outline" type="submit">{{ __('Move status') }}</x-ui.button>
                 @endif
             </form>
         </x-ui.card>
@@ -546,7 +548,9 @@ new #[Title('Vehicle')] class extends Component {
                         <p class="text-xs text-danger" role="alert">{{ $message }}</p>
                     @enderror
 
-                    <x-ui.button type="submit">{{ __('Assign') }}</x-ui.button>
+                    {{-- Outline: an assignment is normally made from the board, where the other trucks and
+                         the week are visible; the reading this page is for stays the filled action. --}}
+                    <x-ui.button variant="outline" type="submit">{{ __('Assign') }}</x-ui.button>
                 </form>
             @endcan
         @else

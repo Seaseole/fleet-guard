@@ -2708,6 +2708,58 @@ Refusal first, enrolment second: the factor gate still bites on every screen the
 
 **Honest gaps.** `verify-documents` and `verify-alerts` remain red on the development sandbox's data, for the reasons recorded in §20.19 — demo paper registered without versions, and one interrupted run's POD bytes with no index row behind them. Neither is a middleware question and nothing was deleted to make them green. The same exporter masking is still live anywhere else that calls `assertSee` — `render-master`, `render-kiosk` and `render-operations` all do — so a future failure there will print the unusable internal message until those helpers are converted the way `render-cutover` and `render-identity` now are. No browser pass has been run on any of this.
 
+### 20.21 Design-system fix — 2026-10-30, a button that states nothing now follows its job
+
+**What changed.** `x-ui.button` no longer has a style for a default. `variant` is `null`, and an unstated one
+resolves by what the button *does*: `type="submit"` is the affirmative action of its form, so it is filled;
+everything else — navigation, row actions, cancel — starts as `outline` and has to be dressed up on purpose.
+Nine call sites were demoted to `outline` where two submits really do share a screen (the fleet and people
+registers' status panels, the vehicle page's status and assignment forms, the rate form on the corridor page,
+the password form on settings/security), and the trip page's departure and completion forms each declared
+`{{-- ui-scope: departure (…§10.2 states are disjoint…) --}}` so the source pass reads them as the two views
+they are. `docs/DESIGN-SYSTEM.md` §5's `button` row now states the resolution, because for a while the
+contract said "never two primary buttons in one view" while the component's default guaranteed the opposite
+whenever nobody thought about it.
+
+**Why this was worth a commit rather than a note.** The default was `primary`, so §5's rule held only where
+someone had looked. The plan that found it (docs/UX-UI-PLAN.md P0-1) first mis-described the symptom — it
+claimed the trip page showed ten filled actions at once; it does not, because `canDepart()` and
+`canComplete()` are disjoint states and the page's row actions were already `ghost`. What was true is weaker
+and worse to leave: **peer decisions carried weights nobody chose** — *Hold* filled beside *Stop the trip*
+outlined in the same "Say why" dialog, and a page-level `Register a gate` as loud as its dialog's submit.
+Correcting the claim before acting on it is why the change is a resolution rule rather than 36 hand edits:
+each hand edit would have been another decision nobody wrote down.
+
+**Two enforcement layers, because they catch different things.** `scripts/lint-ui.php` (rule U1) reads the
+source per container — page outside dialogs, each dialog, each marked branch — and refuses a container with
+two filled actions. The lint resolves the same rule the component does, and *fails the build if the two
+drift*, because a gate that quietly disagrees with the code it reads is worse than no gate. The second layer
+is `assertOneFilledAction()` in `scripts/render-operations.php`: it counts what a real render of a real state
+puts on screen, so it sees what the textual pass cannot (`@if` branches, and a dialog's contents on a server
+render, which are never visible). It earned its place immediately — it flagged `/jobs` and `/trips/{trip}`,
+which the source pass had just passed, and its first version counted the app logo as a button because
+`bg-accent text-on-accent` is shared, so the assertion matches the element, not the class run. The dialog
+stripping had its own trap: `x-ui.dialog`'s attributes contain the word `open` twice (`x-on:open-…`,
+`$el.open`), so a "is this dialog open?" test treated every closed modal as visible. A server render never
+opens one, so the check now strips them all.
+
+**Verification.** `lint-ui` PASS (38 page files, 48 containers); `pint` PASS (516 files);
+`lint-architecture` PASS (426 files, D1–D6); `lint-section-refs` PASS (2 018 citations across 588 files);
+`render-operations` RENDER OK with the two new assertions, and `render-master`, `render-kiosk`,
+`render-cutover` RENDER OK — the last three because the fleet, people, vehicle, kiosk and cutover screens all
+contain a submit whose rendered weight just changed.
+
+**Honest gaps.** `lint-ui.php`'s rules U2 (no raw `<select>`) and U3 (every table carries `:caption`) are
+written but **pending** — the file prints them as pending rather than enabling them and failing 75 checks the
+select and caption packages have not paid for yet, because a gate that fails on known future work gets
+switched off. On `settings/security` the password form is now `outline` and *Enable 2FA* — the action §9.1
+makes mandatory — is the screen's only filled control, which is a judgement a reviewer may reverse; it is
+written in the file rather than implied by a default. Danger-treatment of terminal trip decisions is not done:
+with the flip, the "Say why" dialog's *Hold*, *Stop the trip* and *Re-open* all resolve to `outline`, so the
+peer asymmetry is gone but §5's "filled only on the confirm step" is still unmet — *Stop the trip* wants
+`danger-solid`, and that belongs with the destructive-action pass rather than smuggled into a variant change. No browser pass has been run, so the visual
+result is asserted from rendered markup, not from a screenshot.
+
 ---
 
 **End of design document.**
