@@ -11,6 +11,7 @@ use App\Domain\Maintenance\Actions\CloseWorkOrder;
 use App\Domain\Maintenance\Actions\CompleteWorkOrder;
 use App\Domain\Maintenance\Actions\HoldWorkOrder;
 use App\Domain\Maintenance\Actions\InspectWorkOrder;
+use App\Domain\Maintenance\Actions\IssuePartToWorkOrder;
 use App\Domain\Maintenance\Actions\PlanWorkOrder;
 use App\Domain\Maintenance\Actions\RejectWorkOrder;
 use App\Domain\Maintenance\Actions\RemoveWorkOrderLine;
@@ -18,6 +19,7 @@ use App\Domain\Maintenance\Actions\ResumeWorkOrder;
 use App\Domain\Maintenance\Actions\StartWorkOrder;
 use App\Domain\Maintenance\Data\WorkOrderLineDto;
 use App\Domain\Maintenance\HoldReason;
+use App\Domain\Maintenance\Models\Part;
 use App\Domain\Maintenance\Models\WorkOrder;
 use App\Domain\Maintenance\Models\WorkOrderLine;
 use App\Domain\Maintenance\ServiceScheduleKind;
@@ -40,11 +42,13 @@ use Livewire\Component;
  *
  * The lines stop being editable at `in_progress` — §10.6's rule, enforced by the Actions and printed
  * here as a plain sentence rather than a greyed table. After that the costs are what the work took,
- * and the paths that write them (stock issues, timesheets, supplier bills) arrive in later slices.
+ * and the paths that write them arrive slice by slice: parts now leave the stores shelf into this
+ * job (costed at the shelf's average, posted to 5310 or 5320 against the truck and the job), while
+ * timesheets and supplier bills are still to come.
  *
- * Nothing on this screen posts a journal entry (§10.6: "posting is not a state"). Closing makes the row
- * read-only and records the capitalise decision; the ledger hears about the spend when the thing that
- * incurred it is recorded.
+ * Nothing on this screen is a state transition that touches the ledger; the part issue is the one
+ * costing path that posts, and it posts where the movement is recorded rather than at close (§10.6:
+ * "posting is not a state").
  */
 new #[Title('Work order')] class extends Component {
     /** The ULID, held as a key: the Livewire snapshot is client-readable, and a stale model would act on a row the page no longer shows. */
@@ -78,6 +82,14 @@ new #[Title('Work order')] class extends Component {
 
     public string $closeAmount = '';
 
+    public string $issuePartId = '';
+
+    public string $issueQuantity = '';
+
+    public string $issueDate = '';
+
+    public string $issueNote = '';
+
     public function mount(WorkOrder $workOrder): void
     {
         $this->workOrderId = $workOrder->id;
@@ -89,6 +101,7 @@ new #[Title('Work order')] class extends Component {
             ? ''
             : number_format((float) $truck->engine_hours_10_2, 2, '.', '');
         $this->plannedFor = Carbon::now(CurrentCompany::timezone())->toDateString();
+        $this->issueDate = Carbon::now(CurrentCompany::timezone())->toDateString();
     }
 
     public function canCreate(): bool
@@ -161,6 +174,66 @@ new #[Title('Work order')] class extends Component {
         }
 
         $this->changed(__('Line removed.'), clearErrors: 'line');
+    }
+
+    /* ------------------------------------------------------------------ parts */
+
+    /**
+     * Whether the shelf may feed this job: the seat holds `work_orders.create`, and the machine must
+     * be at a point where the work is sanctioned — a draft or an estimate waiting for an approver may
+     * not draw stock (§10.6).
+     */
+    public function canIssueParts(): bool
+    {
+        return $this->canCreate() && in_array($this->order->status, [
+            WorkOrderStatus::Approved,
+            WorkOrderStatus::Planned,
+            WorkOrderStatus::InProgress,
+            WorkOrderStatus::OnHold,
+        ], true);
+    }
+
+    public function issuePart(IssuePartToWorkOrder $issue): void
+    {
+        abort_unless($this->canIssueParts(), 403);
+
+        $this->validate([
+            'issuePartId' => ['required', 'integer'],
+            'issueQuantity' => ['required', 'string'],
+            'issueDate' => ['required', 'date'],
+            'issueNote' => ['nullable', 'string', 'max:160'],
+        ]);
+
+        $part = Part::query()->find((int) $this->issuePartId);
+
+        if ($part === null) {
+            $this->addError('issue', __('That part is no longer in the catalogue.'));
+
+            return;
+        }
+
+        try {
+            $issue(
+                $this->order,
+                $part,
+                $this->scaledHundredths($this->issueQuantity, __('Quantity')),
+                Carbon::parse($this->issueDate),
+                $this->issueNote,
+                (int) auth()->id(),
+            );
+        } catch (InvalidArgumentException|DomainException $refused) {
+            $this->addError('issue', $refused->getMessage());
+
+            return;
+        }
+
+        $this->reset(['issuePartId', 'issueQuantity', 'issueNote']);
+
+        $this->changed(
+            __('Issued — the shelf moved, the job’s parts cost moved, and both sides posted together.'),
+            'issue-part',
+            'issue',
+        );
     }
 
     /* --------------------------------------------------------------- decisions */
@@ -399,6 +472,30 @@ new #[Title('Work order')] class extends Component {
     public function holdReasons(): array
     {
         return HoldReason::cases();
+    }
+
+    /**
+     * The shelf this job may draw from: active parts with something on hand that either fit any truck
+     * or are specific to this one. A part belonging to another truck is never offered, because the
+     * Action would refuse it anyway and a list of refusals is not a picker.
+     *
+     * @return list<Part>
+     */
+    public function issuePartOptions(): array
+    {
+        return Part::query()
+            ->where('active', true)
+            ->where('stock_quantity_x100', '>', 0)
+            ->where(fn ($query) => $query->whereNull('truck_id')->orWhere('truck_id', $this->order->truck_id))
+            ->orderBy('name')
+            ->get()
+            ->all();
+    }
+
+    /** @return list<\App\Domain\Maintenance\Models\StockMovement> */
+    public function issuedParts(): array
+    {
+        return $this->order->issuedParts()->with('part')->get()->all();
     }
 
     public function baseCurrency(): string
@@ -800,6 +897,60 @@ new #[Title('Work order')] class extends Component {
         </x-ui.table>
     </x-ui.card>
 
+    {{-- What actually left the shelf for this job: the issue book's rows, costed when they were taken. --}}
+    @if ($this->canIssueParts() || $this->issuedParts() !== [])
+        <x-ui.card :title="__('Parts used')" class="min-w-0">
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <x-ui.text size="sm" color="muted">
+                    {{ __('A part is costed at the shelf’s moving average the moment it leaves, so a later receipt cannot re-price work already done. The stock account is credited in the same transaction.') }}
+                </x-ui.text>
+
+                @if ($this->canIssueParts())
+                    <x-ui.button size="sm" variant="outline" x-on:click="$dispatch('open-issue-part')">{{ __('Issue a part') }}</x-ui.button>
+                @endif
+            </div>
+
+            @error('issue')
+                <x-ui.alert tone="danger" :title="__('Refused')" class="mb-4">{{ $message }}</x-ui.alert>
+            @enderror
+
+            <x-ui.table :caption="__('Parts issued to this work order, oldest first')">
+                <x-slot name="head">
+                    <x-ui.table.th>{{ __('Part') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Qty') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Unit cost at issue') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Amount') }}</x-ui.table.th>
+                    <x-ui.table.th>{{ __('Issued') }}</x-ui.table.th>
+                </x-slot>
+
+                @forelse ($this->issuedParts() as $movement)
+                    <tr wire:key="issue-{{ $movement->id }}">
+                        <x-ui.table.td>
+                            <span class="text-fg-ink">{{ $movement->part?->name ?? __('a retired part') }}</span>
+                            <span class="block text-xs text-fg-ink-muted">{{ $movement->part?->sku }}</span>
+                        </x-ui.table.td>
+                        <x-ui.table.td numeric nowrap>{{ number_format(abs($movement->quantity_delta_x100) / 100, 2, '.', '') }}</x-ui.table.td>
+                        <x-ui.table.td numeric nowrap>
+                            {{ $movement->unit_cost_minor === null ? '—' : $this->money(Money::ofMinor($movement->unit_cost_minor, $this->baseCurrency())) }}
+                        </x-ui.table.td>
+                        <x-ui.table.td numeric nowrap>{{ $this->money(Money::ofMinor(abs($movement->value_delta_base), $this->baseCurrency())) }}</x-ui.table.td>
+                        <x-ui.table.td nowrap>{{ $movement->moved_on?->format('d M Y') ?? '—' }}</x-ui.table.td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="5">
+                            <x-ui.empty-state
+                                icon="cube"
+                                title="{{ __('Nothing issued yet') }}"
+                                description="{{ __('When the job needs a part, issue it from the shelf here — the stock account moves in the same step as the cost.') }}"
+                            />
+                        </td>
+                    </tr>
+                @endforelse
+            </x-ui.table>
+        </x-ui.card>
+    @endif
+
     {{-- The machine's own record, in the order the engine wrote it (§4.4). --}}
     <section class="grid gap-4 rounded-fg-lg border border-fg-line bg-fg-surface p-5">
         <x-ui.subheading>{{ __('Trail') }}</x-ui.subheading>
@@ -1036,6 +1187,48 @@ new #[Title('Work order')] class extends Component {
                 <div class="flex items-center gap-3">
                     <x-ui.button type="submit">{{ __('Close it') }}</x-ui.button>
                     <x-ui.button type="button" variant="ghost" x-on:click="$dispatch('close-wo-close')">{{ __('Cancel') }}</x-ui.button>
+                </div>
+            </form>
+        </x-ui.dialog>
+    @endif
+
+    @if ($this->canIssueParts())
+        <x-ui.dialog name="issue-part" :title="__('Issue a part to this job')">
+            <form wire:submit="issuePart" class="grid gap-4 p-5">
+                <x-ui.text size="sm" color="muted">
+                    {{ __('The part leaves stores at the shelf’s moving average and is posted against this truck and job. The stock account is credited in the same transaction.') }}
+                </x-ui.text>
+
+                @php($shelf = $this->issuePartOptions())
+
+                <x-ui.select name="issuePartId" id="wo-issue-part" wire:model="issuePartId" :label="__('Part')" required>
+                    <option value="">{{ __('Choose from the shelf') }}</option>
+
+                    @foreach ($shelf as $shelfPart)
+                        <option value="{{ $shelfPart->id }}">{{ $shelfPart->label() }} — {{ __(':qty on hand', ['qty' => $shelfPart->stockLabel()]) }}</option>
+                    @endforeach
+                </x-ui.select>
+
+                @if ($shelf === [])
+                    <x-ui.text size="sm" color="muted">
+                        {{ __('Nothing on the shelf fits this truck yet. Receive stock from the parts register first.') }}
+                    </x-ui.text>
+                @endif
+
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <x-ui.input name="issueQuantity" wire:model="issueQuantity" numeric :label="__('Quantity')" required />
+                    <x-ui.input name="issueDate" wire:model="issueDate" type="date" :label="__('Issued on')" required />
+                </div>
+
+                <x-ui.input name="issueNote" wire:model="issueNote" :label="__('Note (optional)')" :hint="__('Where it went on the vehicle, or who took it.')" />
+
+                @error('issue')
+                    <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                @enderror
+
+                <div class="flex items-center gap-3">
+                    <x-ui.button type="submit">{{ __('Issue it') }}</x-ui.button>
+                    <x-ui.button type="button" variant="ghost" x-on:click="$dispatch('close-issue-part')">{{ __('Cancel') }}</x-ui.button>
                 </div>
             </form>
         </x-ui.dialog>

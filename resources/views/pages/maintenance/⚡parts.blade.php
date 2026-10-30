@@ -6,13 +6,16 @@ use App\Domain\Fleet\Models\Truck;
 use App\Domain\Kernel\Money\Currency;
 use App\Domain\Kernel\Money\Money;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
+use App\Domain\Maintenance\Actions\CountPartStock;
 use App\Domain\Maintenance\Actions\CreatePart;
+use App\Domain\Maintenance\Actions\ReceivePartStock;
 use App\Domain\Maintenance\Actions\UpdatePart;
 use App\Domain\Maintenance\Data\PartDto;
 use App\Domain\Maintenance\Models\Part;
 use App\Domain\Maintenance\PartCategory;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
@@ -22,16 +25,19 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /*
- * The parts catalogue (§3.2, §4.3): what the workshop buys and fits, before there is any stock
- * to count. Phase 1 ships the register only; movements, counts and reorder alerts arrive with the
- * workshop in phase 3, which is why this screen records a reorder *level* but no quantity.
+ * The parts catalogue and the shelf behind it (§3.2, §4.3): what the workshop buys, what it fits,
+ * and what is actually in stores. Phase 1 shipped the register; slice 3e adds the valued book — a
+ * receipt, an issue to a job and a physical count each move the shelf and post where the movement
+ * belongs (§6.8).
  *
  * A part names a truck only when it is specific to one — a body panel or an ECU. Everything else
  * reads "any truck", which is the honest default for filters and brake pads.
  *
- * Writing is `parts.manage` (§9.3 — Owner, Workshop Manager, Stores Clerk). No §9.4 field gate
- * covers a part's cost: it is a purchasing fact the stores clerk is expected to know, unlike a
- * customer's agreed rate or an employee's salary.
+ * Writing the catalogue is `parts.manage` (§9.3 — Owner, Workshop Manager, Stores Clerk), receiving
+ * and adjusting stock is `parts.adjust` (Owner, Operations Manager, Stores Clerk), and counting is
+ * `parts.count` (Owner, Workshop Manager, Stores Clerk). No §9.4 field gate covers a part's cost: it
+ * is a purchasing fact the stores clerk is expected to know, unlike a customer's agreed rate or an
+ * employee's salary.
  */
 new #[Title('Parts')] class extends Component {
     use WithPagination;
@@ -62,6 +68,19 @@ new #[Title('Parts')] class extends Component {
     public string $truckId = '';
 
     public bool $active = true;
+
+    /** The part the stock dialogs are about — null when neither is open. */
+    public ?int $stockPartId = null;
+
+    public string $stockQuantity = '';
+
+    public string $stockUnitCost = '';
+
+    public string $stockCounted = '';
+
+    public string $stockDate = '';
+
+    public string $stockNote = '';
 
     public function mount(): void
     {
@@ -172,6 +191,152 @@ new #[Title('Parts')] class extends Component {
         $this->dispatch('toast', message: __('Saved.'), kind: 'success');
     }
 
+    /* ------------------------------------------------------------ stock moves */
+
+    public function canAdjust(): bool
+    {
+        return Gate::allows('parts.adjust');
+    }
+
+    public function canCount(): bool
+    {
+        return Gate::allows('parts.count');
+    }
+
+    #[Computed]
+    public function stockPart(): ?Part
+    {
+        return $this->stockPartId === null ? null : Part::query()->find($this->stockPartId);
+    }
+
+    public function openReceive(int $id): void
+    {
+        abort_unless($this->canAdjust(), 403);
+
+        $part = Part::query()->findOrFail($id);
+        $this->prepareStock($part);
+        $this->stockUnitCost = $part->unit_cost_minor === 0 ? '' : $part->unitCost()->toBigDecimal()->toString();
+
+        $this->dispatch('open-part-receive');
+    }
+
+    public function openCount(int $id): void
+    {
+        abort_unless($this->canCount(), 403);
+
+        $part = Part::query()->findOrFail($id);
+        $this->prepareStock($part);
+        $this->stockCounted = $part->stockLabel();
+
+        $this->dispatch('open-part-count');
+    }
+
+    public function receive(ReceivePartStock $receive): void
+    {
+        abort_unless($this->canAdjust(), 403);
+
+        $this->validate([
+            'stockQuantity' => ['required', 'string'],
+            'stockUnitCost' => ['required', 'string'],
+            'stockDate' => ['required', 'date'],
+            'stockNote' => ['nullable', 'string', 'max:160'],
+        ]);
+
+        $part = $this->stockPart;
+
+        if ($part === null) {
+            $this->addError('stock', __('That part is no longer in the catalogue.'));
+
+            return;
+        }
+
+        try {
+            $receive(
+                $part,
+                $this->scaledHundredths($this->stockQuantity, __('Quantity')),
+                Money::ofMajor($this->stockUnitCost, $this->currencyCode()),
+                Carbon::parse($this->stockDate),
+                $this->stockNote,
+                (int) auth()->id(),
+            );
+        } catch (InvalidArgumentException|DomainException $refused) {
+            $this->addError('stock', $refused->getMessage());
+
+            return;
+        }
+
+        $this->finishStock(__('Received — the shelf and the stock account moved together.'), 'part-receive');
+    }
+
+    public function countStock(CountPartStock $count): void
+    {
+        abort_unless($this->canCount(), 403);
+
+        $this->validate([
+            'stockCounted' => ['required', 'string'],
+            'stockDate' => ['required', 'date'],
+            'stockNote' => ['nullable', 'string', 'max:160'],
+        ]);
+
+        $part = $this->stockPart;
+
+        if ($part === null) {
+            $this->addError('stock', __('That part is no longer in the catalogue.'));
+
+            return;
+        }
+
+        try {
+            $count(
+                $part,
+                $this->scaledHundredths($this->stockCounted, __('Counted quantity')),
+                Carbon::parse($this->stockDate),
+                $this->stockNote,
+                (int) auth()->id(),
+            );
+        } catch (InvalidArgumentException|DomainException $refused) {
+            $this->addError('stock', $refused->getMessage());
+
+            return;
+        }
+
+        $this->finishStock(__('Counted — any difference is posted to the stock variance account.'), 'part-count');
+    }
+
+    private function prepareStock(Part $part): void
+    {
+        $this->resetValidation();
+        $this->stockPartId = $part->id;
+        $this->stockQuantity = '';
+        $this->stockUnitCost = '';
+        $this->stockCounted = '';
+        $this->stockNote = '';
+        $this->stockDate = Carbon::now(CurrentCompany::timezone())->toDateString();
+        unset($this->stockPart);
+    }
+
+    private function finishStock(string $message, string $dialog): void
+    {
+        $this->stockPartId = null;
+        $this->reset(['stockQuantity', 'stockUnitCost', 'stockCounted', 'stockNote']);
+        unset($this->parts, $this->stockPart);
+
+        $this->dispatch('close-'.$dialog);
+        $this->dispatch('toast', message: $message, kind: 'success');
+    }
+
+    /** "45.32" → 4532, without ever building a float (§20.4). */
+    private function scaledHundredths(string $input, string $label): int
+    {
+        $text = trim(str_replace([' ', ','], ['', '.'], $input));
+
+        if (preg_match('/^(\d{1,9})(?:\.(\d{1,2}))?$/', $text, $parts) !== 1) {
+            throw new InvalidArgumentException(__(':field must be a number with at most two decimals.', ['field' => $label]));
+        }
+
+        return ((int) $parts[1]) * 100 + (int) str_pad($parts[2] ?? '0', 2, '0');
+    }
+
     /** @return LengthAwarePaginator<int, Part> */
     #[Computed]
     public function parts(): LengthAwarePaginator
@@ -228,7 +393,7 @@ new #[Title('Parts')] class extends Component {
     <header class="grid gap-1">
         <x-ui.heading size="xl" level="1">{{ __('Parts') }}</x-ui.heading>
         <x-ui.text>
-            {{ __('The workshop’s catalogue: what it buys, what it fits and what it costs. Stock counts and issues arrive with the workshop; this register is what a work order will pick a part from.') }}
+            {{ __('The workshop’s catalogue and the shelf behind it: what it buys, what it fits, what it costs and what is actually in stores. A work order takes its parts from here, and every receipt, issue and count moves the stock account with it.') }}
         </x-ui.text>
     </header>
 
@@ -269,8 +434,9 @@ new #[Title('Parts')] class extends Component {
                     <x-ui.table.th>{{ __('Part') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Category') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Fits') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('On hand') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('Unit cost') }}</x-ui.table.th>
-                    <x-ui.table.th numeric>{{ __('Reorder at') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Stock value') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                 </tr>
@@ -293,10 +459,21 @@ new #[Title('Parts')] class extends Component {
                             @endif
                         </x-ui.table.td>
                         <x-ui.table.td numeric nowrap>
+                            <span class="tabular-nums">{{ $part->stockLabel() }}</span>
+
+                            @if ($part->isLowStock())
+                                <x-ui.badge tone="warning">{{ __('low') }}</x-ui.badge>
+                            @endif
+
+                            @if ($part->reorder_level !== null)
+                                <span class="block text-xs text-fg-ink-muted">{{ __('reorder at :level', ['level' => $part->reorder_level]) }}</span>
+                            @endif
+                        </x-ui.table.td>
+                        <x-ui.table.td numeric nowrap>
                             {{ $part->unit_cost_minor === 0 ? '—' : $part->unitCost()->format($this->currencyCode()) }}
                         </x-ui.table.td>
-                        <x-ui.table.td numeric>
-                            {{ $part->reorder_level === null ? '—' : $part->reorder_level }}
+                        <x-ui.table.td numeric nowrap>
+                            {{ $part->stock_value_base === 0 ? '—' : $part->valueMoney()->format($this->currencyCode()) }}
                         </x-ui.table.td>
                         <x-ui.table.td>
                             @if ($part->active)
@@ -305,15 +482,23 @@ new #[Title('Parts')] class extends Component {
                                 <x-ui.badge tone="neutral">{{ __('retired') }}</x-ui.badge>
                             @endif
                         </x-ui.table.td>
-                        <x-ui.table.td numeric>
+                        <x-ui.table.td numeric nowrap>
                             @can('update', $part)
                                 <x-ui.button variant="ghost" size="sm" wire:click="edit({{ $part->id }})">{{ __('Edit') }}</x-ui.button>
                             @endcan
+
+                            @if ($this->canAdjust())
+                                <x-ui.button variant="ghost" size="sm" wire:click="openReceive({{ $part->id }})">{{ __('Receive') }}</x-ui.button>
+                            @endif
+
+                            @if ($this->canCount())
+                                <x-ui.button variant="ghost" size="sm" wire:click="openCount({{ $part->id }})">{{ __('Count') }}</x-ui.button>
+                            @endif
                         </x-ui.table.td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7">
+                        <td colspan="8">
                             <x-ui.empty-state
                                 icon="cube"
                                 :title="$this->hasFilters() ? __('No parts match these filters') : __('No parts yet')"
@@ -405,4 +590,74 @@ new #[Title('Parts')] class extends Component {
             </form>
         </x-ui.card>
     @endcan
+
+    @if ($this->canAdjust())
+        <x-ui.dialog name="part-receive" :title="__('Receive stock')">
+            <form wire:submit="receive" class="grid gap-4 p-5">
+                <x-ui.text size="sm" color="muted">
+                    {{ __('A receipt puts parts on the shelf and posts the same value to the stock account, with the supplier as the creditor.') }}
+                </x-ui.text>
+
+                @if ($this->stockPart !== null)
+                    <x-ui.text size="sm">
+                        {{ $this->stockPart->label() }} — {{ __('on hand :qty, at an average of :average', [
+                            'qty' => $this->stockPart->stockLabel(),
+                            'average' => $this->stockPart->averageMoney()->format($this->currencyCode()),
+                        ]) }}
+                    </x-ui.text>
+                @endif
+
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <x-ui.input name="stockQuantity" wire:model="stockQuantity" numeric :label="__('Quantity')" required />
+                    <x-ui.input name="stockUnitCost" wire:model="stockUnitCost" numeric :label="__('Unit cost (:currency)', ['currency' => $this->currencyCode()])" required />
+                </div>
+
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <x-ui.input name="stockDate" wire:model="stockDate" type="date" :label="__('Received on')" required />
+                    <x-ui.input name="stockNote" wire:model="stockNote" :label="__('Note (optional)')" :hint="__('The invoice number, or who delivered it.')" />
+                </div>
+
+                @error('stock')
+                    <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                @enderror
+
+                <div class="flex items-center gap-3">
+                    <x-ui.button type="submit">{{ __('Receive it') }}</x-ui.button>
+                    <x-ui.button type="button" variant="ghost" x-on:click="$dispatch('close-part-receive')">{{ __('Cancel') }}</x-ui.button>
+                </div>
+            </form>
+        </x-ui.dialog>
+    @endif
+
+    @if ($this->canCount())
+        <x-ui.dialog name="part-count" :title="__('Count the shelf')">
+            <form wire:submit="countStock" class="grid gap-4 p-5">
+                <x-ui.text size="sm" color="muted">
+                    {{ __('The count is compared with the book; the difference is valued at the shelf’s average and posted to the stock variance account. A count that agrees is still recorded.') }}
+                </x-ui.text>
+
+                @if ($this->stockPart !== null)
+                    <x-ui.text size="sm">
+                        {{ $this->stockPart->label() }} — {{ __('the book says :qty', ['qty' => $this->stockPart->stockLabel()]) }}
+                    </x-ui.text>
+                @endif
+
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <x-ui.input name="stockCounted" wire:model="stockCounted" numeric :label="__('Counted quantity')" required />
+                    <x-ui.input name="stockDate" wire:model="stockDate" type="date" :label="__('Counted on')" required />
+                </div>
+
+                <x-ui.input name="stockNote" wire:model="stockNote" :label="__('Note (optional)')" :hint="__('What the shelf looked like, or who counted it.')" />
+
+                @error('stock')
+                    <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                @enderror
+
+                <div class="flex items-center gap-3">
+                    <x-ui.button type="submit">{{ __('Record the count') }}</x-ui.button>
+                    <x-ui.button type="button" variant="ghost" x-on:click="$dispatch('close-part-count')">{{ __('Cancel') }}</x-ui.button>
+                </div>
+            </form>
+        </x-ui.dialog>
+    @endif
 </div>

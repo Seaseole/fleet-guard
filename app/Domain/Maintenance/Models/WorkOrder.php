@@ -11,6 +11,7 @@ use App\Domain\Kernel\Money\Money;
 use App\Domain\Kernel\State\CanTransition;
 use App\Domain\Kernel\Tenancy\BelongsToCompany;
 use App\Domain\Maintenance\HoldReason;
+use App\Domain\Maintenance\StockMovementKind;
 use App\Domain\Maintenance\WorkOrderKind;
 use App\Domain\Maintenance\WorkOrderStatus;
 use App\Domain\Operations\Models\Trip;
@@ -249,15 +250,20 @@ final class WorkOrder extends Model implements AuditableContract
     }
 
     /**
-     * Recompute the four frozen totals from the lines. The only writer of those columns.
+     * Recompute the four frozen totals from the estimate lines **and the parts actually issued**.
+     * The only writer of those columns.
      *
-     * Refused once the vehicle has been released: §10.6 makes `completed` the state in which the
-     * workshop stops being able to change the bill without somebody noticing, and `closed` freezes it
-     * outright. A line edited after completion would change a month that has already been read.
+     * `$requireEditable` is §10.6's two-sided rule. Adding or removing an estimate line is refused
+     * once the vehicle is in the workshop, because the estimate stops being an estimate; but a part
+     * issued *while* the job runs is a fact, and the totals must follow it. The issuing action passes
+     * `false`; the line Actions leave the default.
+     *
+     * Issued parts are summed here rather than written as lines: a stock issue is what the shelf gave
+     * up, not what somebody thought the job would cost, and the two are answered by different tables.
      */
-    public function recalculateCosts(): self
+    public function recalculateCosts(bool $requireEditable = true): self
     {
-        if (! $this->status->acceptsLines()) {
+        if ($requireEditable && ! $this->status->acceptsLines()) {
             throw new InvalidArgumentException(sprintf(
                 '%s is past the point where its costs are facts; a work order’s lines are fixed once the vehicle is released (§10.6).',
                 $this->wo_no,
@@ -276,6 +282,8 @@ final class WorkOrder extends Model implements AuditableContract
             };
         }
 
+        $parts += $this->issuedPartsValueBase();
+
         $this->forceFill([
             'labour_cost_base' => $labour,
             'parts_cost_base' => $parts,
@@ -284,6 +292,28 @@ final class WorkOrder extends Model implements AuditableContract
         ])->save();
 
         return $this;
+    }
+
+    /**
+     * What stock issues have put into this order, in base minor units — the missing half of
+     * `parts_cost_base`. Absolute values, because an issue's delta is negative.
+     */
+    public function issuedPartsValueBase(): int
+    {
+        return (int) StockMovement::query()
+            ->where('work_order_id', $this->id)
+            ->where('kind', StockMovementKind::Issue->value)
+            ->selectRaw('coalesce(sum(abs(value_delta_base)), 0) as issued')
+            ->value('issued');
+    }
+
+    /** @return HasMany<StockMovement, $this> */
+    public function issuedParts(): HasMany
+    {
+        return $this->hasMany(StockMovement::class)
+            ->where('kind', StockMovementKind::Issue->value)
+            ->orderBy('moved_on')
+            ->orderBy('id');
     }
 
     public function total(): Money

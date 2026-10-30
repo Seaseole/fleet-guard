@@ -129,6 +129,10 @@ final class ChartOfAccountsSeeder extends Seeder
             // dimensions — a tank is not a truck, a trip or a customer, and a dip book-keeping entry
             // has no leg to carry.
             ['code' => '1180', 'name' => 'Bulk fuel stock', 'type' => AccountType::Asset, 'normal' => Side::Debit, 'parent' => '1100', 'is_postable' => true],
+            // Phase 3 slice 3e: the stores shelf is an asset until a work order fits the part (§6.8).
+            // No dimensions — the shelf is not a truck or a job, and the receipt that fills it has no
+            // leg to carry; the issue's debit is where the truck and the work order are named.
+            ['code' => '1190', 'name' => 'Parts stock', 'type' => AccountType::Asset, 'normal' => Side::Debit, 'parent' => '1100', 'is_postable' => true],
             ['code' => '1200', 'name' => 'Fixed assets', 'type' => AccountType::Asset, 'normal' => Side::Debit, 'parent' => '1000', 'is_postable' => false],
             ['code' => '1210', 'name' => 'Trucks and trailers', 'type' => AccountType::Asset, 'normal' => Side::Debit, 'parent' => '1200', 'is_postable' => true],
             ['code' => '1220', 'name' => 'Workshop equipment', 'type' => AccountType::Asset, 'normal' => Side::Debit, 'parent' => '1200', 'is_postable' => true],
@@ -167,6 +171,9 @@ final class ChartOfAccountsSeeder extends Seeder
             ['code' => '5300', 'name' => 'Maintenance and repairs', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true, 'requires' => [Dimension::Truck]],
             ['code' => '5310', 'name' => 'Parts consumed', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true, 'requires' => [Dimension::Truck]],
             ['code' => '5320', 'name' => 'Tyres', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true, 'requires' => [Dimension::Truck]],
+            // The shelf, not a truck, disagrees with the book: a count shortage is measured in units
+            // no vehicle consumed, so 5310's truck rule cannot carry it (mirrors 5110 for diesel).
+            ['code' => '5315', 'name' => 'Parts stock variance', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true],
             ['code' => '5400', 'name' => 'Border and customs costs', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true, 'requires' => [Dimension::Trip]],
             // §6.6's direct-cost buckets need three accounts the v1 chart did not carry: a toll is not
             // a customs charge, and putting a weighbridge fee or a police fine in "border" would make

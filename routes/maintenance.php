@@ -13,6 +13,10 @@ use Illuminate\Support\Facades\Route;
  * seat may *do* is the Actions' own gates: `work_orders.create` for the workshop, `work_orders.approve`
  * for the spend, `work_orders.close` for the freeze.
  *
+ * `parts` reads on `parts.view`, which is narrower than `maintenance.view`: a dispatcher may look at
+ * repairs without reading what the store holds. Receiving is `parts.adjust`, counting is `parts.count`
+ * — both gated in the Actions rather than by the route, so the page can print the seat's own controls.
+ *
  * The detail route binds by ULID (§2), so a foreign id is a 404 rather than somebody else's work
  * order: the tenancy scope answers the lookup before `mount()` sees a row.
  */

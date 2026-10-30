@@ -11,21 +11,29 @@ use App\Domain\Kernel\Alerts\AlertType;
 use App\Domain\Kernel\Alerts\Data\ReminderCandidate;
 use App\Domain\Kernel\Alerts\Data\ThresholdSet;
 use App\Domain\Kernel\Alerts\Models\ReminderThreshold;
+use App\Domain\Kernel\Ledger\ChartOfAccounts;
+use App\Domain\Kernel\Ledger\Models\LedgerBarrier;
+use App\Domain\Kernel\Money\Money;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Maintenance\Actions\AddWorkOrderLine;
 use App\Domain\Maintenance\Actions\ApproveWorkOrder;
 use App\Domain\Maintenance\Actions\CancelWorkOrder;
 use App\Domain\Maintenance\Actions\CloseWorkOrder;
 use App\Domain\Maintenance\Actions\CompleteWorkOrder;
+use App\Domain\Maintenance\Actions\CountPartStock;
+use App\Domain\Maintenance\Actions\CreatePart;
 use App\Domain\Maintenance\Actions\HoldWorkOrder;
 use App\Domain\Maintenance\Actions\InspectWorkOrder;
+use App\Domain\Maintenance\Actions\IssuePartToWorkOrder;
 use App\Domain\Maintenance\Actions\RaiseWorkOrder;
+use App\Domain\Maintenance\Actions\ReceivePartStock;
 use App\Domain\Maintenance\Actions\RejectWorkOrder;
 use App\Domain\Maintenance\Actions\RemoveWorkOrderLine;
 use App\Domain\Maintenance\Actions\ResumeWorkOrder;
 use App\Domain\Maintenance\Actions\SaveServiceSchedule;
 use App\Domain\Maintenance\Actions\StartWorkOrder;
 use App\Domain\Maintenance\Alerts\ServiceDueSource;
+use App\Domain\Maintenance\Data\PartDto;
 use App\Domain\Maintenance\Data\ServiceScheduleDto;
 use App\Domain\Maintenance\Data\WorkOrderDto;
 use App\Domain\Maintenance\Data\WorkOrderLineDto;
@@ -33,6 +41,7 @@ use App\Domain\Maintenance\HoldReason;
 use App\Domain\Maintenance\Models\WorkOrderLine;
 use App\Domain\Maintenance\ServiceDueState;
 use App\Domain\Maintenance\ServiceScheduleKind;
+use App\Domain\Maintenance\StockMovementKind;
 use App\Domain\Maintenance\WorkOrderKind;
 use App\Domain\Maintenance\WorkOrderLineKind;
 use App\Domain\Maintenance\WorkOrderStatus;
@@ -57,7 +66,10 @@ use Symfony\Component\Console\Output\ConsoleOutput;
  *   - completing against a schedule advances it and resolves the `service_due` alert in the same
  *     transaction — the source and the resolution are one loop;
  *   - a line added after approval that crosses the limit asks again, and taking it back off
- *     returns the order to approved.
+ *     returns the order to approved;
+ *   - slice 3e's shelf: a receipt, an issue to a job and a physical count each move the valued stock
+ *     and post where §6.8 says they belong, a job that is not sanctioned cannot draw stock, and an
+ *     emptied shelf is worth nothing.
  *
  * Everything this file writes lives in the `XMT` namespace and is deleted at the end, including the
  * `work_order` counter, so the demo company is exactly as it was found.
@@ -148,6 +160,7 @@ $wipeFixtures = static function (array $truckIds) use ($alignWorkOrderCounter): 
 
     wipeIds('alerts', 'id', $alertIds);
     wipeIds('operational_events', 'aggregate_id', array_merge(array_map('strval', $workOrderIds), array_map('strval', $scheduleIds), array_map('strval', $alertIds)));
+    wipeIds('stock_movements', 'work_order_id', $workOrderIds);
     wipeIds('work_order_lines', 'work_order_id', $workOrderIds);
     wipeIds('work_orders', 'id', $workOrderIds);
     wipeIds('service_schedules', 'id', $scheduleIds);
@@ -157,10 +170,36 @@ $wipeFixtures = static function (array $truckIds) use ($alignWorkOrderCounter): 
     $alignWorkOrderCounter();
 };
 
+/**
+ * The shelf this run built: movements first, then the journal entries those movements posted (under
+ * §6.3's lifted barrier, because an entry cannot be deleted while the guard is up), then the parts.
+ */
+$wipeParts = static function (): void {
+    $partIds = DB::table('parts')->where('sku', 'like', 'XMT-%')->pluck('id')->all();
+    $movementIds = $partIds === [] ? [] : DB::table('stock_movements')->whereIn('part_id', $partIds)->pluck('id')->all();
+    $entryIds = $movementIds === [] ? [] : DB::table('gl_journal_entries')
+        ->where('source_type', 'stock_movement')
+        ->whereIn('source_id', $movementIds)
+        ->pluck('id')
+        ->all();
+
+    if ($entryIds !== []) {
+        LedgerBarrier::withLiftedGuard('verify-maintenance cleanup: the stock movements this run posted', 1, static function () use ($entryIds): void {
+            wipeIds('gl_journal_lines', 'entry_id', $entryIds);
+            wipeIds('gl_journal_entries', 'id', $entryIds);
+        });
+    }
+
+    wipeIds('stock_movements', 'id', $movementIds);
+    wipeIds('audits', 'auditable_id', array_map('strval', $partIds));
+    wipeIds('parts', 'id', $partIds);
+};
+
 /* ------------------------------------------------------------------------- */
 echo "== pre-clean: an interrupted run leaves nothing the next one counts ==\n";
 
 $xmtTruckIds = DB::table('trucks')->where('registration_no', 'like', '%XMT')->pluck('id')->all();
+$wipeParts();
 $wipeFixtures($xmtTruckIds);
 
 ok('an interrupted run\'s fixtures are gone and the work-order counter matches the surviving rows');
@@ -206,6 +245,32 @@ $lineDdl = (string) ((array) DB::select('show create table work_order_lines')[0]
 foreach (['work_order_lines_kind_allowed', 'work_order_lines_amount_is_rounded_product', 'work_order_lines_quantity_positive'] as $name) {
     check(str_contains($lineDdl, $name), "work_order_lines carries {$name}");
 }
+
+/* ------------------------------------------------------------------------- */
+echo "\n== §4.3/§15.2 3e the shelf and its stock book ==\n";
+
+$partDdl = (string) ((array) DB::select('show create table parts')[0])['Create Table'];
+
+check(Schema::hasColumns('parts', ['stock_quantity_x100', 'stock_value_base', 'average_cost_minor']), 'parts carries the valued shelf (quantity, value, average)');
+check(str_contains($partDdl, 'parts_empty_stock_is_worth_nothing'), '...and the CHECK that an empty shelf is worth nothing');
+
+$movementDdl = (string) ((array) DB::select('show create table stock_movements')[0])['Create Table'];
+
+foreach ([
+    'stock_movements_kind_allowed',
+    'stock_movements_moved_something',
+    'stock_movements_signs_agree',
+    'stock_movements_empty_is_worth_nothing',
+    'stock_movements_issue_names_an_order',
+] as $name) {
+    check(str_contains($movementDdl, $name), "stock_movements carries {$name}");
+}
+
+check(Schema::hasColumns('stock_movements', ['quantity_delta_x100', 'value_delta_base', 'quantity_after_x100', 'value_after_base', 'average_cost_minor_after', 'work_order_id']), '...and stores the after-snapshots, so a re-read never re-prices a past movement');
+
+$codes = app(ChartOfAccounts::class)->byCode();
+
+check(isset($codes['1190'], $codes['5315'], $codes['5310'], $codes['2110']), 'the chart has 1190 Parts stock, 5315 Parts stock variance, 5310 Parts consumed and 2110 payable');
 
 /* ------------------------------------------------------------------------- */
 echo "\n== fixtures ==\n";
@@ -436,15 +501,207 @@ $cancelledFresh = app(CancelWorkOrder::class)($fresh, 'Raised twice by mistake.'
 check($cancelledFresh->status === WorkOrderStatus::Cancelled, 'a fresh order is cancelled, leaving the first inspection to stand');
 
 /* ------------------------------------------------------------------------- */
+echo "\n== §15.2 3e a receipt, an issue and a count move the shelf and the ledger ==\n";
+
+$otherTruck = app(CreateTruck::class)(new TruckDto(
+    registrationNo: 'BWD998XMT',
+    fleetNo: 'XMT-02',
+    odometerKm: 88_000,
+    fuelType: 'diesel',
+));
+
+$oil = app(CreatePart::class)(PartDto::fromArray([
+    'sku' => 'XMT-OIL-15W40',
+    'name' => 'XMT 15W-40 oil',
+    'category' => 'lubricants',
+    'unit_cost_minor' => 10_000,
+    'currency_code' => $base,
+    'reorder_level' => 2,
+    'truck_id' => null,
+    'active' => true,
+]));
+
+$oil->refresh();
+
+check($oil->stock_quantity_x100 === 0 && $oil->stock_value_base === 0 && $oil->average_cost_minor === 0, 'a new catalogue line starts with an empty shelf worth nothing');
+
+$receipt = app(ReceivePartStock::class)($oil, 1_000, Money::ofMinor(10_000, $base), $today, 'XMT delivery one');
+
+$oil->refresh();
+check($oil->stockLabel() === '10.00' && $oil->stock_value_base === 100_000, 'receiving 10 at 100.00 puts 1,000.00 on the shelf');
+check($oil->average_cost_minor === 10_000, '...at that unit cost as the average');
+check($receipt->kind === StockMovementKind::Receipt && $receipt->value_after_base === 100_000, '...and the movement row is the after-snapshot');
+
+$receiptLines = DB::table('gl_journal_lines')
+    ->where('entry_id', DB::table('gl_journal_entries')->where('source_type', 'stock_movement')->where('source_id', $receipt->id)->value('id') ?? '0')
+    ->orderBy('id')
+    ->get();
+
+check($receiptLines->count() === 2
+    && (int) $receiptLines[0]->account_id === $codes['1190']->id && $receiptLines[0]->direction === 'debit' && (int) $receiptLines[0]->amount_base === 100_000
+    && (int) $receiptLines[1]->account_id === $codes['2110']->id && $receiptLines[1]->direction === 'credit',
+    '...and the receipt posted Dr 1190 Parts stock / Cr 2110 Supplier payable');
+
+$second = app(ReceivePartStock::class)($oil, 1_000, Money::ofMinor(12_000, $base), $today, 'XMT delivery two');
+$oil->refresh();
+
+check($oil->stock_quantity_x100 === 2_000 && $oil->stock_value_base === 220_000, 'a second receipt at 120.00 makes 20 units worth 2,200.00');
+check($oil->average_cost_minor === 11_000, '...and the average is money over units, not the last price paid (110.00)');
+
+refuses(
+    'a receipt in a foreign currency is refused, naming the supplier bill',
+    fn () => app(ReceivePartStock::class)($oil, 100, Money::ofMinor(10_000, 'ZAR'), $today),
+    InvalidArgumentException::class,
+    'supplier bill',
+);
+
+refuses(
+    'a receipt of nothing is refused',
+    fn () => app(ReceivePartStock::class)($oil, 0, Money::ofMinor(10_000, $base), $today),
+);
+
+$job = app(RaiseWorkOrder::class)(new WorkOrderDto(
+    truckId: $truck->id,
+    kind: WorkOrderKind::Repair,
+    title: 'XMT brake job',
+    lines: [new WorkOrderLineDto(WorkOrderLineKind::Labour, 'Brake labour', 100, 5_000, $base)],
+));
+
+check($job->status === WorkOrderStatus::Approved && $job->parts_cost_base === 0, 'an approved job starts with no parts cost');
+
+$issue = app(IssuePartToWorkOrder::class)($job, $oil, 400, $today, 'XMT front callipers');
+
+$oil->refresh();
+$job->refresh();
+
+check(abs($issue->value_delta_base) === 44_000 && $issue->unit_cost_minor === 11_000, 'issuing 4 costs them at the shelf’s 110.00 average — 440.00');
+check($oil->stock_quantity_x100 === 1_600 && $oil->stock_value_base === 176_000 && $oil->average_cost_minor === 11_000, '...and the shelf keeps its average: 16 units, 1,760.00');
+check($job->parts_cost_base === 44_000, '...the job’s parts total is what left the shelf, not an estimate line');
+check($job->total_cost_base === 49_000 && $job->status === WorkOrderStatus::Approved, '...the total follows it, and the under-limit order stays approved');
+
+$issueLines = DB::table('gl_journal_lines')
+    ->where('entry_id', DB::table('gl_journal_entries')->where('source_type', 'stock_movement')->where('source_id', $issue->id)->value('id') ?? '0')
+    ->orderBy('id')
+    ->get();
+
+check($issueLines->count() === 2
+    && (int) $issueLines[0]->account_id === $codes['5310']->id && $issueLines[0]->direction === 'debit'
+    && (int) $issueLines[0]->amount_base === 44_000
+    && (int) $issueLines[0]->truck_id === $truck->id && $issueLines[0]->work_order_id === $job->id
+    && (int) $issueLines[1]->account_id === $codes['1190']->id && $issueLines[1]->direction === 'credit',
+    '...posted Dr 5310 Parts consumed (with the truck and the job) / Cr 1190 Parts stock');
+
+$tyre = app(CreatePart::class)(PartDto::fromArray([
+    'sku' => 'XMT-TYRE-1120',
+    'name' => 'XMT 11R20 drive tyre',
+    'category' => 'tyres',
+    'unit_cost_minor' => 250_000,
+    'currency_code' => $base,
+    'reorder_level' => 1,
+    'truck_id' => null,
+    'active' => true,
+]));
+
+app(ReceivePartStock::class)($tyre, 400, Money::ofMinor(250_000, $base), $today, 'XMT tyres');
+$tyreIssue = app(IssuePartToWorkOrder::class)($job, $tyre->refresh(), 100, $today);
+
+$tyreDebit = DB::table('gl_journal_lines')
+    ->where('entry_id', DB::table('gl_journal_entries')->where('source_type', 'stock_movement')->where('source_id', $tyreIssue->id)->value('id') ?? '0')
+    ->where('direction', 'debit')
+    ->first();
+
+check($tyreDebit !== null && (int) $tyreDebit->account_id === $codes['5320']->id && (int) $tyreDebit->amount_base === 250_000, 'a tyre issued to a job debits 5320 Tyres, not 5310 Parts consumed');
+
+refuses(
+    'a job cannot draw more than the shelf holds',
+    fn () => app(IssuePartToWorkOrder::class)($job, $oil->refresh(), 1_700, $today),
+    InvalidArgumentException::class,
+    'on the shelf',
+);
+
+$unapproved = app(RaiseWorkOrder::class)(new WorkOrderDto(
+    truckId: $truck->id,
+    kind: WorkOrderKind::Repair,
+    title: 'XMT job waiting for an approver',
+    lines: [new WorkOrderLineDto(WorkOrderLineKind::External, 'Gearbox rebuild', 100, 600_000, $base)],
+));
+
+check($unapproved->status === WorkOrderStatus::AwaitingApproval, 'the over-limit job waits for an approver');
+
+refuses(
+    'a job waiting for an approver cannot draw stock',
+    fn () => app(IssuePartToWorkOrder::class)($unapproved, $oil->refresh(), 100, $today),
+    InvalidArgumentException::class,
+    'sanctioned job',
+);
+
+$panel = app(CreatePart::class)(PartDto::fromArray([
+    'sku' => 'XMT-PANEL-02',
+    'name' => 'XMT cab panel for the second truck',
+    'category' => 'body',
+    'unit_cost_minor' => 90_000,
+    'currency_code' => $base,
+    'reorder_level' => null,
+    'truck_id' => $otherTruck->id,
+    'active' => true,
+]));
+
+app(ReceivePartStock::class)($panel, 100, Money::ofMinor(90_000, $base), $today, 'XMT panel');
+
+refuses(
+    'a part specific to another truck is refused by name',
+    fn () => app(IssuePartToWorkOrder::class)($job, $panel->refresh(), 100, $today),
+    InvalidArgumentException::class,
+    'specific to',
+);
+
+$count = app(CountPartStock::class)($oil->refresh(), 1_500, $today, 'XMT count');
+
+$oil->refresh();
+check($count->quantity_delta_x100 === -100 && $count->value_delta_base === -11_000, 'a count one short records −1 at the shelf’s average');
+check($oil->stock_quantity_x100 === 1_500 && $oil->stock_value_base === 165_000, '...and the book follows the count');
+
+$countDebit = DB::table('gl_journal_lines')
+    ->where('entry_id', DB::table('gl_journal_entries')->where('source_type', 'stock_movement')->where('source_id', $count->id)->value('id') ?? '0')
+    ->where('direction', 'debit')
+    ->first();
+
+check($countDebit !== null && (int) $countDebit->account_id === $codes['5315']->id && (int) $countDebit->amount_base === 11_000, '...posting Dr 5315 Parts stock variance for the shortage');
+
+$drain = app(IssuePartToWorkOrder::class)($job, $oil->refresh(), 1_500, $today);
+
+$oil->refresh();
+check(abs($drain->value_delta_base) === 165_000, 'emptying the shelf takes the exact value it held, not a rounded average');
+check($oil->stock_quantity_x100 === 0 && $oil->stock_value_base === 0 && $oil->average_cost_minor === 0, '...so an empty shelf is worth nothing, and the CHECK agrees');
+
+$agreed = app(CountPartStock::class)($oil, 0, $today, 'XMT empty count');
+
+check($agreed->quantity_delta_x100 === 0 && $agreed->value_delta_base === 0, 'a count that agrees with an empty shelf is still recorded, as two zeroes');
+check(! DB::table('gl_journal_entries')->where('source_type', 'stock_movement')->where('source_id', $agreed->id)->exists(), '...and posts nothing, because there is no difference to post');
+
+refuses(
+    'a count below zero is refused',
+    fn () => app(CountPartStock::class)($oil->refresh(), -100, $today),
+    InvalidArgumentException::class,
+    'negative',
+);
+
+$oil->refresh();
+check($oil->isLowStock() === true, '...and an empty shelf reads low against its reorder level of 2');
+
+/* ------------------------------------------------------------------------- */
 echo "\n== cleanup ==\n";
 
-$wipeFixtures([$truck->id]);
+$wipeParts();
+$wipeFixtures([$truck->id, $otherTruck->id]);
 
 $leftovers = [
-    'work orders' => (int) DB::table('work_orders')->where('truck_id', $truck->id)->count(),
-    'work-order lines' => (int) DB::table('work_order_lines')->whereIn('work_order_id', DB::table('work_orders')->where('truck_id', $truck->id)->pluck('id')->all() ?: ['0'])->count(),
-    'service schedules' => (int) DB::table('service_schedules')->where('truck_id', $truck->id)->count(),
-    'trucks' => (int) DB::table('trucks')->where('id', $truck->id)->count(),
+    'work orders' => (int) DB::table('work_orders')->whereIn('truck_id', [$truck->id, $otherTruck->id])->count(),
+    'work-order lines' => (int) DB::table('work_order_lines')->whereIn('work_order_id', DB::table('work_orders')->whereIn('truck_id', [$truck->id, $otherTruck->id])->pluck('id')->all() ?: ['0'])->count(),
+    'service schedules' => (int) DB::table('service_schedules')->whereIn('truck_id', [$truck->id, $otherTruck->id])->count(),
+    'trucks' => (int) DB::table('trucks')->whereIn('id', [$truck->id, $otherTruck->id])->count(),
+    'parts' => (int) DB::table('parts')->where('sku', 'like', 'XMT-%')->count(),
+    'stock movements' => (int) DB::table('stock_movements')->whereIn('part_id', DB::table('parts')->where('sku', 'like', 'XMT-%')->pluck('id')->all() ?: [0])->count(),
 ];
 
 foreach ($leftovers as $what => $count) {
