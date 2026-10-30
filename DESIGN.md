@@ -2760,6 +2760,37 @@ peer asymmetry is gone but §5's "filled only on the confirm step" is still unme
 `danger-solid`, and that belongs with the destructive-action pass rather than smuggled into a variant change. No browser pass has been run, so the visual
 result is asserted from rendered markup, not from a screenshot.
 
+### 20.22 Design-system fix — 2026-10-30, two registers stop claiming a tab pattern they never built
+
+**What changed.** `fleet/⚡index` and `people/⚡index` declared `role="tablist"` with `role="tab"` and
+`aria-selected`, and no `role="tabpanel"`, no `aria-controls`, no matching `id`, no arrow-key handling — a WAI-ARIA
+contract announced to a screen reader and then broken by the page, which is worse than no role at all. Both are
+now a `<nav aria-label="Fleet registers">` of links with `aria-current="true"` on the active one. Links, not the
+segmented radiogroup the plan first proposed, because the register is already `#[Url]`-bound: a link keeps the
+shareable URL and carries `search` and `status` across the switch, which a radiogroup driven by the component
+would have thrown away.
+
+**The bug the markup was hiding.** Because the tab came from the query string and `setTab()` validated only the
+Livewire call, a hand-typed `?tab=anything` fell between the page's `if` branches and rendered the heading, the
+filters and **no table at all** — not an error, an empty screen that looks like nobody has added a trailer yet.
+`mount()` now normalises the value on both pages, which is where the validation belonged in the first place: the
+URL is the input, not the button. `setTab()` is deleted with its two callers.
+
+**Enforcement.** `scripts/lint-ui.php` rule **U4** fails a page that uses `role="tab"` without a `tabpanel` or
+`aria-controls`. It was enabled in the same commit that removed the only two offenders — a rule added while the
+codebase still violates it is a gate that gets switched off.
+
+**Verification.** `lint-ui` PASS (38 page files, 48 containers, rules U1,U4); `pint` PASS (516 files);
+`render-master` RENDER OK, which is the sweep that renders both registers.
+
+**Honest gaps.** No browser pass, so `aria-current` styling is asserted from rendered markup, not seen. U4
+covers the tab pattern only: `alerts`' filter chips pair `aria-pressed` with a conditional class and are
+correct as they stand, but nothing checks that a toggle says so — the rule for that (a button carrying a
+selected-looking style must expose `aria-pressed`, `aria-current` or a real control type) is written nowhere,
+and an audit claim that `security/queues` also used unlabelled `<button>` toggles turned out to be false: that
+screen has no `<button>` elements at all. Checked before repeating it, which is the order these entries should
+follow.
+
 ---
 
 **End of design document.**

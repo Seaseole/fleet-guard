@@ -120,6 +120,15 @@ Recommendation: demote. The "tab" here is a register switch that changes a URL p
 (`#[Url] public string $tab`), which is exactly what a radiogroup or a link set models, and it is fewer moving
 parts to keep honest.
 
+**Landed 2026-10-30.** Demoted — to links rather than the radiogroup, because these are URL-bound views: a
+`<nav aria-label>` whose items are `<a href="?tab=…">` with `aria-current="true"` on the active one, carrying
+`search` and `status` across so switching register keeps the filter. A radiogroup would have had to keep that
+in the component and lose the shareable URL the property already gave the page. `setTab()` went with the
+buttons, and `mount()` now normalises an unknown `?tab=`: the URL was already the source of truth, so a
+hand-typed `?tab=anything` used to fall between the `if` branches and render a heading with no table at all —
+a live bug the tab markup was hiding. Rule **U4** in `scripts/lint-ui.php` refuses `role="tab"` without a
+`tabpanel` and `aria-controls`, so the pattern cannot be half-claimed again.
+
 ### P0-3 · The driver's signature is drawn in the wrong place on a phone
 
 `kiosk/⚡capture` sizes the canvas at `width="600" height="200"` but displays it `class="w-full"`

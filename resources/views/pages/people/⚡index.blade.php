@@ -108,13 +108,12 @@ new #[Title('People')] class extends Component {
         }
     }
 
-    public function setTab(string $tab): void
+    /** Normalised because the register comes from the URL: see the same guard on the fleet register. */
+    public function mount(): void
     {
-        if (! in_array($tab, ['employees', 'drivers'], true)) {
-            return;
+        if (! in_array($this->tab, ['employees', 'drivers'], true)) {
+            $this->tab = 'employees';
         }
-
-        $this->tab = $tab;
     }
 
     public function clearFilters(): void
@@ -491,17 +490,18 @@ new #[Title('People')] class extends Component {
         </x-ui.text>
     </header>
 
-    <div class="flex flex-wrap items-center gap-2" role="tablist" aria-label="{{ __('People registers') }}">
+    {{-- Links, not a `role="tablist"` that promised a tab pattern it did not implement (no tabpanel, no
+         aria-controls, no arrow keys) — the same demotion the fleet register got. --}}
+    <nav class="flex flex-wrap items-center gap-2" aria-label="{{ __('People registers') }}">
         @foreach (['employees' => __('Employees'), 'drivers' => __('Drivers')] as $key => $label)
-            <button
-                type="button"
-                role="tab"
-                aria-selected="{{ $tab === $key ? 'true' : 'false' }}"
-                wire:click="setTab('{{ $key }}')"
+            <a
+                href="{{ route('people.index', array_filter(['tab' => $key, 'search' => $search, 'status' => $statusFilter])) }}"
+                @if ($tab === $key) aria-current="true" @endif
+                wire:navigate
                 class="rounded-fg-md border px-3 py-1.5 text-sm font-medium transition duration-(--t-fast) ease-(--ease-standard) {{ $tab === $key ? 'border-fg-line-strong bg-fg-surface text-fg-ink shadow-fg-1' : 'border-transparent text-fg-ink-secondary hover:bg-fg-surface-sunk hover:text-fg-ink' }}"
-            >{{ $label }}</button>
+            >{{ $label }}</a>
         @endforeach
-    </div>
+    </nav>
 
     @if ($this->statusTarget !== null)
         <x-ui.card :title="__('Change status — :driver', ['driver' => $this->statusTarget['name']])">

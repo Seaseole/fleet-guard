@@ -129,13 +129,18 @@ new #[Title('Fleet')] class extends Component {
         }
     }
 
-    public function setTab(string $tab): void
+    /**
+     * The register is chosen in the URL, so the URL has to be believed only in the ways this page renders.
+     *
+     * A hand-typed `?tab=anything` used to fall between the `if` branches and print a page with a heading
+     * and no table at all — not an error, just an empty screen with no explanation. Normalising at mount
+     * makes every link here shareable and every stray query string land on a register that exists.
+     */
+    public function mount(): void
     {
-        if (! in_array($tab, ['trucks', 'trailers', 'equipment'], true)) {
-            return;
+        if (! in_array($this->tab, ['trucks', 'trailers', 'equipment'], true)) {
+            $this->tab = 'trucks';
         }
-
-        $this->tab = $tab;
     }
 
     public function clearFilters(): void
@@ -704,21 +709,24 @@ new #[Title('Fleet')] class extends Component {
         </x-ui.text>
     </header>
 
-    <div class="flex flex-wrap items-center gap-2" role="tablist" aria-label="{{ __('Fleet registers') }}">
+    {{-- The three registers are three URL-bound views, so they are links and not a widget: a
+         `role="tablist"` was claimed here without `tabpanel`, `aria-controls` or arrow keys, which is a
+         contract a screen reader announces and the page then breaks. Links keep the current filters, stay
+         shareable, and need no keyboard implementation to be correct. --}}
+    <nav class="flex flex-wrap items-center gap-2" aria-label="{{ __('Fleet registers') }}">
         @foreach ([
             'trucks' => __('Trucks'),
             'trailers' => __('Trailers'),
             'equipment' => __('Equipment'),
         ] as $key => $label)
-            <button
-                type="button"
-                role="tab"
-                aria-selected="{{ $tab === $key ? 'true' : 'false' }}"
-                wire:click="setTab('{{ $key }}')"
+            <a
+                href="{{ route('fleet.index', array_filter(['tab' => $key, 'search' => $search, 'status' => $statusFilter])) }}"
+                @if ($tab === $key) aria-current="true" @endif
+                wire:navigate
                 class="rounded-fg-md border px-3 py-1.5 text-sm font-medium transition duration-(--t-fast) ease-(--ease-standard) {{ $tab === $key ? 'border-fg-line-strong bg-fg-surface text-fg-ink shadow-fg-1' : 'border-transparent text-fg-ink-secondary hover:bg-fg-surface-sunk hover:text-fg-ink' }}"
-            >{{ $label }}</button>
+            >{{ $label }}</a>
         @endforeach
-    </div>
+    </nav>
 
     @if ($this->statusTarget !== null)
         <x-ui.card :title="__('Change status — :asset', ['asset' => $this->statusTarget['label']])">

@@ -17,6 +17,8 @@ declare(strict_types=1);
  *       forms do *not* get their own budget: their submits are on screen together with each other.
  *   U2  no raw `<select>` in a page component — the design system's controls only (§13, `x-ui.select`).
  *   U3  every `<x-ui.table>` carries `:caption` — the accessible name of the table (WCAG, §10).
+ *   U4  a `role="tab"` may not appear without its `tabpanel` and `aria-controls` — half a WAI-ARIA
+ *       pattern is a promise a screen reader cannot keep.
  *
  * Run: php scripts/lint-ui.php   (composer lint:ui)
  */
@@ -33,7 +35,7 @@ final class UiLint
      *
      * @var list<string>
      */
-    private const ENABLED = ['U1'];
+    private const ENABLED = ['U1', 'U4'];
 
     /** @var array<string, string> */
     private const PENDING = [
@@ -64,6 +66,7 @@ final class UiLint
         foreach ($this->pageFiles() as $file) {
             $this->files++;
             $this->checkContainers($file);
+            $this->checkRolePatternsAreComplete($file);
             $this->checkSelectsAreComponents($file);
             $this->checkTablesHaveCaptions($file);
         }
@@ -276,6 +279,36 @@ final class UiLint
     private function capture(string $attrs, string $pattern, string $prefix): ?string
     {
         return preg_match($pattern, $attrs, $m) === 1 ? $prefix.':'.$m[1] : null;
+    }
+
+    /**
+     * U4 — a WAI-ARIA pattern is a promise to a screen reader, so a half of it is worse than none.
+     *
+     * Two pages declared `role="tab"` without a `tabpanel`, an `aria-controls`, or the arrow-key handling the
+     * role means, which left an assistive tech announcing a widget whose keyboard contract the page then
+     * breaks. Those two were turned into links (UX-UI-PLAN P0-2); this rule keeps the next one from landing.
+     */
+    private function checkRolePatternsAreComplete(string $file): void
+    {
+        if (! in_array('U4', self::ENABLED, true)) {
+            return;
+        }
+
+        $contents = (string) file_get_contents($file);
+
+        if (preg_match('/role=["\']tab["\']/', $contents) === 1) {
+            $missing = [];
+
+            foreach (['role=["\']tabpanel["\']' => 'a role=tabpanel', 'aria-controls=' => 'aria-controls'] as $pattern => $what) {
+                if (preg_match('/'.$pattern.'/', $contents) !== 1) {
+                    $missing[] = $what;
+                }
+            }
+
+            if ($missing !== []) {
+                $this->fail($this->rel($file), 'U4: claims role="tab" without '.implode(' or ', $missing).' — finish the pattern or use links');
+            }
+        }
     }
 
     /** U2 — a page must use the component, not a hand-copied class string, so the control themes with the rest. */
