@@ -626,7 +626,7 @@ new #[Title('Cutover')] class extends Component
                                 <tr>
                                     <x-ui.table.th class="w-16">{{ __('Line') }}</x-ui.table.th>
                                     @foreach ($batch->dataset->previewColumns() as $column)
-                                        <x-ui.table.th class="whitespace-nowrap">{{ $column }}</x-ui.table.th>
+                                        <x-ui.table.th>{{ $column }}</x-ui.table.th>
                                     @endforeach
                                     <x-ui.table.th>{{ __('Problem') }}</x-ui.table.th>
                                 </tr>
@@ -634,9 +634,9 @@ new #[Title('Cutover')] class extends Component
                             <tbody>
                                 @forelse ($this->rows as $row)
                                     <tr wire:key="cutover-row-{{ $row->id }}">
-                                        <x-ui.table.td class="font-mono text-xs">{{ $row->line_number }}</x-ui.table.td>
+                                        <x-ui.table.td identifier>{{ $row->line_number }}</x-ui.table.td>
                                         @foreach ($batch->dataset->previewColumns() as $column)
-                                            <x-ui.table.td class="whitespace-nowrap font-mono text-xs">{{ $this->masterCell($row, $column, $batch) }}</x-ui.table.td>
+                                            <x-ui.table.td identifier nowrap>{{ $this->masterCell($row, $column, $batch) }}</x-ui.table.td>
                                         @endforeach
                                         <x-ui.table.td>
                                             @if ($row->isValid())
@@ -667,25 +667,25 @@ new #[Title('Cutover')] class extends Component
                                 <tr>
                                     <x-ui.table.th class="w-16">{{ __('Line') }}</x-ui.table.th>
                                     <x-ui.table.th>{{ __('Account') }}</x-ui.table.th>
-                                    <x-ui.table.th class="text-right">{{ __('Debit') }}</x-ui.table.th>
-                                    <x-ui.table.th class="text-right">{{ __('Credit') }}</x-ui.table.th>
+                                    <x-ui.table.th numeric>{{ __('Debit') }}</x-ui.table.th>
+                                    <x-ui.table.th numeric>{{ __('Credit') }}</x-ui.table.th>
                                     <x-ui.table.th>{{ __('Problem') }}</x-ui.table.th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @forelse ($this->rows as $row)
                                     <tr wire:key="cutover-row-{{ $row->id }}">
-                                        <x-ui.table.td class="font-mono text-xs">{{ $row->line_number }}</x-ui.table.td>
+                                        <x-ui.table.td identifier>{{ $row->line_number }}</x-ui.table.td>
                                         <x-ui.table.td>
-                                            <span class="font-mono text-xs text-fg-ink">{{ $row->account_code }}</span>
+                                            <span class="fg-identifier text-xs text-fg-ink">{{ $row->account_code }}</span>
                                             @if ($row->account_name)
                                                 <span class="text-fg-ink-secondary"> — {{ $row->account_name }}</span>
                                             @endif
                                         </x-ui.table.td>
-                                        <x-ui.table.td class="text-right font-mono text-xs">
+                                        <x-ui.table.td numeric>
                                             {{ $row->debit_minor > 0 ? $this->money($row->debit_minor, $batch->currency_code) : '—' }}
                                         </x-ui.table.td>
-                                        <x-ui.table.td class="text-right font-mono text-xs">
+                                        <x-ui.table.td numeric>
                                             {{ $row->credit_minor > 0 ? $this->money($row->credit_minor, $batch->currency_code) : '—' }}
                                         </x-ui.table.td>
                                         <x-ui.table.td>
@@ -737,29 +737,29 @@ new #[Title('Cutover')] class extends Component
                         <x-ui.table.th>{{ __('Dataset') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('File') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
-                        <x-ui.table.th class="text-right">{{ __('Rows') }}</x-ui.table.th>
-                        <x-ui.table.th class="text-right">{{ __('Debit') }}</x-ui.table.th>
-                        <x-ui.table.th class="text-right">{{ __('Credit') }}</x-ui.table.th>
+                        <x-ui.table.th numeric>{{ __('Rows') }}</x-ui.table.th>
+                        <x-ui.table.th numeric>{{ __('Debit') }}</x-ui.table.th>
+                        <x-ui.table.th numeric>{{ __('Credit') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('When') }}</x-ui.table.th>
-                        <x-ui.table.th class="text-right">{{ __(' ') }}</x-ui.table.th>
+                        <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse ($this->history as $entry)
                         <tr wire:key="cutover-batch-{{ $entry->id }}" @class(['bg-fg-surface-sunk' => $entry->public_id === $batchId])>
-                            <x-ui.table.td class="font-mono text-xs">#{{ $entry->id }}</x-ui.table.td>
-                            <x-ui.table.td class="whitespace-nowrap">{{ $entry->dataset->label() }}</x-ui.table.td>
+                            <x-ui.table.td identifier>#{{ $entry->id }}</x-ui.table.td>
+                            <x-ui.table.td nowrap>{{ $entry->dataset->label() }}</x-ui.table.td>
                             <x-ui.table.td>{{ $entry->original_filename ?? '—' }}</x-ui.table.td>
                             <x-ui.table.td>
                                 <x-ui.badge :tone="$this->statusTone($entry->status)">{{ $entry->status->label() }}</x-ui.badge>
                             </x-ui.table.td>
-                            <x-ui.table.td class="text-right font-mono text-xs">
+                            <x-ui.table.td numeric>
                                 {{ $entry->valid_row_count }}/{{ $entry->row_count }}
                             </x-ui.table.td>
-                            <x-ui.table.td class="text-right font-mono text-xs">{{ $entry->dataset->isMasterData() ? '—' : $this->money($entry->total_debit, $entry->currency_code) }}</x-ui.table.td>
-                            <x-ui.table.td class="text-right font-mono text-xs">{{ $entry->dataset->isMasterData() ? '—' : $this->money($entry->total_credit, $entry->currency_code) }}</x-ui.table.td>
-                            <x-ui.table.td class="whitespace-nowrap text-fg-ink-secondary">{{ $entry->created_at?->format('d M Y H:i') }}</x-ui.table.td>
-                            <x-ui.table.td class="text-right">
+                            <x-ui.table.td numeric>{{ $entry->dataset->isMasterData() ? '—' : $this->money($entry->total_debit, $entry->currency_code) }}</x-ui.table.td>
+                            <x-ui.table.td numeric>{{ $entry->dataset->isMasterData() ? '—' : $this->money($entry->total_credit, $entry->currency_code) }}</x-ui.table.td>
+                            <x-ui.table.td nowrap class="text-fg-ink-secondary">{{ $entry->created_at?->format('d M Y H:i') }}</x-ui.table.td>
+                            <x-ui.table.td numeric>
                                 <x-ui.button variant="ghost" size="sm" wire:click="openBatch('{{ $entry->public_id }}')">{{ __('Open') }}</x-ui.button>
                             </x-ui.table.td>
                         </tr>

@@ -221,7 +221,7 @@ new #[Title('Cross-border')] class extends Component {
         @endif
     </div>
 
-    <x-ui.table>
+    <x-ui.table :caption="__('Border crossings, newest first — the trip, the gate and what the gate is still waiting on')">
         <x-slot name="head">
             <x-ui.table.th>{{ __('Trip') }}</x-ui.table.th>
             <x-ui.table.th>{{ __('Gate') }}</x-ui.table.th>
@@ -235,9 +235,9 @@ new #[Title('Cross-border')] class extends Component {
             <tr wire:key="crossing-{{ $crossing->id }}">
                 <x-ui.table.td nowrap>
                     @if ($crossing->trip !== null)
-                        <a href="{{ route('operations.trip', $crossing->trip) }}" class="font-mono text-sm text-accent">{{ $crossing->trip->trip_no }}</a>
+                        <a href="{{ route('operations.trip', $crossing->trip) }}" class="fg-identifier text-sm text-accent">{{ $crossing->trip->trip_no }}</a>
                     @else
-                        <span class="font-mono text-sm text-fg-ink-muted">{{ $crossing->trip_id }}</span>
+                        <span class="fg-identifier text-sm text-fg-ink-muted">{{ $crossing->trip_id }}</span>
                     @endif
                 </x-ui.table.td>
 
@@ -286,7 +286,7 @@ new #[Title('Cross-border')] class extends Component {
         @if ($this->posts === [])
             <x-ui.text>{{ __('No gate has been registered. A crossing needs one — register the posts your corridors actually use, once each.') }}</x-ui.text>
         @else
-            <x-ui.table>
+            <x-ui.table :caption="__('The gate posts on file — where a truck may cross, and what the barrier costs')">
                 <x-slot name="head">
                     <x-ui.table.th>{{ __('Gate') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Country') }}</x-ui.table.th>

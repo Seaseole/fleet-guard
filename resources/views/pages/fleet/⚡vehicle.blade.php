@@ -616,7 +616,7 @@ new #[Title('Vehicle')] class extends Component {
                     @foreach ($this->readings as $reading)
                         <tr wire:key="reading-{{ $reading->id }}">
                             <x-ui.table.td nowrap>{{ $reading->read_on->format('d M Y') }}</x-ui.table.td>
-                            <x-ui.table.td mono>{{ number_format($reading->odometer_km) }}</x-ui.table.td>
+                            <x-ui.table.td numeric>{{ number_format($reading->odometer_km) }}</x-ui.table.td>
                             <x-ui.table.td numeric>{{ $reading->engine_hours_10_2 === null ? '—' : number_format($reading->engine_hours_10_2, 2) }}</x-ui.table.td>
                             <x-ui.table.td>{{ $reading->source->label() }}</x-ui.table.td>
                             <x-ui.table.td>

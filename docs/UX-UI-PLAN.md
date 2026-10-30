@@ -361,6 +361,21 @@ the *same* Amount column reads differently on the ledger screen and the bank scr
 `__(' ')` blank cells. Fix by convention: caption always, one numeric path, and let
 `scripts/lint-ui.php` refuse a `x-ui.table` without a caption.
 
+**Landed 2026-10-30.** All 11 caption-less `<x-ui.table>`s now name themselves, plus the journal nested table's
+raw `<caption>`; the two raw tables stay raw because `x-ui.table` wraps in a bordered scroll box and a box inside
+a table cell reads as a second register. The numeric path is `x-ui.table.td`'s props only — 69 cell tags rewritten
+to `numeric` / `identifier` / `nowrap`, and 13 in-cell monospace spans and divs moved to the `.fg-identifier`
+token. Two corrections to the evidence above, both measured after the work: the blank headers were **14, not two**
+(each one heading the row-action column, now labelled `Actions`, which four registers already did), and the old
+prop pair was worse than "two mechanisms" — `numeric` produced the alignment *without* `.fg-numeric`, so 24 cells
+were right-aligned with proportional digits and did not line up on the decimal point. `numeric` now means the
+token (monospace + tabular + right), `mono` is gone, and `identifier` is the left-aligned half the stylesheet
+already defined and nothing used. Enforced by **U3** (caption) and **U5** (no `text-right`/`font-mono`/`whitespace-nowrap`
+in a cell's class, for the component and for a raw `<td>`), both proven to fail by a probe page rather than trusted.
+Because a word-prop that the component stops declaring renders as an HTML attribute and styles nothing — invisible
+to any source pass — `render-operations` also asserts the track table's figures actually resolve to `fg-numeric`,
+its caption is in the markup, and no prop leaked.
+
 ### P3-2 · The two `wire:poll` regions are silent for assistive tech
 
 The live map refreshes positions every `poll_seconds`

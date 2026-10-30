@@ -460,14 +460,14 @@ new #[Title('Jobs')] class extends Component {
         @endif
     </div>
 
-    <x-ui.table>
+    <x-ui.table :caption="__('The freight job register — every job, its corridor, and the state it has reached')">
         <x-slot name="head">
             <x-ui.table.th>{{ __('Job') }}</x-ui.table.th>
             <x-ui.table.th>{{ __('Customer · corridor') }}</x-ui.table.th>
             <x-ui.table.th>{{ __('Load on') }}</x-ui.table.th>
             <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
             <x-ui.table.th numeric>{{ __('Quoted') }}</x-ui.table.th>
-            <x-ui.table.th class="text-right">{{ __('Actions') }}</x-ui.table.th>
+            <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
         </x-slot>
 
         @forelse ($this->jobs as $job)
@@ -475,7 +475,7 @@ new #[Title('Jobs')] class extends Component {
 
             <tr wire:key="job-{{ $job->id }}">
                 <x-ui.table.td nowrap>
-                    <span class="font-mono text-sm text-fg-ink">{{ $job->job_no }}</span>
+                    <span class="fg-identifier text-sm text-fg-ink">{{ $job->job_no }}</span>
                     <span class="block text-xs text-fg-ink-secondary">{{ $job->commodity ?? __('(no commodity)') }}</span>
                     @if ($job->tonnes_10_2 !== null)
                         <span class="block text-xs text-fg-ink-muted">{{ __(':tonnes t', ['tonnes' => rtrim(rtrim((string) $job->tonnes_10_2, '0'), '.')]) }}</span>
@@ -520,7 +520,7 @@ new #[Title('Jobs')] class extends Component {
                     @endif
                 </x-ui.table.td>
 
-                <x-ui.table.td class="text-right whitespace-nowrap">
+                <x-ui.table.td numeric nowrap>
                     @can('quote', $job)
                         <x-ui.button size="sm" variant="ghost" wire:click="openQuote('{{ $job->id }}')">{{ $job->currency_code === null ? __('Quote') : __('Re-quote') }}</x-ui.button>
                     @endcan

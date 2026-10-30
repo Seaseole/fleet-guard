@@ -442,7 +442,7 @@ new #[Title('Routes')] class extends Component {
                     <x-ui.table.th numeric>{{ __('Distance') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Prices') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
-                    <x-ui.table.th class="text-right">{{ __(' ') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                 </tr>
             </thead>
             <tbody>
@@ -452,7 +452,7 @@ new #[Title('Routes')] class extends Component {
                         @class(['bg-fg-surface-sunk' => $selectedRouteId === $route->id])
                     >
                         <x-ui.table.td>
-                            <span class="font-mono font-medium text-fg-ink">{{ $route->code }}</span>
+                            <span class="fg-identifier font-medium text-fg-ink">{{ $route->code }}</span>
                         </x-ui.table.td>
                         <x-ui.table.td>
                             <span class="text-fg-ink">{{ $route->corridor() }}</span>
@@ -480,7 +480,7 @@ new #[Title('Routes')] class extends Component {
                                 <x-ui.badge tone="neutral">{{ __('retired') }}</x-ui.badge>
                             @endif
                         </x-ui.table.td>
-                        <x-ui.table.td class="text-right">
+                        <x-ui.table.td numeric>
                             <div class="inline-flex items-center gap-1">
                                 <x-ui.button
                                     variant="ghost"
@@ -544,7 +544,7 @@ new #[Title('Routes')] class extends Component {
                         <x-ui.table.th numeric>{{ __('Rate') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Window') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
-                        <x-ui.table.th class="text-right">{{ __(' ') }}</x-ui.table.th>
+                        <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                     </tr>
                 </thead>
                 <tbody>
@@ -554,7 +554,7 @@ new #[Title('Routes')] class extends Component {
                                 <span class="font-medium text-fg-ink">{{ $rate->customer?->name ?? __('Customer #:id', ['id' => $rate->customer_id]) }}</span>
 
                                 @if ($rate->customer?->code)
-                                    <div class="font-mono text-xs text-fg-ink-muted">{{ $rate->customer->code }}</div>
+                                    <div class="fg-identifier text-xs text-fg-ink-muted">{{ $rate->customer->code }}</div>
                                 @endif
                             </x-ui.table.td>
                             <x-ui.table.td>{{ $rate->rate_type->label() }}</x-ui.table.td>
@@ -573,7 +573,7 @@ new #[Title('Routes')] class extends Component {
                                 @php($state = $rate->stateOn($this->today()))
                                 <x-ui.badge :tone="$state->tone()">{{ __($state->label()) }}</x-ui.badge>
                             </x-ui.table.td>
-                            <x-ui.table.td class="text-right">
+                            <x-ui.table.td numeric>
                                 @can('update', $rate)
                                     @if ($this->canSeeTerms())
                                         <x-ui.button variant="ghost" size="sm" wire:click="editRate({{ $rate->id }})">{{ __('Edit') }}</x-ui.button>

@@ -19,6 +19,9 @@ declare(strict_types=1);
  *   U3  every `<x-ui.table>` carries `:caption` — the accessible name of the table (WCAG, §10).
  *   U4  a `role="tab"` may not appear without its `tabpanel` and `aria-controls` — half a WAI-ARIA
  *       pattern is a promise a screen reader cannot keep.
+ *   U5  one numeric path in a table: a component cell asks for `numeric`/`identifier`/`nowrap`, it does not
+ *       re-type the classes; and no cell hand-copies `text-right font-mono`, which is how the same Amount
+ *       column came to read differently on two screens (docs/UX-UI-PLAN.md P3-1).
  *
  * Run: php scripts/lint-ui.php   (composer lint:ui)
  */
@@ -35,12 +38,10 @@ final class UiLint
      *
      * @var list<string>
      */
-    private const ENABLED = ['U1', 'U2', 'U4'];
+    private const ENABLED = ['U1', 'U2', 'U3', 'U4', 'U5'];
 
     /** @var array<string, string> */
-    private const PENDING = [
-        'U3' => 'every table has :caption — lands with the numeric/caption pass (UX-UI-PLAN P3-1)',
-    ];
+    private const PENDING = [];
 
     /** @var list<string> */
     private array $violations = [];
@@ -68,6 +69,7 @@ final class UiLint
             $this->checkRolePatternsAreComplete($file);
             $this->checkSelectsAreComponents($file);
             $this->checkTablesHaveCaptions($file);
+            $this->checkNumericTreatmentIsOnePath($file);
         }
 
         return $this->report();
@@ -347,6 +349,54 @@ final class UiLint
 
             $line = substr_count(substr($contents, 0, $match[1]), "\n") + 1;
             $this->fail($this->rel($file), "U3: <x-ui.table> at line {$line} has no :caption — the table is unnamed for a screen reader");
+        }
+    }
+
+    /**
+     * U5 — the numeric treatment has exactly one route: a component cell names its job with a prop, and a
+     * hand-written cell (only legal in the two raw tables) uses the `.fg-numeric` / `.fg-identifier` token.
+     * `text-right` and `font-mono` typed into a class is the second mechanism this task removed, and the one
+     * that let a money column align on the wrong side of the decimal point.
+     */
+    private function checkNumericTreatmentIsOnePath(string $file): void
+    {
+        if (! in_array('U5', self::ENABLED, true)) {
+            return;
+        }
+
+        $contents = (string) file_get_contents($file);
+
+        $component = '/<x-ui\.table\.(td|th)\b((?:(?!>)[\s\S])*)>/';
+
+        if (preg_match_all($component, $contents, $matches, PREG_OFFSET_CAPTURE)) {
+            foreach ($matches[0] as $index => $match) {
+                if (! preg_match('/class="([^"]*)"/', $matches[2][$index][0], $class) || ! preg_match('/\b(text-right|font-mono|fg-numeric|fg-identifier|whitespace-nowrap)\b/', $class[1], $token)) {
+                    continue;
+                }
+
+                $this->fail($this->rel($file), sprintf(
+                    'U5: a %s cell at line %d carries "%s" in a class — use the numeric/identifier/nowrap prop instead',
+                    $matches[1][$index][0],
+                    substr_count(substr($contents, 0, $match[1]), "\n") + 1,
+                    $token[1],
+                ));
+            }
+        }
+
+        // A raw <td> is legal for an empty-state row and inside the journal's nested lines table; it is not
+        // legal as a second way to ask for monospace figures.
+        if (preg_match_all('/<td\b((?:(?!>)[\s\S])*)>/', $contents, $raw, PREG_OFFSET_CAPTURE)) {
+            foreach ($raw[1] as $index => $attrs) {
+                if (! preg_match('/class="([^"]*)"/', $attrs[0], $class) || ! preg_match('/\b(text-right|font-mono)\b/', $class[1], $token)) {
+                    continue;
+                }
+
+                $this->fail($this->rel($file), sprintf(
+                    'U5: a raw <td> at line %d hand-copies "%s" — use .fg-numeric / .fg-identifier, or the x-ui.table.td component',
+                    substr_count(substr($contents, 0, $raw[0][$index][1]), "\n") + 1,
+                    $token[1],
+                ));
+            }
         }
     }
 

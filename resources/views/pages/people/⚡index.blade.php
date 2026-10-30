@@ -582,7 +582,7 @@ new #[Title('People')] class extends Component {
                         <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('National ID') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Gross salary') }}</x-ui.table.th>
-                        <x-ui.table.th class="text-right">{{ __(' ') }}</x-ui.table.th>
+                        <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                     </tr>
                 </thead>
                 <tbody>
@@ -590,7 +590,7 @@ new #[Title('People')] class extends Component {
                         <tr wire:key="employee-{{ $employee->id }}">
                             <x-ui.table.td>
                                 <span class="font-medium text-fg-ink">{{ $employee->name }}</span>
-                                <div class="font-mono text-xs text-fg-ink-muted">{{ $employee->employee_no }}</div>
+                                <div class="fg-identifier text-xs text-fg-ink-muted">{{ $employee->employee_no }}</div>
                             </x-ui.table.td>
                             <x-ui.table.td class="text-fg-ink-secondary">{{ $employee->role_or_grade ?: '—' }}</x-ui.table.td>
                             <x-ui.table.td nowrap>{{ $employee->hired_on?->format('d M Y') ?? '—' }}</x-ui.table.td>
@@ -601,7 +601,7 @@ new #[Title('People')] class extends Component {
                                     <x-ui.badge tone="neutral">{{ __('left') }}</x-ui.badge>
                                 @endif
                             </x-ui.table.td>
-                            <x-ui.table.td class="font-mono text-xs">{{ $employee->maskedNationalId() }}</x-ui.table.td>
+                            <x-ui.table.td identifier>{{ $employee->maskedNationalId() }}</x-ui.table.td>
                             <x-ui.table.td numeric>
                                 <x-ui.gated gate="seePayroll" :label="__('salary')">
                                     {{ $employee->gross_salary_base === 0
@@ -609,7 +609,7 @@ new #[Title('People')] class extends Component {
                                         : \App\Domain\Kernel\Money\Money::ofMinor($employee->gross_salary_base, $this->currencyCode)->format($this->currencyCode) }}
                                 </x-ui.gated>
                             </x-ui.table.td>
-                            <x-ui.table.td class="text-right">
+                            <x-ui.table.td numeric>
                                 @can('update', $employee)
                                     <x-ui.button variant="ghost" size="sm" wire:click="editEmployee({{ $employee->id }})">{{ __('Edit') }}</x-ui.button>
                                 @endcan
@@ -654,7 +654,7 @@ new #[Title('People')] class extends Component {
                         <x-ui.table.th>{{ __('Permit expires') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Eligible today') }}</x-ui.table.th>
-                        <x-ui.table.th class="text-right">{{ __(' ') }}</x-ui.table.th>
+                        <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                     </tr>
                 </thead>
                 <tbody>
@@ -663,9 +663,9 @@ new #[Title('People')] class extends Component {
                         <tr wire:key="driver-{{ $driver->id }}">
                             <x-ui.table.td>
                                 <span class="font-medium text-fg-ink">{{ $driver->employee?->name ?? __('Driver #:id', ['id' => $driver->id]) }}</span>
-                                <div class="font-mono text-xs text-fg-ink-muted">{{ $driver->employee?->employee_no }}</div>
+                                <div class="fg-identifier text-xs text-fg-ink-muted">{{ $driver->employee?->employee_no }}</div>
                             </x-ui.table.td>
-                            <x-ui.table.td class="font-mono text-xs">
+                            <x-ui.table.td identifier>
                                 {{ $driver->maskedLicenceNo() }}
                                 @if ($driver->licence_code)
                                     <div class="text-fg-ink-muted">{{ $driver->licence_code }}</div>
@@ -695,7 +695,7 @@ new #[Title('People')] class extends Component {
                                     <x-ui.badge tone="danger">{{ __('not cleared') }}</x-ui.badge>
                                 @endif
                             </x-ui.table.td>
-                            <x-ui.table.td class="text-right">
+                            <x-ui.table.td numeric>
                                 <div class="inline-flex items-center gap-1">
                                     @can('update', $driver)
                                         <x-ui.button variant="ghost" size="sm" wire:click="editDriver({{ $driver->id }})">{{ __('Edit') }}</x-ui.button>

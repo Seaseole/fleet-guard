@@ -272,7 +272,7 @@ new #[Title('Parts')] class extends Component {
                     <x-ui.table.th numeric>{{ __('Unit cost') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('Reorder at') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
-                    <x-ui.table.th class="text-right">{{ __(' ') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                 </tr>
             </thead>
             <tbody>
@@ -280,7 +280,7 @@ new #[Title('Parts')] class extends Component {
                     <tr wire:key="part-{{ $part->id }}">
                         <x-ui.table.td>
                             <span class="font-medium text-fg-ink">{{ $part->name }}</span>
-                            <div class="font-mono text-xs text-fg-ink-muted">{{ $part->sku }}</div>
+                            <div class="fg-identifier text-xs text-fg-ink-muted">{{ $part->sku }}</div>
                         </x-ui.table.td>
                         <x-ui.table.td>
                             <x-ui.badge>{{ $part->category->label() }}</x-ui.badge>
@@ -305,7 +305,7 @@ new #[Title('Parts')] class extends Component {
                                 <x-ui.badge tone="neutral">{{ __('retired') }}</x-ui.badge>
                             @endif
                         </x-ui.table.td>
-                        <x-ui.table.td class="text-right">
+                        <x-ui.table.td numeric>
                             @can('update', $part)
                                 <x-ui.button variant="ghost" size="sm" wire:click="edit({{ $part->id }})">{{ __('Edit') }}</x-ui.button>
                             @endcan

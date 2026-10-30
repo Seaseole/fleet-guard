@@ -306,7 +306,7 @@ new #[Title('Alerts')] class extends Component {
                     <x-ui.table.th>{{ __('State') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Condition from') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Decided by') }}</x-ui.table.th>
-                    <x-ui.table.th class="text-right">{{ __(' ') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                 </tr>
             </thead>
             <tbody>
@@ -347,11 +347,11 @@ new #[Title('Alerts')] class extends Component {
                                 </div>
                             @endif
                         </x-ui.table.td>
-                        <x-ui.table.td class="text-fg-ink-secondary whitespace-nowrap">
+                        <x-ui.table.td nowrap class="text-fg-ink-secondary">
                             <span title="{{ $alert->occurred_on->toDateString() }}">{{ $alert->occurred_on->format('d M Y') }}</span>
                             <div class="text-xs text-fg-ink-muted">{{ $alert->last_seen_at->diffForHumans() }}</div>
                         </x-ui.table.td>
-                        <x-ui.table.td class="text-xs text-fg-ink-secondary">
+                        <x-ui.table.td class="text-fg-ink-secondary text-xs">
                             @if ($alert->state === \App\Domain\Kernel\Alerts\AlertState::Resolved)
                                 {{ $alert->resolvedBy?->name ?? __('the scheduler') }}
                                 <div class="text-fg-ink-muted">{{ Str::limit((string) $alert->resolve_reason, 48) }}</div>
@@ -364,7 +364,7 @@ new #[Title('Alerts')] class extends Component {
                                 <span class="text-fg-ink-muted">{{ __('nobody yet') }}</span>
                             @endif
                         </x-ui.table.td>
-                        <x-ui.table.td class="text-right whitespace-nowrap">
+                        <x-ui.table.td numeric nowrap>
                             @can('alerts.acknowledge')
                                 @if ($alert->state === \App\Domain\Kernel\Alerts\AlertState::Open)
                                     <x-ui.button

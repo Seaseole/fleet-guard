@@ -269,7 +269,7 @@ new #[Title('Suppliers')] class extends Component {
                     <x-ui.table.th>{{ __('Contact') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Payment terms') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
-                    <x-ui.table.th class="text-right">{{ __(' ') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                 </tr>
             </thead>
             <tbody>
@@ -279,7 +279,7 @@ new #[Title('Suppliers')] class extends Component {
                             <span class="font-medium text-fg-ink">{{ $supplier->name }}</span>
 
                             @if ($supplier->code)
-                                <div class="font-mono text-xs text-fg-ink-muted">{{ $supplier->code }}</div>
+                                <div class="fg-identifier text-xs text-fg-ink-muted">{{ $supplier->code }}</div>
                             @endif
                         </x-ui.table.td>
                         <x-ui.table.td>
@@ -294,7 +294,7 @@ new #[Title('Suppliers')] class extends Component {
                                 @endif
 
                                 @if ($supplier->contact_phone)
-                                    <div class="font-mono text-xs text-fg-ink-muted">{{ $supplier->contact_phone }}</div>
+                                    <div class="fg-identifier text-xs text-fg-ink-muted">{{ $supplier->contact_phone }}</div>
                                 @endif
                             @else
                                 <span class="text-xs text-fg-ink-muted">{{ __('none on file') }}</span>
@@ -308,7 +308,7 @@ new #[Title('Suppliers')] class extends Component {
                                 <x-ui.badge tone="neutral">{{ __('retired') }}</x-ui.badge>
                             @endif
                         </x-ui.table.td>
-                        <x-ui.table.td class="text-right">
+                        <x-ui.table.td numeric>
                             @can('update', $supplier)
                                 <x-ui.button variant="ghost" size="sm" wire:click="edit({{ $supplier->id }})">{{ __('Edit') }}</x-ui.button>
                             @endcan

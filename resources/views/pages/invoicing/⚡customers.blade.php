@@ -253,7 +253,7 @@ new #[Title('Customers')] class extends Component {
                     <x-ui.table.th>{{ __('VAT number') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Payment terms') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
-                    <x-ui.table.th class="text-right">{{ __(' ') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                 </tr>
             </thead>
             <tbody>
@@ -263,7 +263,7 @@ new #[Title('Customers')] class extends Component {
                             <span class="font-medium text-fg-ink">{{ $customer->name }}</span>
 
                             @if ($customer->code)
-                                <div class="font-mono text-xs text-fg-ink-muted">{{ $customer->code }}</div>
+                                <div class="fg-identifier text-xs text-fg-ink-muted">{{ $customer->code }}</div>
                             @endif
                         </x-ui.table.td>
                         <x-ui.table.td>
@@ -275,13 +275,13 @@ new #[Title('Customers')] class extends Component {
                                 @endif
 
                                 @if ($customer->contact_phone)
-                                    <div class="font-mono text-xs text-fg-ink-muted">{{ $customer->contact_phone }}</div>
+                                    <div class="fg-identifier text-xs text-fg-ink-muted">{{ $customer->contact_phone }}</div>
                                 @endif
                             @else
                                 <span class="text-xs text-fg-ink-muted">{{ __('none on file') }}</span>
                             @endif
                         </x-ui.table.td>
-                        <x-ui.table.td class="font-mono text-xs">{{ $customer->vat_number ?: '—' }}</x-ui.table.td>
+                        <x-ui.table.td identifier>{{ $customer->vat_number ?: '—' }}</x-ui.table.td>
                         <x-ui.table.td>
                             <x-ui.gated gate="seeCustomerTerms" :label="__('payment terms')">
                                 {{ $customer->paymentTermsLabel() }}
@@ -294,7 +294,7 @@ new #[Title('Customers')] class extends Component {
                                 <x-ui.badge tone="neutral">{{ __('retired') }}</x-ui.badge>
                             @endif
                         </x-ui.table.td>
-                        <x-ui.table.td class="text-right">
+                        <x-ui.table.td numeric>
                             @can('update', $customer)
                                 <x-ui.button variant="ghost" size="sm" wire:click="edit({{ $customer->id }})">{{ __('Edit') }}</x-ui.button>
                             @endcan

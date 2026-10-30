@@ -254,7 +254,7 @@ new #[Title('Live map')] class extends Component {
             </x-ui.card>
 
             <x-ui.card as="section" padding="none" :title="__('Last fix per truck')">
-                <x-ui.table>
+                <x-ui.table :caption="__('The last position each truck reported, and how long ago that was')">
                     <x-slot name="head">
                         <x-ui.table.th>{{ __('Truck') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Trip') }}</x-ui.table.th>
@@ -271,7 +271,7 @@ new #[Title('Live map')] class extends Component {
 
                             <x-ui.table.td nowrap>
                                 @if ($vehicle->trip !== null)
-                                    <a href="{{ route('operations.trip', $vehicle->trip->id) }}" class="font-mono text-sm text-accent">{{ $vehicle->trip->tripNo }}</a>
+                                    <a href="{{ route('operations.trip', $vehicle->trip->id) }}" class="fg-identifier text-sm text-accent">{{ $vehicle->trip->tripNo }}</a>
                                     <span class="block text-xs text-fg-ink-muted">
                                         {{ $vehicle->trip->origin }} → {{ $vehicle->trip->destination }}
                                     </span>
@@ -326,7 +326,7 @@ new #[Title('Live map')] class extends Component {
                     <x-ui.button type="button" size="sm" variant="ghost" class="ml-auto" wire:click="clearTrip">{{ __('Close') }}</x-ui.button>
                 </div>
 
-                <x-ui.table>
+                <x-ui.table :caption="__('Every fix reported for the selected trip, in the order the truck sent them')">
                     <x-slot name="head">
                         <x-ui.table.th>{{ __('Fixed at (UTC)') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Latitude') }}</x-ui.table.th>

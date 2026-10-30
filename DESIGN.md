@@ -2835,6 +2835,47 @@ the component's `label` prop stays unused. `hint` was not invented for any of th
 keyboard path, and no browser pass was run. U3 (every `x-ui.table` carries a `:caption`) is still pending and lands
 with #17, which is the other half of the form-and-table cleanup.
 
----
+### 20.24 Design-system fix — 2026-10-30, one way to ask a column for its figures, and a name for every table
 
-**End of design document.**
+**What changed.** `x-ui.table.td` now has exactly three ways to say what a cell is: `numeric` (`.fg-numeric` —
+monospace, tabular, right), `identifier` (`.fg-identifier` — monospace, tabular, left), `nowrap`. `mono` is gone.
+69 cell tags across the pages were rewritten from copied classes to those props, 13 in-cell monospace spans and
+divs moved to the `.fg-identifier` token, all 11 caption-less `<x-ui.table>`s gained a `:caption`, the journal's
+nested lines table gained a raw `<caption class="sr-only">`, and 14 blank header cells — every one of them heading
+the row-action column — are labelled `Actions`.
+
+**The defect was worse than inconsistency.** The old pair was `numeric` → `text-right` and `mono` → `fg-numeric
+text-right`, so a screen that asked for the alignment got proportional digits: **24 cells were right-aligned and did
+not line up on the decimal point**, and the 15 that copied `class="text-right"` did the same. A money column that
+does not align is why this document keeps saying figures are machine-read (`§5.1`'s minor units, and
+[docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md) §11's rule that money is tabular and identifiers are mono). The
+rename also removed the choice itself: there is no longer a
+prop whose name tells you to remember to ask for tabular figures separately.
+
+**What the plan had wrong, measured after the fact.** It reported "two headers are literally `__(' ')`"; there were
+14, spread over ten registers — the same hand-copied convenience in ten files. It described the raw `text-right
+font-mono text-xs` cells as belonging to 11 screens, which was right about the count and wrong about the shape: the
+drift was not only on `<td>` elements but one level in, on the `<span>` and `<div>` that carried an identifier inside
+a component cell, which a class-on-the-cell check never sees.
+
+**Enforcement.** `scripts/lint-ui.php` gained **U5** (no `text-right`, `font-mono`, `fg-numeric`, `fg-identifier` or
+`whitespace-nowrap` in the class of a component cell; no `text-right`/`font-mono` in a raw `<td>`'s class) and
+**U3** was switched on now that the codebase satisfies it. Both were proven by a throwaway page carrying one of each
+violation, which printed four failures; a lint that has never been seen to fail is not a gate. Raw `<td>` remains
+legal where the component cannot go — 21 empty-state `colspan` rows and the four cells of the two raw tables — and
+the two raw tables are raw deliberately: `x-ui.table` wraps in a bordered `overflow-x-auto` box, and a box inside a
+table cell reads as a second register.
+
+**Verification.** `lint-ui` PASS (38 page files, 48 containers, rules U1,U2,U3,U4,U5); `pint` PASS;
+architecture and section-reference lints PASS; `render-master`, `render-operations` and `render-cutover` RENDER OK
+and `render-kiosk` PASS — 0 failed. `render-operations`' track-table leg now also asserts what a source pass cannot:
+that the props resolve to the token class in real markup, that the caption the page promises is actually emitted,
+and that no word-prop leaked out as an HTML attribute — the failure mode where a component stops declaring a prop,
+the template keeps compiling, and the column silently loses its alignment.
+
+**Honest gaps.** Dropping `text-xs` from 15 figure cells moves them to the dense table's 0.8125 rem; that is the
+same size as their column neighbours and it is asserted from the class list, not seen, because no browser pass was
+run. `13 font-mono` uses survive outside tables, where `.fg-identifier` is a local choice rather than a register's
+column treatment — U5 walks tables on purpose and does not police the rest of a page. Caption wording is
+developer prose: it names what each grid is, but nobody has read any of them to a screen reader. And `sortable`
+still has no caller — the prop and the `aria-sort` exist, and P0-5 is the slice that uses them.

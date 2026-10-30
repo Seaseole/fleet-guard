@@ -1476,6 +1476,22 @@ final class OperationsRenderSweep extends TestCase
                 }
             }
 
+            // A prop name the component does not declare renders as an HTML attribute and styles nothing, and
+            // lint-ui reading the source cannot see that — only a render can. So this checks that `numeric`
+            // became the token class, that the caption the screen now promises is actually in the markup, and
+            // that no word-prop leaked onto the element.
+            if (! str_contains($html, '<caption class="sr-only">Every fix reported for the selected trip')) {
+                throw new Exception('the track table renders without its accessible name');
+            }
+
+            if (! str_contains($html, 'fg-numeric')) {
+                throw new Exception('no figure cell resolved to .fg-numeric — the columns do not line up on the decimal point');
+            }
+
+            if (str_contains($html, 'numeric="') || str_contains($html, 'identifier="')) {
+                throw new Exception('a table cell prop leaked into the markup as an attribute instead of a class');
+            }
+
             // The toggle has to close as well as open, or the panel is a trap on a polled screen.
             $component->call('selectTrip', $this->gpsTripId);
 

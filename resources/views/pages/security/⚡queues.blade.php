@@ -75,12 +75,12 @@ new #[Title('Queue health')] class extends Component {
     <div class="space-y-3">
         <x-ui.heading level="2">{{ __('Failed jobs') }}</x-ui.heading>
         <x-ui.text>{{ __('Fix the cause before retrying. Use the reference to locate server logs; payloads and exception traces are never shown here.') }}</x-ui.text>
-        <x-ui.table>
+        <x-ui.table :caption="__('Queue jobs that failed, with the reference to look up in the server logs')">
             <thead><tr><x-ui.table.th>{{ __('Reference') }}</x-ui.table.th><x-ui.table.th>{{ __('Queue') }}</x-ui.table.th><x-ui.table.th>{{ __('Failed at (UTC)') }}</x-ui.table.th><x-ui.table.th>{{ __('Action') }}</x-ui.table.th></tr></thead>
             <tbody>
             @forelse ($this->failures as $job)
                 <tr wire:key="failed-{{ $job->uuid }}">
-                    <x-ui.table.td><span class="font-mono text-xs">{{ $job->uuid }}</span></x-ui.table.td>
+                    <x-ui.table.td identifier>{{ $job->uuid }}</x-ui.table.td>
                     <x-ui.table.td>{{ $job->queue }}</x-ui.table.td>
                     <x-ui.table.td>{{ $job->failed_at }}</x-ui.table.td>
                     <x-ui.table.td>

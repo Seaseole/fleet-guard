@@ -232,7 +232,7 @@ new #[Title('Bank and cash accounts')] class extends Component {
                         <x-ui.table.th>{{ __('Currency') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Type') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
-                        <x-ui.table.th class="text-right">{{ __(' ') }}</x-ui.table.th>
+                        <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                     </tr>
                 </thead>
                 <tbody>
@@ -245,7 +245,7 @@ new #[Title('Bank and cash accounts')] class extends Component {
                                     <span class="text-fg-ink-muted">· {{ $account->branch }}</span>
                                 @endif
                             </x-ui.table.td>
-                            <x-ui.table.td class="font-mono text-xs">
+                            <x-ui.table.td identifier>
                                 @if ($account->number_masked === null)
                                     <x-ui.text size="xs" color="muted">{{ __('not recorded') }}</x-ui.text>
                                 @elseif (isset($revealed[$account->id]))
@@ -273,7 +273,7 @@ new #[Title('Bank and cash accounts')] class extends Component {
                                     <x-ui.badge tone="neutral">{{ __('closed') }}</x-ui.badge>
                                 @endif
                             </x-ui.table.td>
-                            <x-ui.table.td class="text-right">
+                            <x-ui.table.td numeric>
                                 @can('bank.manage')
                                     <x-ui.button variant="ghost" size="sm" wire:click="edit({{ $account->id }})">{{ __('Edit') }}</x-ui.button>
                                 @endcan

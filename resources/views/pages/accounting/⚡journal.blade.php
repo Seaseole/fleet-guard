@@ -192,8 +192,8 @@ new #[Title('Journal')] class extends Component {
                         <x-ui.table.th>{{ __('Number') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Date') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Description') }}</x-ui.table.th>
-                        <x-ui.table.th class="text-right">{{ __('Debits') }}</x-ui.table.th>
-                        <x-ui.table.th class="text-right">{{ __('Credits') }}</x-ui.table.th>
+                        <x-ui.table.th numeric>{{ __('Debits') }}</x-ui.table.th>
+                        <x-ui.table.th numeric>{{ __('Credits') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Source') }}</x-ui.table.th>
                         <x-ui.table.th></x-ui.table.th>
                     </tr>
@@ -201,13 +201,13 @@ new #[Title('Journal')] class extends Component {
                 <tbody>
                     @forelse ($this->entries as $entry)
                         <tr wire:click="showLines('{{ $entry->id }}')" class="cursor-pointer" wire:key="journal-entry-{{ $entry->id }}">
-                            <x-ui.table.td class="font-mono text-xs text-fg-ink">{{ $entry->entry_no }}</x-ui.table.td>
-                            <x-ui.table.td class="whitespace-nowrap"><span title="{{ $entry->posted_on->toDateString() }}">{{ $entry->posted_on->format('d M Y') }}</span></x-ui.table.td>
+                            <x-ui.table.td identifier class="text-fg-ink">{{ $entry->entry_no }}</x-ui.table.td>
+                            <x-ui.table.td nowrap><span title="{{ $entry->posted_on->toDateString() }}">{{ $entry->posted_on->format('d M Y') }}</span></x-ui.table.td>
                             <x-ui.table.td class="text-fg-ink-secondary">{{ $entry->description }}</x-ui.table.td>
-                            <x-ui.table.td class="text-right font-mono text-xs">
+                            <x-ui.table.td numeric>
                                 {{ $this->money($entry->total_debit, $this->base()) }}
                             </x-ui.table.td>
-                            <x-ui.table.td class="text-right font-mono text-xs">
+                            <x-ui.table.td numeric>
                                 {{ $this->money($entry->total_credit, $this->base()) }}
                             </x-ui.table.td>
                             <x-ui.table.td>
@@ -218,7 +218,7 @@ new #[Title('Journal')] class extends Component {
                                     </x-ui.badge>
                                 @endif
                             </x-ui.table.td>
-                            <x-ui.table.td class="text-right">
+                            <x-ui.table.td numeric>
                                 <x-ui.button
                                     variant="ghost"
                                     size="sm"
@@ -237,6 +237,13 @@ new #[Title('Journal')] class extends Component {
                             <tr id="journal-entry-lines-{{ $entry->id }}" wire:key="journal-lines-{{ $entry->id }}">
                                 <td colspan="7" class="bg-fg-surface-sunk px-4 py-3">
                                     <table class="w-full text-sm">
+                                        {{--
+                                            Not x-ui.table: that component wraps in a bordered scroll box, and a
+                                            box inside this cell would read as a second register. It still needs
+                                            the same two things the component gives every table — a name, and
+                                            figures from the token classes rather than a copied utility pair.
+                                        --}}
+                                        <caption class="sr-only">{{ __('The debit and credit lines that make up this journal entry') }}</caption>
                                         <thead>
                                             <tr class="text-left text-xs text-fg-ink-muted">
                                                 <th class="py-1 font-medium">{{ __('Account') }}</th>
@@ -248,13 +255,13 @@ new #[Title('Journal')] class extends Component {
                                             @foreach ($this->openLines as $line)
                                                 <tr class="border-t border-fg-line">
                                                     <td class="py-1.5">
-                                                        <span class="font-mono text-xs">{{ $line->account->code }}</span>
+                                                        <span class="fg-identifier text-xs">{{ $line->account->code }}</span>
                                                         <span class="text-fg-ink-secondary">{{ $line->account->name }}</span>
                                                     </td>
                                                     <td class="py-1.5 text-fg-ink-secondary">
                                                         {{ $line->line_note }}
                                                         @if ($line->truck_id || $line->trip_id || $line->customer_id || $line->driver_id)
-                                                            <span class="ml-2 font-mono text-xs text-fg-ink-muted">
+                                                            <span class="ml-2 fg-identifier text-xs text-fg-ink-muted">
                                                                 @if ($line->truck_id) truck {{ $line->truck_id }} @endif
                                                                 @if ($line->trip_id) trip {{ $line->trip_id }} @endif
                                                                 @if ($line->customer_id) cust {{ $line->customer_id }} @endif
@@ -262,7 +269,7 @@ new #[Title('Journal')] class extends Component {
                                                             </span>
                                                         @endif
                                                     </td>
-                                                    <td class="py-1.5 text-right font-mono text-xs">
+                                                    <td class="py-1.5 fg-numeric text-xs">
                                                         <span class="{{ $line->isDebit() ? 'text-fg-ink' : 'text-fg-ink-secondary' }}">
                                                             {{ $line->direction->value }} {{ $this->money($line->amount_base, $this->base()) }}
                                                         </span>

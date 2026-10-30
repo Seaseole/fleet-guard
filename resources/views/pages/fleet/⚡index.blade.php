@@ -805,7 +805,7 @@ new #[Title('Fleet')] class extends Component {
                         <x-ui.table.th numeric>{{ __('Odometer') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Capacity') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Assigned to') }}</x-ui.table.th>
-                        <x-ui.table.th class="text-right">{{ __(' ') }}</x-ui.table.th>
+                        <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                     </tr>
                 </thead>
                 <tbody>
@@ -826,7 +826,7 @@ new #[Title('Fleet')] class extends Component {
                                     <span class="ms-1 text-xs text-fg-ink-muted">{{ __('inactive') }}</span>
                                 @endunless
                             </x-ui.table.td>
-                            <x-ui.table.td mono>{{ number_format($truck->odometer_km) }}</x-ui.table.td>
+                            <x-ui.table.td numeric>{{ number_format($truck->odometer_km) }}</x-ui.table.td>
                             <x-ui.table.td numeric>{{ $truck->capacity_tonnes_10_2 === null ? '—' : number_format($truck->capacity_tonnes_10_2, 2) }}</x-ui.table.td>
                             <x-ui.table.td>
                                 @php($open = $this->openAssignments[$truck->id] ?? null)
@@ -841,7 +841,7 @@ new #[Title('Fleet')] class extends Component {
                                     </div>
                                 @endif
                             </x-ui.table.td>
-                            <x-ui.table.td class="text-right">
+                            <x-ui.table.td numeric>
                                 <div class="inline-flex items-center gap-1">
                                     @can('update', $truck)
                                         <x-ui.button variant="ghost" size="sm" wire:click="edit({{ $truck->id }})">{{ __('Edit') }}</x-ui.button>
@@ -890,7 +890,7 @@ new #[Title('Fleet')] class extends Component {
                         <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Odometer') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Capacity') }}</x-ui.table.th>
-                        <x-ui.table.th class="text-right">{{ __(' ') }}</x-ui.table.th>
+                        <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                     </tr>
                 </thead>
                 <tbody>
@@ -911,9 +911,9 @@ new #[Title('Fleet')] class extends Component {
                                     <span class="ms-1 text-xs text-fg-ink-muted">{{ __('inactive') }}</span>
                                 @endunless
                             </x-ui.table.td>
-                            <x-ui.table.td mono>{{ number_format($trailer->odometer_km) }}</x-ui.table.td>
+                            <x-ui.table.td numeric>{{ number_format($trailer->odometer_km) }}</x-ui.table.td>
                             <x-ui.table.td numeric>{{ $trailer->capacity_tonnes_10_2 === null ? '—' : number_format($trailer->capacity_tonnes_10_2, 2) }}</x-ui.table.td>
-                            <x-ui.table.td class="text-right">
+                            <x-ui.table.td numeric>
                                 <div class="inline-flex items-center gap-1">
                                     @can('update', $trailer)
                                         <x-ui.button variant="ghost" size="sm" wire:click="edit({{ $trailer->id }})">{{ __('Edit') }}</x-ui.button>
@@ -959,7 +959,7 @@ new #[Title('Fleet')] class extends Component {
                         <x-ui.table.th>{{ __('Kind') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Purchase price') }}</x-ui.table.th>
-                        <x-ui.table.th class="text-right">{{ __(' ') }}</x-ui.table.th>
+                        <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                     </tr>
                 </thead>
                 <tbody>
@@ -975,7 +975,7 @@ new #[Title('Fleet')] class extends Component {
                                     {{ \App\Domain\Kernel\Money\Money::ofMinor($item->purchase_amount_base, $this->currencyCode)->format($this->currencyCode) }}
                                 </x-ui.gated>
                             </x-ui.table.td>
-                            <x-ui.table.td class="text-right">
+                            <x-ui.table.td numeric>
                                 <div class="inline-flex items-center gap-1">
                                     @can('update', $item)
                                         <x-ui.button variant="ghost" size="sm" wire:click="edit({{ $item->id }})">{{ __('Edit') }}</x-ui.button>

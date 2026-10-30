@@ -1224,7 +1224,7 @@ new #[Title('Trip')] class extends Component
                 description="{{ __('An empty manifest is refused at loaded — add what the truck is carrying, each line with its waybill.') }}"
             />
         @else
-            <x-ui.table>
+            <x-ui.table :caption="__('What this trip is carrying, one line per stop')">
                 <x-slot name="head">
                     <x-ui.table.th>{{ __('Stop') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Commodity') }}</x-ui.table.th>
@@ -1232,7 +1232,7 @@ new #[Title('Trip')] class extends Component
                     <x-ui.table.th numeric>{{ __('Cubic') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Consignee') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Waybill') }}</x-ui.table.th>
-                    <x-ui.table.th class="text-right">{{ __('Actions') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                 </x-slot>
 
                 @foreach ($this->loads as $load)
@@ -1246,10 +1246,10 @@ new #[Title('Trip')] class extends Component
                             @if ($load->waybill_document_id === null)
                                 <span class="text-danger">{{ __('missing') }}</span>
                             @else
-                                <span class="font-mono text-xs">{{ $load->waybill_document_id }}</span>
+                                <span class="fg-identifier text-xs">{{ $load->waybill_document_id }}</span>
                             @endif
                         </x-ui.table.td>
-                        <x-ui.table.td class="text-right">
+                        <x-ui.table.td numeric>
                             @if ($this->canEditLoads())
                                 <x-ui.button size="xs" variant="ghost" wire:click="removeLoad({{ $load->id }})">{{ __('Remove') }}</x-ui.button>
                             @endif
@@ -1371,7 +1371,7 @@ new #[Title('Trip')] class extends Component
             @if ($this->crossings === [])
                 <x-ui.text>{{ __('No gate is planned on this trip. Plan one before the truck reaches the border, or from the paper when it comes back.') }}</x-ui.text>
             @else
-                <x-ui.table>
+                <x-ui.table :caption="__('The border gates this trip walks, and how far each one has got')">
                     <x-slot name="head">
                         <x-ui.table.th>{{ __('Gate') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Entered') }}</x-ui.table.th>
@@ -1379,7 +1379,7 @@ new #[Title('Trip')] class extends Component
                         <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Charges') }}</x-ui.table.th>
                         @if ($this->canManageCrossings())
-                            <x-ui.table.th class="text-right">{{ __('Actions') }}</x-ui.table.th>
+                            <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                         @endif
                     </x-slot>
 
@@ -1415,7 +1415,7 @@ new #[Title('Trip')] class extends Component
                             </x-ui.table.td>
 
                             @if ($this->canManageCrossings())
-                                <x-ui.table.td class="text-right whitespace-nowrap">
+                                <x-ui.table.td numeric nowrap>
                                     @if ($crossing->status === App\Domain\Operations\BorderCrossingStatus::Planned)
                                         <x-ui.button size="xs" variant="ghost" wire:click="enterCrossing('{{ $crossing->id }}')">{{ __('At the gate') }}</x-ui.button>
                                     @endif
@@ -1595,7 +1595,7 @@ new #[Title('Trip')] class extends Component
                 @if ($this->tripCosts === [])
                     <x-ui.text>{{ __('No cost has been recorded against this trip.') }}</x-ui.text>
                 @else
-                    <x-ui.table>
+                    <x-ui.table :caption="__('Every cost recorded against this trip, and what it was paid with')">
                         <x-slot name="head">
                             <x-ui.table.th>{{ __('Date') }}</x-ui.table.th>
                             <x-ui.table.th>{{ __('Cost') }}</x-ui.table.th>
@@ -1639,7 +1639,7 @@ new #[Title('Trip')] class extends Component
                     @if ($this->chargeables === [])
                         <x-ui.text>{{ __('Nothing has been earned yet — a chargeable is built when the delivery proof is accepted (§16).') }}</x-ui.text>
                     @else
-                        <x-ui.table>
+                        <x-ui.table :caption="__('What this trip has earned and whether each chargeable can go on an invoice yet')">
                             <x-slot name="head">
                                 <x-ui.table.th>{{ __('Earned') }}</x-ui.table.th>
                                 <x-ui.table.th>{{ __('Basis') }}</x-ui.table.th>
@@ -1780,14 +1780,14 @@ new #[Title('Trip')] class extends Component
                 </form>
 
                 @if ($this->accessTokens !== [])
-                    <x-ui.table>
+                    <x-ui.table :caption="__('The driver kiosk links issued for this trip, and when each one stops working')">
                         <x-slot name="head">
                             <x-ui.table.th>{{ __('Issued') }}</x-ui.table.th>
                             <x-ui.table.th>{{ __('Scopes') }}</x-ui.table.th>
                             <x-ui.table.th>{{ __('Expires') }}</x-ui.table.th>
                             <x-ui.table.th>{{ __('Last used') }}</x-ui.table.th>
                             <x-ui.table.th>{{ __('State') }}</x-ui.table.th>
-                            <x-ui.table.th class="text-right">{{ __('Actions') }}</x-ui.table.th>
+                            <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                         </x-slot>
 
                         @foreach ($this->accessTokens as $token)
@@ -1799,7 +1799,7 @@ new #[Title('Trip')] class extends Component
                                 <x-ui.table.td>
                                     <x-ui.badge :tone="$this->tokenTone($token)">{{ $this->tokenState($token) }}</x-ui.badge>
                                 </x-ui.table.td>
-                                <x-ui.table.td class="text-right">
+                                <x-ui.table.td numeric>
                                     @if ($token->closedBecause() === null)
                                         <x-ui.button size="xs" variant="ghost" wire:click="revokeDriverLink('{{ $token->id }}')">{{ __('Revoke') }}</x-ui.button>
                                     @endif

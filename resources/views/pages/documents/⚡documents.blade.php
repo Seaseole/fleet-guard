@@ -326,7 +326,7 @@ new #[Title('Documents')] class extends Component {
                         <x-ui.table.th>{{ __('Lifecycle') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Validity') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Current copy') }}</x-ui.table.th>
-                        <x-ui.table.th class="text-right">{{ __(' ') }}</x-ui.table.th>
+                        <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                     </tr>
                 </thead>
                 <tbody>
@@ -356,13 +356,13 @@ new #[Title('Documents')] class extends Component {
                                 @if ($current === null)
                                     <x-ui.text size="xs" color="muted">{{ __('no copy on file') }}</x-ui.text>
                                 @else
-                                    <span class="font-mono text-xs">v{{ $current->version_seq }}</span>
+                                    <span class="fg-identifier text-xs">v{{ $current->version_seq }}</span>
                                     <div class="text-xs text-fg-ink-muted">
                                         {{ $current->humanSize() }} · {{ $current->virus_scan_status->label() }}
                                     </div>
                                 @endif
                             </x-ui.table.td>
-                            <x-ui.table.td class="text-right whitespace-nowrap">
+                            <x-ui.table.td numeric nowrap>
                                 @if ($current !== null)
                                     @can('download', $document)
                                         <x-ui.button
