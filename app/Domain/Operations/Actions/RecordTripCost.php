@@ -12,6 +12,7 @@ use App\Domain\Kernel\Ledger\LedgerService;
 use App\Domain\Kernel\Money\Fx;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Operations\Data\TripCostDto;
+use App\Domain\Operations\Kiosk\KioskAuthority;
 use App\Domain\Operations\Models\Trip;
 use App\Domain\Operations\Models\TripCost;
 use App\Domain\Operations\Support\TripCostRollup;
@@ -45,10 +46,14 @@ final class RecordTripCost
         private readonly ChartOfAccounts $chart,
     ) {}
 
-    public function __invoke(Trip $trip, TripCostDto $dto, ?int $actorId = null): TripCost
+    public function __invoke(Trip $trip, TripCostDto $dto, ?int $actorId = null, ?KioskAuthority $kiosk = null): TripCost
     {
-        if (! Gate::allows('expenses.create')) {
+        if ($kiosk === null && ! Gate::allows('expenses.create')) {
             throw new InvalidArgumentException('Recording a trip cost is an expense, and this seat may not raise one (§9.3).');
+        }
+
+        if ($kiosk !== null && ! $kiosk->actsOn($trip->id)) {
+            throw new InvalidArgumentException('That driver link is for another trip, so it cannot raise a cost on this one.');
         }
 
         if ($trip->costs_frozen || in_array($trip->status, [TripStatus::Cancelled, TripStatus::Aborted], true)) {

@@ -23,4 +23,15 @@ Route::middleware('web')->prefix('kiosk')->name('kiosk.')->group(function (): vo
         ->middleware(['throttle:kiosk', 'kiosk'])
         ->whereNumber('company')
         ->name('capture');
+
+    /*
+     * §15.2's 3g: the driver's fuel screen. A separate route rather than a tab on the POD page because
+     * the two are different scopes, and a link with `pod` alone must not be handed a form that can spend
+     * the fleet's money. Which page a secret opens is the dispatcher's choice at issue time, and the page
+     * itself still checks the scope before writing.
+     */
+    Route::livewire('{company}/{secret}/fuel', 'pages::kiosk.fuel')
+        ->middleware(['throttle:kiosk', 'kiosk'])
+        ->whereNumber('company')
+        ->name('fuel');
 });

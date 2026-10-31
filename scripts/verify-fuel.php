@@ -87,8 +87,9 @@ use Illuminate\Support\Str;
  * - the issue posts through Phase 2's doors — a trip cost of type `fuel` (account 5100, truck and
  *   trip dimensions) and an odometer reading whose source says where it came from — and the §6.6
  *   rollup's fuel bucket equals the cost that was posted;
- * - §10.9's machine is real: `recorded → posted` on the trail, and the states not built yet (bulk
- *   tank, kiosk) are refused **by name** rather than silently accepted;
+ * - §10.9's machine is real: `recorded → posted` on the trail, and a source the other door owns
+ *   (a kiosk issue, written by the driver's phone in slice 3g) is refused **by name** rather than
+ *   silently accepted;
  * - the slip is NOT posted to the ledger in this slice (`posted_to_ledger` false) because §6.8's
  *   payable needs Phase 5's bills — the seam is asserted, not assumed.
  *
@@ -701,7 +702,7 @@ refuses(
 );
 
 refuses(
-    'a kiosk issue is refused by the slice that will build it',
+    'the office door cannot claim a kiosk issue for itself (§9.6 two doors, one write)',
     fn () => $issue($trip, new FuelIssueDto(
         tankId: $mainTank->id,
         litresX100: 10_000,
@@ -711,7 +712,7 @@ refuses(
         source: FuelIssueSource::Kiosk,
     )),
     InvalidArgumentException::class,
-    'Phase 3d'
+    'written by the driver'
 );
 
 refuses(

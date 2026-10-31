@@ -9,6 +9,7 @@ use App\Domain\Kernel\Documents\Actions\RegisterDocument;
 use App\Domain\Kernel\Documents\Actions\UploadDocumentVersion;
 use App\Domain\Kernel\Documents\DocumentInput;
 use App\Domain\Kernel\Documents\DocumentType;
+use App\Domain\Operations\Kiosk\KioskAuthority;
 use App\Domain\Operations\Models\ProofOfDelivery;
 use App\Domain\Operations\Models\Trip;
 use App\Domain\Operations\Models\TripAccessToken;
@@ -55,7 +56,7 @@ final class CaptureProofOfDelivery
         ?string $clientUuid = null,
     ): ProofOfDelivery {
         return DB::transaction(function () use ($token, $secret, $pin, $facts, $files, $clientUuid): ProofOfDelivery {
-            $this->authorise($token, $secret, $pin);
+            KioskAuthority::verified($token, $secret, $pin, TripAccessScope::Pod);
 
             if ($clientUuid !== null && trim($clientUuid) !== '') {
                 $seen = ProofOfDelivery::query()->where('client_uuid', trim($clientUuid))->first();
@@ -137,21 +138,6 @@ final class CaptureProofOfDelivery
 
             return $pod->refresh();
         });
-    }
-
-    private function authorise(TripAccessToken $token, string $secret, string $pin): void
-    {
-        if (! $token->isLive()) {
-            throw new \InvalidArgumentException('That driver link is closed.');
-        }
-
-        if (! $token->hasScope(TripAccessScope::Pod)) {
-            throw new \InvalidArgumentException('This link does not carry the proof-of-delivery scope (§9.6).');
-        }
-
-        if (! hash_equals($token->token_hash, hash('sha256', $secret)) || ! $token->hasPinFor($pin, $secret)) {
-            throw new \InvalidArgumentException('That PIN does not match this trip.');
-        }
     }
 
     /**

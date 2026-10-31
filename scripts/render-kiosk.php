@@ -13,6 +13,9 @@ declare(strict_types=1);
  *
  * So this sweep uses two doors in order: it issues a link on the trip detail page through Livewire, reads
  * the URL the panel printed, and GETs that URL with no session at all — the shared phone in the yard.
+ * Slice 3g adds the fuel screen to the same sweep: a `fuel` link opens a form with the pump's fields and
+ * no POD form, and each narrow link landing on the other door is told so instead of being handed a form
+ * it cannot save.
  *
  * Not a test suite: `tests/` stays out of the repository (§14.6). Fixtures live in the `RKO` namespace on
  * the development database; everything created is removed and then asserted removed, including the two
@@ -27,6 +30,9 @@ use App\Domain\Fleet\Actions\CreateTrailer;
 use App\Domain\Fleet\Actions\CreateTruck;
 use App\Domain\Fleet\Data\TrailerDto;
 use App\Domain\Fleet\Data\TruckDto;
+use App\Domain\Fuel\Actions\CreateFuelTank;
+use App\Domain\Fuel\FuelTankKind;
+use App\Domain\Fuel\Models\FuelIssue;
 use App\Domain\Invoicing\Actions\CreateCustomer;
 use App\Domain\Invoicing\Data\CustomerDto;
 use App\Domain\Kernel\Documents\DocumentInput;
@@ -65,6 +71,7 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Bootstrap\HandleExceptions;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -72,6 +79,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Livewire\Livewire;
+use Livewire\Mechanisms\HandleRequests\HandleRequests;
 
 /**
  * @extends TestCase
@@ -105,8 +113,13 @@ final class KioskRenderSweep extends TestCase
         Auth::login($owner);
 
         // The kiosk sweep measures the driver's door and the office's panel; the MFA redirect belongs to
-        // render-identity and would be reported here as a broken trip screen.
-        $this->withoutMiddleware(EnsureMultiFactorAuthentication::class);
+        // render-identity and would be reported here as a broken trip screen. CSRF is skipped for the one
+        // /livewire/update POST below because it is posted without the browser's cookie jar, and the
+        // browser pass already proved the token path; what this sweep proves is the middleware gap.
+        $this->withoutMiddleware([
+            EnsureMultiFactorAuthentication::class,
+            PreventRequestForgery::class,
+        ]);
 
         $workshop = $this->staffAs($owner, RoleKey::WorkshopManager, 'render-kio-check-workshop@fleetguard.local');
         CurrentCompany::force($owner->company_id);
@@ -118,6 +131,11 @@ final class KioskRenderSweep extends TestCase
         [$tripA, $crewA] = $this->arrivedTrip('1', 230_000);
         [$tripB, $crewB] = $this->arrivedTrip('2', 240_000);
 
+        // The driver's fuel screen (slice 3g) needs a tank to show its form, so this fixture truck
+        // declares one; the trip is out and not yet decided, which is where a driver buys diesel.
+        [$tripC, $crewC] = $this->arrivedTrip('3', 250_000, 300);
+        $fuelTank = (app(CreateFuelTank::class))((int) $crewC[0]->id, FuelTankKind::Main);
+
         $driverA = $crewA[2];
         $driverB = $crewB[2];
 
@@ -126,6 +144,8 @@ final class KioskRenderSweep extends TestCase
         $issue = app(IssueTripAccessToken::class);
         $direct = $issue($tripA, (int) $driverA->id, ['pod'], (int) $owner->id);
         $directSecret = $direct['secret'];
+
+        $fuelLink = $issue($tripC, (int) $crewC[2]->id, ['fuel'], (int) $owner->id);
 
         $this->attempt('a driver phone with no session opens the page for its one trip', function () use ($directSecret): void {
             $html = (string) $this->kioskGet('/kiosk/'.$this->ownerCompany.'/'.$directSecret)->assertOk()->getContent();
@@ -243,6 +263,113 @@ final class KioskRenderSweep extends TestCase
 
             if (! str_contains($html, 'Revoke') || ! str_contains($html, 'Live')) {
                 throw new Exception('the token row disappeared with the reveal');
+            }
+        });
+
+        echo "\n== §15.2 3g the fuel link opens the fuel screen, and only that screen ==\n";
+
+        $this->attempt('a fuel link opens the driver\'s fuel screen with the pump\'s fields', function () use ($fuelLink, $tripC): void {
+            $html = (string) $this->kioskGet('/kiosk/'.$this->ownerCompany.'/'.$fuelLink['secret'].'/fuel')->assertOk()->getContent();
+
+            foreach ([
+                'Fuel on the road',
+                $tripC->trip_no,
+                'Record what the pump gave you',
+                'Litres',
+                'Price per litre',
+                'Odometer reading',
+                '6-digit PIN from the dispatcher',
+                'Record the fuel',
+            ] as $needle) {
+                if (! str_contains($html, $needle)) {
+                    throw new Exception("the fuel page is missing '{$needle}'");
+                }
+            }
+
+            if (str_contains($html, 'Send the proof')) {
+                throw new Exception('the fuel page offers the POD form its link does not carry');
+            }
+
+            foreach (['Accept the delivery', 'Send back', 'Revoke'] as $officeOnly) {
+                if (str_contains($html, $officeOnly)) {
+                    throw new Exception("the fuel page offers the office control '{$officeOnly}'");
+                }
+            }
+        });
+
+        $this->attempt('a fuel link on the POD URL is told which door it opened, not given a form', function () use ($fuelLink): void {
+            $html = (string) $this->kioskGet('/kiosk/'.$this->ownerCompany.'/'.$fuelLink['secret'])->assertOk()->getContent();
+
+            if (! str_contains($html, 'does not open proof-of-delivery')) {
+                throw new Exception('the POD page does not say the link lacks the pod scope');
+            }
+
+            if (! str_contains($html, 'Record fuel instead')) {
+                throw new Exception('the POD page does not point at the screen the link does open');
+            }
+
+            if (str_contains($html, 'Send the proof')) {
+                throw new Exception('the POD page renders its form for a fuel-only link');
+            }
+        });
+
+        $this->attempt('a pod link on the fuel URL is told the fuel scope is missing', function () use (&$reveal): void {
+            $secret = $this->secretFrom($reveal['url'] ?? '');
+            $html = (string) $this->kioskGet('/kiosk/'.$this->ownerCompany.'/'.$secret.'/fuel')->assertOk()->getContent();
+
+            if (! str_contains($html, 'does not open fuel capture')) {
+                throw new Exception('the fuel page does not name the missing scope');
+            }
+
+            if (! str_contains($html, 'Go to proof of delivery')) {
+                throw new Exception('the fuel page does not point back at the door the link opens');
+            }
+
+            if (str_contains($html, 'Record the fuel')) {
+                throw new Exception('the fuel page renders its form for a pod-only link');
+            }
+        });
+
+        /*
+         * The page controls submit to `/livewire/update`, a route the `kiosk` middleware does not guard —
+         * so the company context and the token attribute the GET established are gone by the first save.
+         * Before the component held its own link and re-redeemed it, every submit died with
+         * `MissingCompanyContext` (a 500 the browser found; `Livewire::test` would not). This sends the
+         * snapshot the page printed back to the real endpoint with no session, exactly as the phone does.
+         */
+        $this->attempt('a submit with no session re-opens the page\'s own link instead of dying in the update', function () use ($fuelLink, $fuelTank, $tripC): void {
+            $html = (string) $this->kioskGet('/kiosk/'.$this->ownerCompany.'/'.$fuelLink['secret'].'/fuel')->assertOk()->getContent();
+
+            if (preg_match('/wire:snapshot="([^"]+)"/', $html, $match) !== 1) {
+                throw new Exception('the fuel page carries no Livewire snapshot to submit');
+            }
+
+            $before = FuelIssue::query()->where('trip_id', $tripC->id)->count();
+
+            $response = $this->kioskPostJson(
+                '/'.ltrim(app(HandleRequests::class)->getUpdateUri(), '/'),
+                ['components' => [[
+                    'snapshot' => html_entity_decode($match[1], ENT_QUOTES),
+                    'updates' => [
+                        'tankId' => (string) $fuelTank->id,
+                        'stationId' => '',
+                        'litres' => '50',
+                        'price' => '19.75',
+                        'odometer' => '300600',
+                        'invoiceNo' => '',
+                        'note' => '',
+                        'pin' => '000000',
+                    ],
+                    'calls' => [['path' => '', 'method' => 'save', 'params' => []]],
+                ]]],
+            )->assertOk();
+
+            if (! str_contains((string) $response->getContent(), 'That PIN does not match this trip.')) {
+                throw new Exception('the update did not reach the Action\'s PIN refusal: '.substr((string) $response->getContent(), 0, 400));
+            }
+
+            if (FuelIssue::query()->where('trip_id', $tripC->id)->count() !== $before) {
+                throw new Exception('a refused submit wrote a fuel issue');
             }
         });
 
@@ -408,7 +535,7 @@ final class KioskRenderSweep extends TestCase
      *
      * @return array{0: Trip, 1: array{0: mixed, 1: mixed, 2: mixed}}
      */
-    private function arrivedTrip(string $suffix, int $odometer): array
+    private function arrivedTrip(string $suffix, int $odometer, ?int $mainTankLitres = null): array
     {
         $customer = DB::table('customers')->where('code', 'RKO-CUST')->first();
 
@@ -440,6 +567,7 @@ final class KioskRenderSweep extends TestCase
             make: 'Probe',
             model: 'Kiosk render',
             odometerKm: $odometer,
+            mainTankLitres: $mainTankLitres,
         ));
 
         $trailer = (app(CreateTrailer::class))(new TrailerDto(registrationNo: 'T 7'.$suffix.' RKO', type: 'flatbed', capacityTonnes: 30.0));
@@ -519,6 +647,24 @@ final class KioskRenderSweep extends TestCase
 
         try {
             $response = $this->get($path);
+        } finally {
+            if ($this->owner !== null) {
+                Auth::login($this->owner);
+            }
+
+            CurrentCompany::force($this->ownerCompany ?? 1);
+        }
+
+        return $response;
+    }
+
+    /** The same no-session door, for the Livewire update the page's own controls post to. */
+    private function kioskPostJson(string $path, array $payload): TestResponse
+    {
+        Auth::logout();
+
+        try {
+            $response = $this->withHeaders(['X-Livewire' => 'true'])->postJson($path, $payload);
         } finally {
             if ($this->owner !== null) {
                 Auth::login($this->owner);
@@ -645,6 +791,9 @@ final class KioskRenderSweep extends TestCase
         $this->deleteIn('vehicle_assignments', 'driver_id', $driverIds);
         $this->deleteIn('odometer_readings', 'truck_id', $truckIds);
         $this->deleteIn('odometer_readings', 'trip_id', $tripIds);
+        // The fuel screen's fixtures: a tank fitted to a truck and nothing else — this sweep reads the
+        // form and never submits, so no issue, slip or journal entry is written.
+        $this->deleteIn('fuel_tanks', 'truck_id', $truckIds);
 
         $this->deleteIn('document_versions', 'document_id', $docIds);
         $this->deleteIn('proof_of_deliveries', 'trip_id', $tripIds);

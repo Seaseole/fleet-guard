@@ -17,6 +17,7 @@ use App\Domain\Kernel\Ledger\Data\Side;
 use App\Domain\Kernel\Ledger\LedgerService;
 use App\Domain\Kernel\Money\Fx;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
+use App\Domain\Operations\Kiosk\KioskAuthority;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -46,9 +47,9 @@ final class CreateFuelPurchase
         private readonly ChartOfAccounts $chart,
     ) {}
 
-    public function __invoke(FuelPurchaseDto $dto, ?int $actorId = null): FuelPurchase
+    public function __invoke(FuelPurchaseDto $dto, ?int $actorId = null, ?KioskAuthority $kiosk = null): FuelPurchase
     {
-        if (! Gate::allows('fuel.record')) {
+        if ($kiosk === null && ! Gate::allows('fuel.record')) {
             throw new InvalidArgumentException('Recording a fuel purchase is workshop recording (§9.3).');
         }
 

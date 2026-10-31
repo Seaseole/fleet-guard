@@ -15,12 +15,14 @@ use App\Domain\Fuel\Models\BulkTank;
 use App\Domain\Fuel\Models\FuelIssue;
 use App\Domain\Fuel\Models\FuelPurchase;
 use App\Domain\Fuel\Models\FuelTank;
+use App\Domain\Kernel\Audit\ActorKind;
 use App\Domain\Kernel\Money\Fx;
 use App\Domain\Kernel\Money\FxRateSource;
 use App\Domain\Kernel\Money\Money;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Operations\Actions\RecordTripCost;
 use App\Domain\Operations\Data\TripCostDto;
+use App\Domain\Operations\Kiosk\KioskAuthority;
 use App\Domain\Operations\Models\Trip;
 use App\Domain\Operations\TripCostPayment;
 use App\Domain\Operations\TripCostType;
@@ -49,8 +51,12 @@ use InvalidArgumentException;
  * negative, because a tank that owes litres is not a number anybody can reconcile.
  *
  * Above everything, the issue is **on a trip**: §4.3 allows a null `trip_id` for stock consumed off a
- * trip, but account 5100 requires the trip dimension (§6.1), so this door still demands one. The
- * kiosk source arrives with its own screen in slice 3d and is refused by name until then.
+ * trip, but account 5100 requires the trip dimension (§6.1), so this door still demands one.
+ *
+ * **Two doors, one write.** A person holding `fuel.record` records an issue from the trip panel; a
+ * driver's phone holds a verified {@see KioskAuthority} instead and the source must say `kiosk`, so
+ * the register can always tell which door a litre came through. The token is bound to this trip and
+ * names itself on the row, which is what §9.6's "attribution survives the shared phone" asks for.
  */
 final class RecordFuelIssue
 {
@@ -59,11 +65,13 @@ final class RecordFuelIssue
         private readonly RecordOdometerReading $recordOdometer,
     ) {}
 
-    public function __invoke(Trip $trip, FuelIssueDto $dto, ?int $actorId = null): FuelIssue
+    public function __invoke(Trip $trip, FuelIssueDto $dto, ?int $actorId = null, ?KioskAuthority $kiosk = null): FuelIssue
     {
-        if (! Gate::allows('fuel.record')) {
+        if ($kiosk === null && ! Gate::allows('fuel.record')) {
             throw new InvalidArgumentException('Issuing fuel is workshop recording (§9.3).');
         }
+
+        $this->assertSourceMatchesTheDoor($trip, $dto, $kiosk);
 
         if ($dto->sourceUuid !== null && $dto->sourceUuid !== '') {
             $existing = FuelIssue::query()->where('source_uuid', $dto->sourceUuid)->first();
@@ -72,8 +80,6 @@ final class RecordFuelIssue
                 return $existing;
             }
         }
-
-        $this->assertSourceIsBuilt($dto->source);
 
         $truckId = $trip->truck_id ?? throw new InvalidArgumentException(sprintf(
             'Trip %s has no truck, so there is no tank to fill. Plan the trip first (§10.2).',
@@ -92,7 +98,7 @@ final class RecordFuelIssue
 
         $baseCurrency = CurrentCompany::model()->base_currency_code;
 
-        return DB::transaction(function () use ($trip, $truckId, $tank, $dto, $actorId, $baseCurrency): FuelIssue {
+        return DB::transaction(function () use ($trip, $truckId, $tank, $dto, $actorId, $kiosk, $baseCurrency): FuelIssue {
             $purchase = null;
             $bulkTank = null;
 
@@ -180,6 +186,7 @@ final class RecordFuelIssue
                 'status' => FuelIssueStatus::Recorded,
                 'exception_reason' => $this->exceptionReason($dto, $tank),
                 'source_uuid' => $dto->sourceUuid === '' ? null : $dto->sourceUuid,
+                'trip_access_token_id' => $kiosk?->tokenId(),
                 'recorded_by' => $actorId,
             ]);
 
@@ -202,7 +209,7 @@ final class RecordFuelIssue
                 description: $this->description($tank, $purchase, $bulkTank, $dto),
                 sourceType: 'fuel_issue',
                 sourceId: $issue->id,
-            ), $actorId);
+            ), $actorId, $kiosk);
 
             if ($bulkTank !== null) {
                 // The stock falls by exactly the money the ledger just credited to 1180, so the
@@ -223,16 +230,41 @@ final class RecordFuelIssue
                 'trip_cost_id' => $cost->id,
             ])->save();
 
-            $issue->moveTo(FuelIssueStatus::Posted);
+            $issue->moveTo(
+                FuelIssueStatus::Posted,
+                null,
+                $kiosk === null ? [] : ['trip_access_token_id' => $kiosk->tokenId(), 'kiosk_scope' => $kiosk->scope->value],
+                $kiosk === null ? ActorKind::User : ActorKind::Kiosk,
+            );
 
             return $issue->refresh();
         }, 3);
     }
 
-    private function assertSourceIsBuilt(FuelIssueSource $source): void
+    /**
+     * The source column and the door that wrote the row must agree.
+     *
+     * `kiosk` means a driver's phone wrote it, so an office seat cannot claim it and a token cannot
+     * pass off a pump-card issue as its own; `pump_card` and `bulk_tank` are the office's, so a
+     * driver's link may not use them either. Saying so here keeps the register's `source` a fact
+     * about provenance rather than a value a caller picked.
+     */
+    private function assertSourceMatchesTheDoor(Trip $trip, FuelIssueDto $dto, ?KioskAuthority $kiosk): void
     {
-        if ($source === FuelIssueSource::Kiosk) {
-            throw new InvalidArgumentException('Fuel captured at the kiosk arrives with the driver\'s fuel screen (Phase 3d). Record it on the office fuel panel until then.');
+        if ($dto->source === FuelIssueSource::Kiosk && $kiosk === null) {
+            throw new InvalidArgumentException('A kiosk issue is written by the driver\'s fuel screen (§9.6). The office panel records the slips it can name.');
+        }
+
+        if ($kiosk === null) {
+            return;
+        }
+
+        if (! $kiosk->actsOn($trip->id)) {
+            throw new InvalidArgumentException('That driver link is for another trip, so it cannot issue fuel on this one.');
+        }
+
+        if ($dto->source !== FuelIssueSource::Kiosk) {
+            throw new InvalidArgumentException('A driver link may only record fuel it captured at the kiosk.');
         }
     }
 

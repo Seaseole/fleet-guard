@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace App\Domain\Fuel;
 
+use App\Domain\Operations\Kiosk\KioskAuthority;
+
 /**
  * §4.3 FUEL_ISSUE `source` — where the fuel came from.
  *
  * `bulk_tank` is a real source from slice 3b: the issue names the yard tank it drew from, its cost is
  * the tank's moving average at that moment, and the journal credits `1180 Bulk fuel stock` rather
- * than a cash or payable account. `kiosk` is still only vocabulary — the driver's screen arrives with
- * slice 3d, and the Action refuses it by name until then.
+ * than a cash or payable account. `kiosk` is a real source from slice 3g: the driver's phone records
+ * the slip they paid for and the issue that drains it in one act, and only a verified
+ * {@see KioskAuthority} may write it.
  */
 enum FuelIssueSource: string
 {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Domain\Kernel\Documents\DocumentInput;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Operations\Actions\CaptureProofOfDelivery;
+use App\Domain\Operations\Actions\RedeemKioskToken;
 use App\Domain\Operations\Models\ProofOfDelivery;
 use App\Domain\Operations\Models\Trip;
 use App\Domain\Operations\Models\TripAccessToken;
@@ -13,6 +14,7 @@ use App\Domain\Operations\TripAccessScope;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -57,9 +59,25 @@ new #[Layout('layouts::auth')] #[Title('Proof of delivery')] class extends Compo
 
     public bool $done = false;
 
+    /**
+     * The page's own link, held so a Livewire update can re-open it.
+     *
+     * `/livewire/update` does not run the `kiosk` route middleware, so the request attributes and the
+     * company context the initial GET established are gone by the first submit. The token is not a
+     * secret beyond the URL that already carries it, and the snapshot is signed; these two values let
+     * {@see token()} redeem the same link again on every update.
+     */
+    #[Locked]
+    public string $companyId = '';
+
+    #[Locked]
+    public string $secretKey = '';
+
     public function mount(): void
     {
         $this->clientUuid = (string) Str::uuid();
+        $this->companyId = (string) request()->route('company');
+        $this->secretKey = (string) request()->route('secret');
 
         if ($this->existingCapture() !== null) {
             $this->done = true;
@@ -68,6 +86,15 @@ new #[Layout('layouts::auth')] #[Title('Proof of delivery')] class extends Compo
 
     public function save(CaptureProofOfDelivery $capture): void
     {
+        // Resolved first: on an update this is what re-opens the link the GET established.
+        $token = $this->token();
+
+        if ($token === null || ! $token->hasScope(TripAccessScope::Pod)) {
+            $this->addError('form', __('This link does not open proof-of-delivery capture.'));
+
+            return;
+        }
+
         $this->validate([
             'receiverName' => ['required', 'string', 'max:120'],
             'quantityTonnes' => ['required', 'numeric', 'gt:0', 'lt:100000'],
@@ -77,14 +104,6 @@ new #[Layout('layouts::auth')] #[Title('Proof of delivery')] class extends Compo
             'photo' => ['required', 'file', 'max:15728', 'mimes:jpg,jpeg,png,webp'],
             'signatureData' => ['required', 'string', 'min:80'],
         ]);
-
-        $token = $this->token();
-
-        if ($token === null || ! $token->hasScope(TripAccessScope::Pod)) {
-            $this->addError('form', __('This link does not open proof-of-delivery capture.'));
-
-            return;
-        }
 
         $files = [];
 
@@ -132,6 +151,31 @@ new #[Layout('layouts::auth')] #[Title('Proof of delivery')] class extends Compo
         return $this->token()?->trip;
     }
 
+    /**
+     * Whether this page's own door is open.
+     *
+     * The link is opened by the middleware as long as it is live, so a token issued for `fuel` alone can
+     * still land here by typing the URL. Rendering the POD form to it would offer a capture the Action
+     * refuses one field at a time; asking up front lets the page point at the screen the link does open.
+     */
+    public function opensPod(): bool
+    {
+        return $this->token()?->hasScope(TripAccessScope::Pod) ?? false;
+    }
+
+    public function opensFuel(): bool
+    {
+        return $this->token()?->hasScope(TripAccessScope::Fuel) ?? false;
+    }
+
+    public function fuelUrl(): string
+    {
+        return route('kiosk.fuel', [
+            'company' => CurrentCompany::id(),
+            'secret' => $this->secret(),
+        ]);
+    }
+
     public function podStatusLine(): string
     {
         $pod = $this->existingCapture();
@@ -159,7 +203,26 @@ new #[Layout('layouts::auth')] #[Title('Proof of delivery')] class extends Compo
     {
         $token = request()->attributes->get('kioskToken');
 
-        return $token instanceof TripAccessToken ? $token : null;
+        if ($token instanceof TripAccessToken) {
+            return $token;
+        }
+
+        if ($this->companyId === '' || $this->secretKey === '') {
+            return null;
+        }
+
+        try {
+            $token = app(RedeemKioskToken::class)->fromSecret((int) $this->companyId, $this->secretKey, (string) request()->ip());
+        } catch (\InvalidArgumentException) {
+            return null;
+        }
+
+        // The rest of this request (render included) reads the token through the same attribute the
+        // route middleware sets, so the link is redeemed once per update, not once per property read.
+        request()->attributes->set('kioskToken', $token);
+        request()->attributes->set('kioskSecret', $this->secretKey);
+
+        return $token;
     }
 
     private function secret(): string
@@ -221,13 +284,33 @@ new #[Layout('layouts::auth')] #[Title('Proof of delivery')] class extends Compo
         <x-ui.alert tone="danger" :title="__('This link is closed')">
             {{ __('Ask the dispatcher for a new one.') }}
         </x-ui.alert>
+    @elseif (! $this->opensPod())
+        <x-ui.alert tone="warning" :title="__('This link does not open proof-of-delivery capture')">
+            {{ __('The dispatcher chooses what a driver link may capture. Ask for one that names proof of delivery.') }}
+        </x-ui.alert>
+
+        @if ($this->opensFuel())
+            <x-ui.button variant="outline" :href="$this->fuelUrl()">
+                {{ __('Record fuel instead') }}
+            </x-ui.button>
+        @endif
     @elseif ($done)
         <x-ui.alert tone="success" :title="__('Sent')">
             {{ __('The office approves the delivery — :status.', ['status' => $this->podStatusLine()]) }}
         </x-ui.alert>
 
         <x-ui.button variant="outline" wire:click="$refresh">{{ __('Check again') }}</x-ui.button>
+
+        @if ($this->opensFuel())
+            <x-ui.button variant="ghost" size="sm" :href="$this->fuelUrl()">{{ __('Record fuel') }}</x-ui.button>
+        @endif
     @else
+        @if ($this->opensFuel())
+            <div class="flex justify-end">
+                <x-ui.button variant="ghost" size="sm" :href="$this->fuelUrl()">{{ __('Record fuel') }}</x-ui.button>
+            </div>
+        @endif
+
         <form class="grid gap-4" wire:submit="save">
             <x-ui.input name="receiverName" wire:model="receiverName" :label="__('Who received it?')" required />
 

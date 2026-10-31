@@ -6,6 +6,16 @@ use App\Domain\Fleet\Actions\CreateTrailer;
 use App\Domain\Fleet\Actions\CreateTruck;
 use App\Domain\Fleet\Data\TrailerDto;
 use App\Domain\Fleet\Data\TruckDto;
+use App\Domain\Fuel\Actions\CreateFuelStation;
+use App\Domain\Fuel\Actions\CreateFuelTank;
+use App\Domain\Fuel\Actions\RecordFuelIssue;
+use App\Domain\Fuel\Actions\RecordKioskFuelIssue;
+use App\Domain\Fuel\Data\FuelIssueDto;
+use App\Domain\Fuel\Data\KioskFuelDto;
+use App\Domain\Fuel\FuelIssueSource;
+use App\Domain\Fuel\FuelIssueStatus;
+use App\Domain\Fuel\FuelTankKind;
+use App\Domain\Fuel\Models\FuelIssue;
 use App\Domain\Invoicing\Actions\CreateCustomer;
 use App\Domain\Invoicing\Data\CustomerDto;
 use App\Domain\Kernel\Audit\ActorKind;
@@ -13,6 +23,8 @@ use App\Domain\Kernel\Documents\DocumentInput;
 use App\Domain\Kernel\Documents\DocumentStore;
 use App\Domain\Kernel\Documents\DocumentType;
 use App\Domain\Kernel\Documents\Models\Document;
+use App\Domain\Kernel\Ledger\ChartOfAccounts;
+use App\Domain\Kernel\Ledger\Models\LedgerBarrier;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Operations\Actions\AcceptJob;
 use App\Domain\Operations\Actions\AdvanceTrip;
@@ -34,12 +46,17 @@ use App\Domain\Operations\Data\JobQuoteDto;
 use App\Domain\Operations\Data\RouteDto;
 use App\Domain\Operations\Data\TripDto;
 use App\Domain\Operations\Exceptions\KioskScopeUnavailable;
+use App\Domain\Operations\Kiosk\KioskAuthority;
 use App\Domain\Operations\Models\Job;
 use App\Domain\Operations\Models\ProofOfDelivery;
 use App\Domain\Operations\Models\Trip;
 use App\Domain\Operations\Models\TripAccessToken;
+use App\Domain\Operations\Models\TripCost;
 use App\Domain\Operations\PodStatus;
 use App\Domain\Operations\RouteRateType;
+use App\Domain\Operations\TripAccessScope;
+use App\Domain\Operations\TripCostPayment;
+use App\Domain\Operations\TripCostType;
 use App\Domain\Operations\TripStatus;
 use App\Domain\People\Actions\CreateDriver;
 use App\Domain\People\Actions\CreateEmployee;
@@ -68,6 +85,12 @@ use Illuminate\Support\Str;
  * - §10.2 *"a driver may never transition to delivered"* — the capture reaches `pod_pending` and the
  *   office's approval, not the driver's, reaches `delivered`;
  * - §9.6's offline retry — the same `client_uuid` twice is one delivery note, not two.
+ *
+ * Phase 3's slice 3g adds the driver's fuel screen to the same file: a `fuel` link records the slip
+ * the driver paid for, issues its litres onto the trip, posts the 5100 cost against petty cash and
+ * moves the odometer — one transaction, through the Actions the office uses — with the token named on
+ * the issue row and on its trail. The refusals that matter are the narrow scope, the trip binding and
+ * the wrong tank; the retry that matters is the same `client_uuid`.
  *
  * It writes to the development database on the live MySQL 9.1 instance (docs/DEV-DATABASE.md) inside the
  * `KIO` fixture namespace, removes everything it created including the uploaded bytes, and asserts that
@@ -99,6 +122,39 @@ function wipeIds(string $table, string $column, array $ids): int
     return DB::table($table)->whereIn($column, $ids)->delete();
 }
 
+/**
+ * The §6.3 barrier refuses deletes on the ledger; a fixture must lift it for its own entries only.
+ *
+ * @param  list<string>  $costIds
+ * @return list<string>
+ */
+function kioskCostJournalEntries(array $costIds): array
+{
+    if ($costIds === []) {
+        return [];
+    }
+
+    return DB::table('gl_journal_entries')
+        ->where('source_type', 'trip_cost')
+        ->whereIn('source_id', array_map('strval', $costIds))
+        ->pluck('id')
+        ->all();
+}
+
+/** @param list<string> $entryIds */
+function purgeKioskJournalEntries(array $entryIds): void
+{
+    if ($entryIds === []) {
+        return;
+    }
+
+    LedgerBarrier::withLiftedGuard('verify-kiosk: clear a run\'s fuel cost entries', null, function () use ($entryIds): void {
+        DB::table('gl_journal_lines')->whereIn('entry_id', $entryIds)->delete();
+        DB::table('gl_journal_entries')->whereIn('id', $entryIds)->whereNotNull('reverses_entry_id')->delete();
+        DB::table('gl_journal_entries')->whereIn('id', $entryIds)->delete();
+    });
+}
+
 /*
  * Pre-clean: a run that died halfway leaves a trip at `pod_pending` with a live token, and the next run
  * would report a fixture token as a product finding.
@@ -117,6 +173,14 @@ $kioDocIds = array_values(array_unique(array_merge($kioDocIds, DB::table('docume
 $kioTruckIds = DB::table('trucks')->where('registration_no', 'like', '%KIO')->pluck('id')->all();
 $kioEmployeeIds = DB::table('employees')->where('employee_no', 'like', 'EMP-KIO%')->pluck('id')->all();
 $kioDriverIds = $kioEmployeeIds === [] ? [] : DB::table('drivers')->whereIn('employee_id', $kioEmployeeIds)->pluck('id')->all();
+$kioCostIds = $kioTripIds === [] ? [] : DB::table('trip_costs')->whereIn('trip_id', $kioTripIds)->pluck('id')->all();
+$kioIssueIds = $kioTripIds === [] ? [] : DB::table('fuel_issues')->whereIn('trip_id', $kioTripIds)->pluck('id')->all();
+$kioPurchaseIds = array_values(array_unique(array_merge(
+    DB::table('fuel_purchases')->where('invoice_no', 'like', 'KIO-%')->pluck('id')->all(),
+    $kioIssueIds === [] ? [] : DB::table('fuel_issues')->whereIn('id', $kioIssueIds)->whereNotNull('purchase_id')->pluck('purchase_id')->all(),
+)));
+
+purgeKioskJournalEntries(kioskCostJournalEntries($kioCostIds));
 
 foreach ($kioDocIds as $docId) {
     $paths = DB::table('document_versions')->where('document_id', $docId)->pluck('path')->all();
@@ -134,6 +198,11 @@ wipeIds('odometer_readings', 'trip_id', $kioTripIds);
 
 wipeIds('document_versions', 'document_id', $kioDocIds);
 wipeIds('proof_of_deliveries', 'trip_id', $kioTripIds);
+wipeIds('fuel_issues', 'id', $kioIssueIds);
+wipeIds('fuel_purchases', 'id', $kioPurchaseIds);
+wipeIds('trip_costs', 'trip_id', $kioTripIds);
+DB::table('fuel_tanks')->whereIn('truck_id', $kioTruckIds ?: [0])->delete();
+DB::table('fuel_stations')->where('name', 'like', 'KIO %')->delete();
 wipeIds('trip_access_tokens', 'trip_id', $kioTripIds);
 wipeIds('loads', 'trip_id', $kioTripIds);
 wipeIds('operational_events', 'aggregate_id', $kioTripIds);
@@ -166,6 +235,28 @@ $alignCounters = static function (string $when): void {
             ->where('company_id', 1)
             ->where('scope', $scope)
             ->update(['next_value' => $highest + 1, 'updated_at' => now()]);
+    }
+
+    // This run posts fuel costs and purges their entries, so the journal counter must follow the
+    // surviving rows: left ahead, the next post collides on a number nobody ever kept.
+    $journal = DB::table('number_sequences')
+        ->where('company_id', 1)
+        ->where('scope', 'journal_entry')
+        ->first();
+
+    if ($journal !== null) {
+        $prefix = 'JV-'.$journal->period_key.'-';
+
+        $highestEntry = DB::table('gl_journal_entries')
+            ->where('company_id', 1)
+            ->where('entry_no', 'like', $prefix.'%')
+            ->pluck('entry_no')
+            ->map(static fn (string $number): int => (int) substr($number, strlen($prefix)))
+            ->max() ?? 0;
+
+        DB::table('number_sequences')
+            ->where('id', $journal->id)
+            ->update(['next_value' => $highestEntry + 1, 'updated_at' => now()]);
     }
 
     echo "  counters aligned to the surviving rows ({$when})\n";
@@ -232,6 +323,7 @@ CurrentCompany::force(1);
 $created = [
     'truck_ids' => [], 'trailer_ids' => [], 'employee_ids' => [], 'driver_ids' => [],
     'job_ids' => [], 'trip_ids' => [], 'token_ids' => [], 'pod_ids' => [], 'document_ids' => [],
+    'tank_ids' => [], 'station_ids' => [], 'issue_ids' => [], 'cost_ids' => [], 'purchase_ids' => [],
 ];
 
 /* ------------------------------------------------------------------------- */
@@ -285,6 +377,24 @@ if ($kioskRoute !== null) {
 check((int) config('fleet.kiosk.pin_attempts_per_minute') > 0, 'the PIN attempt budget is a configured number (fleet.kiosk.pin_attempts_per_minute)');
 check((int) config('fleet.kiosk.ttl_hours_after_trip_end') > 0, 'and so is the grace after the trip ends (fleet.kiosk.ttl_hours_after_trip_end)');
 
+$fuelRoute = Route::getRoutes()->getByName('kiosk.fuel');
+
+check($fuelRoute !== null, 'the driver fuel screen has its own route (§15.2 3g)');
+
+if ($fuelRoute !== null) {
+    check(str_contains($fuelRoute->uri(), '{company}') && str_contains($fuelRoute->uri(), '{secret}'), '...with the company and the secret in the path, same as the POD door');
+    check(in_array('throttle:kiosk', $fuelRoute->middleware(), true) && in_array('kiosk', $fuelRoute->middleware(), true), '...behind the same attempt throttle and tenant middleware');
+    check(! in_array('auth', $fuelRoute->middleware(), true), '...and no auth middleware: a driver has no account (ADR-0006)');
+}
+
+/* ------------------------------------------------------------------------- */
+echo "\n== §4.3 the fuel issue row names the phone that wrote it (§15.2 3g) ==\n";
+
+$issueDdl = (string) ((array) DB::select('show create table fuel_issues')[0])['Create Table'];
+
+check(str_contains($issueDdl, 'fuel_issues_trip_access_token_fk'), 'a kiosk issue points at the token row that wrote it');
+check(str_contains($issueDdl, 'fuel_issues_kiosk_names_its_token'), '...and the CHECK pairs `source = kiosk` with a named token in both directions');
+
 /* ------------------------------------------------------------------------- */
 echo "\n== fixtures: job → trip → assigned → in_transit → arrived ==\n";
 
@@ -305,7 +415,7 @@ $baseCurrency = CurrentCompany::model()->base_currency_code;
  *
  * @return array{0: Trip, 1: array{0: mixed, 1: mixed, 2: mixed}}
  */
-$arrivedTrip = static function (string $suffix, int $odometer) use (&$created, $customer, $route, $baseCurrency): array {
+$arrivedTrip = static function (string $suffix, int $odometer, ?int $mainTankLitres = null) use (&$created, $customer, $route, $baseCurrency): array {
     $truck = (app(CreateTruck::class))(new TruckDto(
         registrationNo: 'B 8'.$suffix.' KIO',
         fleetNo: 'T-KIO'.$suffix,
@@ -313,6 +423,7 @@ $arrivedTrip = static function (string $suffix, int $odometer) use (&$created, $
         make: 'Probe',
         model: 'Kiosk',
         odometerKm: $odometer,
+        mainTankLitres: $mainTankLitres,
     ));
     $created['truck_ids'][] = $truck->id;
 
@@ -382,7 +493,7 @@ echo "\n== §9.6 issuing a token: hashes out, plain values once ==\n";
 $issue = app(IssueTripAccessToken::class);
 
 refuses('a token with no scopes is refused', fn () => $issue($trip, (int) $driver->id, [], 1), KioskScopeUnavailable::class, 'opens nothing');
-refuses('a scope this build cannot honour is refused at issue time', fn () => $issue($trip, (int) $driver->id, ['fuel'], 1), KioskScopeUnavailable::class, 'not captured through the kiosk yet');
+refuses('a scope this build cannot honour is refused at issue time', fn () => $issue($trip, (int) $driver->id, ['odometer'], 1), KioskScopeUnavailable::class, 'not captured through the kiosk yet');
 
 $otherDriverId = (int) DB::table('drivers')->where('company_id', 1)->where('id', '<>', $driver->id)->value('id');
 refuses('a token for somebody other than the trip\'s driver is refused', fn () => $issue($trip, $otherDriverId, ['pod'], 1), InvalidArgumentException::class, 'crewed by driver');
@@ -607,7 +718,7 @@ refuses(
 /* ------------------------------------------------------------------------- */
 echo "\n== §4.1 rejection sends the paper back, not the truck ==\n";
 
-[$tripB, $crewB] = $arrivedTrip('2', 210_000);
+[$tripB, $crewB] = $arrivedTrip('2', 210_000, 250);
 $driverB = $crewB[2];
 
 $tripB = (app(AdvanceTrip::class))($tripB, TripStatus::Arrived, 1);
@@ -644,6 +755,152 @@ check(DB::table('proof_of_deliveries')->where('trip_id', $tripB->id)->count() ==
 
 $approvedB = (app(ApprovePod::class))($resubmitted->fresh(), 1);
 check($approvedB->status === PodStatus::Approved && $tripB->fresh()->status === TripStatus::Delivered, 'the replacement is approved and the trip delivered');
+
+/* ------------------------------------------------------------------------- */
+echo "\n== §15.2 3g the driver's fuel screen: one slip, one issue, one cost ==\n";
+
+[$tripC, $crewC] = $arrivedTrip('3', 300_000, 300);
+$truckC = $crewC[0];
+$driverC = $crewC[2];
+
+$mainTank = (app(CreateFuelTank::class))($truckC->id, FuelTankKind::Main);
+$created['tank_ids'][] = $mainTank->id;
+
+$pump = (app(CreateFuelStation::class))('KIO Pump Gaborone', 'Gaborone');
+$created['station_ids'][] = $pump->id;
+
+// A tank on another truck, so the "fuel goes into this trip's own truck" refusal has something to
+// name — the other truck's capacity was declared when the second fixture was built.
+$otherTank = (app(CreateFuelTank::class))($crewB[0]->id, FuelTankKind::Main);
+$created['tank_ids'][] = $otherTank->id;
+
+$fuelToken = $issue($tripC, (int) $driverC->id, ['fuel'], 1);
+$created['token_ids'][] = $fuelToken['token']->id;
+
+check($fuelToken['token']->hasScope(TripAccessScope::Fuel), 'a link issued for the fuel screen carries the fuel scope (§15.2 3g)');
+check(! $fuelToken['token']->hasScope(TripAccessScope::Pod), '...and only that scope: the dispatcher chose the narrow door');
+
+$recordFuel = app(RecordKioskFuelIssue::class);
+
+// 250.00 L at BWP 19.75 = BWP 4 937.50 → 493 750 minor units.
+$dto = static fn (?int $tankId = null): KioskFuelDto => new KioskFuelDto(
+    tankId: $tankId ?? $mainTank->id,
+    litresX100: 25_000,
+    pricePerLitreMinor: 1_975,
+    odometerKm: 300_500,
+    occurredOn: Carbon::now(),
+    stationId: $pump->id,
+    invoiceNo: 'KIO-CASH-1',
+    note: 'KIO cash slip',
+);
+
+refuses(
+    'the wrong PIN is refused at the fuel door',
+    fn () => $recordFuel($fuelToken['token'], $fuelToken['secret'], $fuelToken['pin'] === '000000' ? '111111' : '000000', $dto(), (string) Str::uuid()),
+    InvalidArgumentException::class,
+    'PIN'
+);
+
+$podOnly = $issue($tripC, (int) $driverC->id, ['pod'], 1);
+$created['token_ids'][] = $podOnly['token']->id;
+
+refuses(
+    'a pod-only link cannot reach the fuel screen — scopes are narrow (§9.6)',
+    fn () => $recordFuel($podOnly['token'], $podOnly['secret'], $podOnly['pin'], $dto(), (string) Str::uuid()),
+    InvalidArgumentException::class,
+    'does not carry the fuel'
+);
+
+$wrongTankUuid = (string) Str::uuid();
+
+refuses(
+    'another truck\'s tank is refused',
+    fn () => $recordFuel($fuelToken['token'], $fuelToken['secret'], $fuelToken['pin'], $dto($otherTank->id), $wrongTankUuid),
+    InvalidArgumentException::class,
+    'not an active tank'
+);
+
+check((int) DB::table('fuel_purchases')->where('source_uuid', $wrongTankUuid)->count() === 0, '...and the slip that attempt wrote is rolled back with the issue');
+
+$clientUuid = (string) Str::uuid();
+$kioskIssue = $recordFuel($fuelToken['token'], $fuelToken['secret'], $fuelToken['pin'], $dto(), $clientUuid);
+$created['issue_ids'][] = $kioskIssue->id;
+$created['cost_ids'][] = $kioskIssue->trip_cost_id;
+$created['purchase_ids'][] = $kioskIssue->purchase_id;
+
+check($kioskIssue->source === FuelIssueSource::Kiosk, 'the issue says it was written at the kiosk');
+check($kioskIssue->status === FuelIssueStatus::Posted, '...and posted the cost rather than waiting for the office');
+check($kioskIssue->trip_access_token_id === $fuelToken['token']->id, '...naming the token row — attribution survives the shared phone (§9.6)');
+check($kioskIssue->recorded_by === null, '...with no user recorded, because a driver has no account (ADR-0006)');
+
+$purchase = DB::table('fuel_purchases')->where('id', $kioskIssue->purchase_id)->first();
+
+check($purchase !== null && (int) $purchase->litres === 25_000 && (int) $purchase->price_per_litre_minor === 1_975, 'the slip is recorded at the litres and price on the driver\'s receipt');
+check($purchase !== null && (int) $purchase->amount === 493_750, '...its amount is litres × price: BWP 4 937.50');
+check($purchase !== null && (bool) $purchase->posted_to_ledger === false, '...and the slip is not posted as a payable — the issue carries the money (§6.8)');
+
+$cost = TripCost::query()->findOrFail($kioskIssue->trip_cost_id);
+
+check($cost->cost_type === TripCostType::Fuel, 'the issue raised a trip cost of type fuel');
+check($cost->paid_with === TripCostPayment::PettyCash, '...settled as petty cash, because the driver paid at the pump');
+check($cost->base_amount === 493_750, '...for the slip\'s own figure, to the minor unit');
+
+$entry = DB::table('gl_journal_entries')->where('source_type', 'trip_cost')->where('source_id', $cost->id)->first();
+
+check($entry !== null, 'the cost has a journal entry that names it');
+
+if ($entry !== null) {
+    $lines = DB::table('gl_journal_lines')->where('entry_id', $entry->id)->get()->all();
+    $chart = app(ChartOfAccounts::class)->byCode();
+    $debit = collect($lines)->firstWhere('direction', 'debit');
+    $credit = collect($lines)->firstWhere('direction', 'credit');
+
+    check($debit !== null && (int) $debit->account_id === $chart['5100']->id && (int) $debit->amount_base === 493_750, '...debiting 5100 fuel by the issued cost');
+    check($credit !== null && (int) $credit->account_id === $chart['1110']->id && (int) $credit->amount_base === 493_750, '...and crediting 1110 petty cash, the money the driver spent');
+    check($debit !== null && $debit->truck_id === $truckC->id && $debit->trip_id === $tripC->id, '...with the truck and trip dimensions account 5100 requires (§6.1)');
+}
+
+$reading = DB::table('odometer_readings')->where('trip_id', $tripC->id)->where('odometer_km', 300_500)->first();
+
+check($reading !== null && $reading->source === 'fuel_issue', 'the dashboard figure becomes an odometer reading marked as coming from the pump');
+check((int) DB::table('trucks')->where('id', $truckC->id)->value('odometer_km') === 300_500, '...and moves the truck\'s projection to it');
+
+$rollup = (int) DB::table('trips')->where('id', $tripC->id)->value('fuel_cost_base');
+
+check($rollup === 493_750, 'the §6.6 rollup\'s fuel bucket equals the posted cost ('.$rollup.')');
+
+$issueEvent = DB::table('operational_events')
+    ->where('aggregate_type', 'fuel_issue')
+    ->where('aggregate_id', $kioskIssue->id)
+    ->where('to_state', 'posted')
+    ->first();
+
+$context = $issueEvent === null ? [] : (json_decode((string) $issueEvent->context, true) ?: []);
+
+check($issueEvent !== null && $issueEvent->actor_kind === ActorKind::Kiosk->value, '§10.9\'s recorded → posted move is on the trail attributed to the kiosk');
+check(($context['trip_access_token_id'] ?? null) === $fuelToken['token']->id, '...and its context names the token, so the trail and the row agree');
+
+$fuelAuthority = KioskAuthority::verified($fuelToken['token'], $fuelToken['secret'], $fuelToken['pin'], TripAccessScope::Fuel);
+
+refuses(
+    'a fuel link cannot pour its litres into a different trip',
+    fn () => (app(RecordFuelIssue::class))($trip, new FuelIssueDto(
+        tankId: $mainTank->id,
+        litresX100: 1_000,
+        odometerKm: 300_600,
+        occurredOn: Carbon::now(),
+        purchaseId: $kioskIssue->purchase_id,
+        source: FuelIssueSource::Kiosk,
+    ), null, $fuelAuthority),
+    InvalidArgumentException::class,
+    'another trip'
+);
+
+$fuelRetry = $recordFuel($fuelToken['token'], $fuelToken['secret'], $fuelToken['pin'], $dto(), $clientUuid);
+
+check($fuelRetry->id === $kioskIssue->id, 'the same client_uuid returns the litre already recorded instead of buying it twice (§9.6)');
+check((int) DB::table('fuel_issues')->where('trip_id', $tripC->id)->count() === 1, '...and the trip holds exactly one issue');
+check((int) DB::table('fuel_purchases')->where('invoice_no', 'KIO-CASH-1')->count() === 1, '...and exactly one slip');
 
 /* ------------------------------------------------------------------------- */
 echo "\n== §9.6 revocation and expiry: two reasons a link dies, kept in two columns ==\n";
@@ -699,6 +956,19 @@ $runDriverIds = array_values(array_unique(array_merge(
     $created['driver_ids'],
     DB::table('drivers')->whereIn('employee_id', DB::table('employees')->where('employee_no', 'like', 'EMP-KIO%')->pluck('id')->all() ?: [0])->pluck('id')->all(),
 )));
+$runCostIds = $runTripIds === [] ? [] : DB::table('trip_costs')->whereIn('trip_id', $runTripIds)->pluck('id')->all();
+$runIssueIds = $runTripIds === [] ? [] : DB::table('fuel_issues')->whereIn('trip_id', $runTripIds)->pluck('id')->all();
+$runPurchaseIds = array_values(array_unique(array_merge(
+    $created['purchase_ids'],
+    DB::table('fuel_purchases')->where('invoice_no', 'like', 'KIO-%')->pluck('id')->all(),
+    $runIssueIds === [] ? [] : DB::table('fuel_issues')->whereIn('id', $runIssueIds)->whereNotNull('purchase_id')->pluck('purchase_id')->all(),
+)));
+$runTankIds = array_values(array_unique(array_merge(
+    $created['tank_ids'],
+    DB::table('fuel_tanks')->whereIn('truck_id', $runTruckIds ?: [0])->pluck('id')->all(),
+)));
+
+purgeKioskJournalEntries(kioskCostJournalEntries($runCostIds));
 
 foreach ($runDocIds as $docId) {
     $paths = DB::table('document_versions')->where('document_id', $docId)->pluck('path')->all();
@@ -716,6 +986,11 @@ DB::table('odometer_readings')->whereIn('truck_id', $runTruckIds ?: [0])->delete
 wipeIds('odometer_readings', 'trip_id', $runTripIds);
 wipeIds('document_versions', 'document_id', $runDocIds);
 wipeIds('proof_of_deliveries', 'trip_id', $runTripIds);
+wipeIds('fuel_issues', 'id', $runIssueIds);
+wipeIds('fuel_purchases', 'id', $runPurchaseIds);
+wipeIds('trip_costs', 'trip_id', $runTripIds);
+wipeIds('fuel_tanks', 'id', $runTankIds);
+DB::table('fuel_stations')->where('name', 'like', 'KIO %')->delete();
 wipeIds('trip_access_tokens', 'trip_id', $runTripIds);
 wipeIds('loads', 'trip_id', $runTripIds);
 wipeIds('operational_events', 'aggregate_id', $runTripIds);
@@ -732,7 +1007,7 @@ DB::table('trailers')->whereIn('id', $created['trailer_ids'] ?: [0])->delete();
 DB::table('routes')->where('code', 'like', 'KIO%')->delete();
 DB::table('customers')->where('code', 'like', 'KIO%')->delete();
 
-foreach ([Trip::class, Job::class, TripAccessToken::class, ProofOfDelivery::class, Document::class] as $type) {
+foreach ([Trip::class, Job::class, TripAccessToken::class, ProofOfDelivery::class, Document::class, TripCost::class, FuelIssue::class] as $type) {
     DB::table('audits')->where('auditable_type', $type)->where('created_at', '>=', $runStartedAt)->delete();
 }
 
@@ -762,7 +1037,13 @@ $leftovers = [
     'drivers' => DB::table('drivers')->whereIn('id', $runDriverIds ?: [0])->count(),
     'customers' => DB::table('customers')->where('code', 'like', 'KIO%')->count(),
     'routes' => DB::table('routes')->where('code', 'like', 'KIO%')->count(),
+    'fuel stations' => DB::table('fuel_stations')->where('name', 'like', 'KIO %')->count(),
     'assignments' => DB::table('vehicle_assignments')->whereIn('trip_id', $runTripIds ?: [0])->count(),
+    'fuel issues' => DB::table('fuel_issues')->whereIn('id', $runIssueIds ?: [0])->count(),
+    'fuel purchases' => DB::table('fuel_purchases')->whereIn('id', $runPurchaseIds ?: [0])->count(),
+    'trip costs' => DB::table('trip_costs')->whereIn('id', $runCostIds ?: [0])->count(),
+    'fuel tanks' => DB::table('fuel_tanks')->whereIn('id', $runTankIds ?: [0])->count(),
+    'journal entries' => $runCostIds === [] ? 0 : DB::table('gl_journal_entries')->where('source_type', 'trip_cost')->whereIn('source_id', array_map('strval', $runCostIds))->count(),
 ];
 
 foreach ($leftovers as $what => $count) {
