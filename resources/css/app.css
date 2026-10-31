@@ -7,27 +7,44 @@
 
 /*
  | Fleet Guard design tokens — docs/DESIGN-SYSTEM.md is the source of truth.
- | Every colour pair below is AA-checked in both themes; a new colour requires
- | its contrast ratio written next to it.
+ |
+ | TWO VOCABULARIES, ONE PALETTE. `--*-fg-*` is this application's own naming and 672 class references in
+ | pages and partials are written against it. Alongside it sits the shadcn contract (`background`,
+ | `foreground`, `card`, `popover`, `primary`, `secondary`, `muted`, `destructive`, `border`, `input`,
+ | `ring`), because a copied component snippet expects those names. The contract is an **alias layer**
+ | declared in `@theme inline` over the same variables, not a second palette: an alias cannot drift from
+ | what it points at, which is where a forked palette always ends up.
+ |
+ | Every colour pair below is AA-checked in both themes and its ratio written next to it; a new colour
+ | requires one. Borders are the documented exception — `fg-line` (1.27:1 on a surface) and
+ | `fg-line-strong` (1.65:1) are separators, never the sole signal that a control exists: the field carries
+ | a label and keyboard focus paints `--color-focus` at 5.24:1 on the canvas (§10), so the 3:1 that
+ | WCAG 1.4.11 demands is met by the affordance that actually has to be perceivable.
+ |
+ | ONE DELIBERATE DEVIATION from shadcn: their `accent` slot is a hover *surface*, while `--color-accent`
+ | here is the corridor teal — the brand, referenced 52 times (`text-accent` 32, `border-accent` 6,
+ | `bg-accent-soft` 5). Re-pointing that name would recolour 88 pages to satisfy a label. The hover surface
+ | is therefore `--color-fg-surface-hover`, and shadcn's `accent` role maps onto `--color-muted`.
  */
 @theme {
     /* Typography: IBM Plex Sans for UI, IBM Plex Mono for figures and identifiers. */
     --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
     --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-    /* Neutrals — warm, low-chroma. */
-    --color-fg-canvas: #f7f7f4;
+    /* Neutrals — cool and low-chroma. shadcn's grey, this app's ratios. */
+    --color-fg-canvas: #fafafa;
     --color-fg-surface: #ffffff;
     --color-fg-surface-raised: #ffffff;
-    --color-fg-surface-sunk: #f0f1ec;
-    --color-fg-ink: #121413;
-    --color-fg-ink-secondary: #4c524e;
-    --color-fg-ink-muted: #6b726d;          /* 4.60:1 on fg-canvas, 4.94:1 on fg-surface */
-    --color-fg-line: #e2e4de;
-    --color-fg-line-strong: #c9ccc4;
+    --color-fg-surface-sunk: #f4f4f5;
+    --color-fg-surface-hover: #f0f0f2;
+    --color-fg-ink: #131417;                 /* 17.65:1 on canvas, 18.42:1 on surface */
+    --color-fg-ink-secondary: #52555c;       /* 7.15:1 on canvas, 7.47:1 on surface */
+    --color-fg-ink-muted: #6b6f77;           /* 4.83:1 on canvas, 5.04:1 on surface, 4.59:1 on sunk */
+    --color-fg-line: #e4e4e7;
+    --color-fg-line-strong: #c8c9ce;
 
     /* Accent — corridor teal, one per view. */
-    --color-accent: #0f766e;                /* white text on it = 4.9:1 */
+    --color-accent: #0f766e;                /* white text on it = 5.47:1; as text on a surface = 5.47:1 */
     --color-accent-hover: #0b5f59;
     --color-accent-soft: #e2f1ef;
     --color-on-accent: #ffffff;
@@ -43,20 +60,21 @@
     --color-on-danger: #ffffff;              /* 6.57:1 on fg-danger */
     --color-info: #175cd3;
     --color-info-soft: #eff6ff;
-    --color-neutral-badge: #5a615c;
+    --color-neutral-badge: #5a5f66;          /* 6.43:1 on surface, 5.85:1 on sunk */
 
     /* Focus ring. */
-    --color-focus: #0f766e;
+    --color-focus: #0f766e;                 /* 5.24:1 on canvas, 5.47:1 on surface */
 
-    /* Radii. */
-    --radius-fg-sm: 4px;
+    /* Radii — shadcn's scale off a 0.625rem base: 6 / 8 / 10 / 14. */
+    --radius-fg-sm: 6px;
     --radius-fg-md: 8px;
-    --radius-fg-lg: 14px;
+    --radius-fg-lg: 10px;
+    --radius-fg-xl: 14px;
 
-    /* Elevation. */
-    --shadow-fg-1: 0 1px 1px rgb(17 20 18 / 0.04), 0 1px 2px rgb(17 20 18 / 0.06);
-    --shadow-fg-2: 0 2px 4px rgb(17 20 18 / 0.06), 0 8px 16px rgb(17 20 18 / 0.08);
-    --shadow-fg-3: 0 12px 32px rgb(17 20 18 / 0.14), 0 4px 8px rgb(17 20 18 / 0.08);
+    /* Elevation — quieter than before: a card sits on the page rather than floating above it. */
+    --shadow-fg-1: 0 1px 2px rgb(15 18 23 / 0.06);
+    --shadow-fg-2: 0 1px 3px rgb(15 18 23 / 0.08), 0 4px 10px rgb(15 18 23 / 0.06);
+    --shadow-fg-3: 0 4px 8px rgb(15 18 23 / 0.08), 0 16px 40px rgb(15 18 23 / 0.14);
 
     /* Motion (use with duration-(--t-*) / ease-(--ease-*)). */
     --t-fast: 120ms;
@@ -66,22 +84,59 @@
     --ease-emphasis: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/*
+ | The shadcn contract, as aliases. `inline` is what makes these utilities emit `var(…)` rather than a
+ | copied literal, so the `.dark` block below stays the only place a value changes.
+ */
+@theme inline {
+    --color-background: var(--color-fg-canvas);
+    --color-foreground: var(--color-fg-ink);
+
+    --color-card: var(--color-fg-surface);
+    --color-card-foreground: var(--color-fg-ink);
+
+    --color-popover: var(--color-fg-surface-raised);
+    --color-popover-foreground: var(--color-fg-ink);
+
+    /* The affirmative action of a view — brand teal here, near-black in stock shadcn. */
+    --color-primary: var(--color-accent);
+    --color-primary-foreground: var(--color-on-accent);
+
+    --color-secondary: var(--color-fg-surface-sunk);
+    --color-secondary-foreground: var(--color-fg-ink);
+
+    --color-muted: var(--color-fg-surface-sunk);
+    --color-muted-foreground: var(--color-fg-ink-muted);
+
+    --color-destructive: var(--color-danger);
+    --color-destructive-foreground: var(--color-on-danger);
+
+    --color-border: var(--color-fg-line);
+    --color-input: var(--color-fg-line-strong);
+    --color-ring: var(--color-focus);
+
+    /* `text-accent-foreground` is referenced once already and had no token behind it, so it painted
+       nothing. Defining it here is the fix; the value is the same white the button uses. */
+    --color-accent-foreground: var(--color-on-accent);
+}
+
 @layer theme {
     .dark {
-        --color-fg-canvas: #0d0f0e;
-        --color-fg-surface: #151816;
-        --color-fg-surface-raised: #1b1f1d;
-        --color-fg-surface-sunk: #101312;
-        --color-fg-ink: #e9ebe7;
-        --color-fg-ink-secondary: #a9b1ac;
-        --color-fg-ink-muted: #8b938e;        /* 6.10:1 on fg-canvas, 5.67:1 on fg-surface */
-        --color-fg-line: #2a2f2c;
-        --color-fg-line-strong: #3a403c;
+        --color-fg-canvas: #0e1013;
+        --color-fg-surface: #171a1f;
+        --color-fg-surface-raised: #1d2127;
+        --color-fg-surface-sunk: #21252b;
+        --color-fg-surface-hover: #22262d;
+        --color-fg-ink: #e7e9ea;             /* 15.64:1 on canvas, 14.32:1 on surface */
+        --color-fg-ink-secondary: #a8adb5;   /* 8.45:1 on canvas, 7.73:1 on surface */
+        --color-fg-ink-muted: #90949d;       /* 6.27:1 on canvas, 5.74:1 on surface, 5.06:1 on sunk */
+        --color-fg-line: #2a2f37;
+        --color-fg-line-strong: #3a4048;
 
         --color-accent: #2dbbae;
         --color-accent-hover: #45d0c2;
         --color-accent-soft: #102a28;
-        --color-on-accent: #04211e;
+        --color-on-accent: #04211e;          /* 7.11:1 on fg-accent */
 
         --color-success: #4cc38a;
         --color-success-soft: #0d2a1c;
@@ -90,16 +145,16 @@
         --color-danger: #f97066;
         --color-danger-hover: #fb8b84;
         --color-danger-soft: #2c1413;
-        --color-on-danger: #0d0f0e;          /* 6.90:1 on fg-danger */
+        --color-on-danger: #0e1013;          /* 6.84:1 on fg-danger */
         --color-info: #7ca9f9;
         --color-info-soft: #101d33;
-        --color-neutral-badge: #98a29b;
+        --color-neutral-badge: #99a0a8;      /* 6.60:1 on surface */
 
-        --color-focus: #2dbbae;
+        --color-focus: #2dbbae;              /* 8.01:1 on canvas */
 
-        --shadow-fg-1: 0 1px 1px rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.5);
-        --shadow-fg-2: 0 2px 4px rgb(0 0 0 / 0.45), 0 8px 16px rgb(0 0 0 / 0.55);
-        --shadow-fg-3: 0 12px 32px rgb(0 0 0 / 0.6), 0 4px 8px rgb(0 0 0 / 0.5);
+        --shadow-fg-1: 0 1px 2px rgb(0 0 0 / 0.4);
+        --shadow-fg-2: 0 1px 3px rgb(0 0 0 / 0.45), 0 4px 10px rgb(0 0 0 / 0.5);
+        --shadow-fg-3: 0 4px 8px rgb(0 0 0 / 0.5), 0 16px 40px rgb(0 0 0 / 0.6);
     }
 }
 
@@ -113,10 +168,15 @@
     }
 
     body {
-        @apply bg-fg-canvas text-sm leading-5 text-fg-ink font-sans antialiased;
+        @apply bg-background text-sm leading-5 text-foreground font-sans antialiased;
     }
 
-    /* Focus is always visible; nothing in this codebase sets outline: none. */
+    /*
+     * Focus is always visible, and it is one global rule rather than a ring per control. That is how a
+     * keyboard user reaches a `<summary>`, a table's sort button or a `[tabindex]` signature canvas —
+     * none of them shadcn components — and an `outline-offset` band is what survives an
+     * `overflow-x-auto` table, which a `ring-offset`-style box shadow does not.
+     */
     :where(a, button, input, select, textarea, [tabindex]):focus-visible {
         @apply outline-2 outline-offset-2 outline-focus;
     }
@@ -136,6 +196,26 @@
         display: none !important;
     }
 
+    /*
+     * A native `<dialog>` appears between two painted frames, so `@starting-style` is what gives it the
+     * entry Radix provides in shadcn: opacity and settle over --t-fast, the backdrop fading with it. No
+     * JavaScript, and the reduced-motion block at the end of this file collapses all of it.
+     */
+    dialog:not([open]) {
+        @apply opacity-0;
+    }
+
+    dialog[open] {
+        transition: opacity var(--t-fast) var(--ease-standard),
+            transform var(--t-fast) var(--ease-standard),
+            overlay var(--t-fast) allow-discrete,
+            display var(--t-fast) allow-discrete;
+
+        @starting-style {
+            @apply opacity-0 scale-[0.98];
+        }
+    }
+
     /* Skeleton shimmer, and no shimmer at all under reduced motion. */
     @keyframes fg-shimmer {
         100% {
@@ -144,7 +224,7 @@
     }
 
     .fg-skeleton {
-        @apply relative overflow-hidden bg-fg-surface-sunk;
+        @apply relative overflow-hidden bg-muted;
     }
 
     .fg-skeleton::after {

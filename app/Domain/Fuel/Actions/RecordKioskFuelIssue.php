@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Fuel\Actions;
 
+use App\Domain\Fleet\Models\Truck;
 use App\Domain\Fuel\Data\FuelIssueDto;
 use App\Domain\Fuel\Data\FuelPurchaseDto;
 use App\Domain\Fuel\Data\KioskFuelDto;
@@ -70,6 +71,17 @@ final class RecordKioskFuelIssue
 
             $baseCurrency = CurrentCompany::model()->base_currency_code;
 
+            // The slip's product is the truck's, read from the register rather than from the phone:
+            // the driver has no reason to pick it, and a client that could would let a petrol receipt
+            // be recorded as diesel.
+            $truck = $trip->truck_id === null
+                ? null
+                : Truck::query()->whereKey($trip->truck_id)->first();
+
+            if ($truck === null) {
+                throw new InvalidArgumentException('That trip names no truck, so the slip cannot say what fuel it bought.');
+            }
+
             $purchase = ($this->purchases)(new FuelPurchaseDto(
                 amount: Money::ofMinor($dto->amountMinor(), $baseCurrency),
                 rate: '1',
@@ -78,6 +90,7 @@ final class RecordKioskFuelIssue
                 purchasedOn: $dto->occurredOn,
                 litresX100: $dto->litresX100,
                 pricePerLitreMinor: $dto->pricePerLitreMinor,
+                fuelType: $truck->fuel_type,
                 stationId: $dto->stationId,
                 invoiceNo: $dto->invoiceNo,
                 sourceUuid: $uuid,

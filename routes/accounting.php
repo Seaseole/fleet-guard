@@ -36,6 +36,19 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         ->middleware('can:ledger.view')
         ->name('accounting.journal');
 
+    /*
+     * §20.35 (Phase 5 slice 5a) — the supplier bills. The register reads under `accounting.view`
+     * (§9.1: "see expenses, bills and statements"); recording is the `bills.create` ability and the
+     * Action asks again, because a screen is not a permission check.
+     */
+    Route::livewire('accounting/bills', 'pages::accounting.bills')
+        ->middleware('can:accounting.view')
+        ->name('accounting.bills');
+
+    Route::livewire('accounting/bills/{bill}', 'pages::accounting.bill')
+        ->middleware('can:accounting.view')
+        ->name('accounting.bills.show');
+
     Route::livewire('accounting/journal/new', 'pages::accounting.journal-new')
         ->middleware([
             'can:ledger.journal.manual',

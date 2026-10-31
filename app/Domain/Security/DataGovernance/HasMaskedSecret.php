@@ -9,13 +9,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * The §9.5 column trio, applied by convention rather than by a cast: `<base>_encrypted` holds the
+ * The column trio, applied by convention rather than by a cast: `<base>_encrypted` holds the
  * ciphertext, `<base>_masked` holds the display form, `key_version` records which key made it.
  *
  * Not an Eloquent cast, because one cast cannot own three columns and a silent
  * decrypt-on-read is precisely the thing that turns a field gate into a leak. Reading plaintext is
- * always a named call — {@see revealMaskedSecret()} — so the audit trail (§9.5) and the
- * re-authentication rule (§9.1) have a single place to hook, and `grep -r reveal` answers "what
+ * always a named call — {@see revealMaskedSecret()} — so the audit trail and the
+ * re-authentication rule have a single place to hook, and `grep -r reveal` answers "what
  * can read bank numbers".
  *
  * @mixin Model

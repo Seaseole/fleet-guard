@@ -246,7 +246,8 @@ final class UiLint
     private function isPrimary(string $attrs): bool
     {
         if (preg_match("/variant\s*=\s*[\"']([a-z-]+)[\"']/", $attrs, $m) === 1) {
-            return $m[1] === 'primary';
+            // `default` is shadcn's name for the filled slot and resolves to the same classes as `primary`.
+            return in_array($m[1], ['primary', 'default'], true);
         }
 
         if (str_contains($attrs, 'variant=')) {

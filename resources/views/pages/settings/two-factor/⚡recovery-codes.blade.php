@@ -47,13 +47,13 @@ new class extends Component
 }; ?>
 
 <div
-    class="py-6 space-y-6 border shadow-sm rounded-xl border-zinc-200 dark:border-white/10"
+    class="py-6 space-y-6 border border-fg-line shadow-fg-1 rounded-fg-lg"
     wire:cloak
     x-data="{ showRecoveryCodes: false }"
 >
     <div class="px-6 space-y-2">
         <div class="flex items-center gap-2">
-            <x-ui.icon name="lock-closed" variant="outline" class="size-4" />
+            <x-ui.icon name="lock-closed" class="size-4" />
             <x-ui.heading level="3">{{ __('2FA recovery codes') }}</x-ui.heading>
         </div>
         <x-ui.text variant="subtle">
@@ -66,7 +66,6 @@ new class extends Component
             <x-ui.button
                 x-show="!showRecoveryCodes"
                 icon="eye"
-                icon:variant="outline"
                 variant="primary"
                 x-on:click="showRecoveryCodes = true"
                 aria-expanded="false"
@@ -78,7 +77,6 @@ new class extends Component
             <x-ui.button
                 x-show="showRecoveryCodes"
                 icon="eye-slash"
-                icon:variant="outline"
                 variant="primary"
                 x-on:click="showRecoveryCodes = false"
                 aria-expanded="true"
@@ -113,7 +111,7 @@ new class extends Component
 
                 @if (filled($recoveryCodes))
                     <div
-                        class="grid gap-1 p-4 font-mono text-sm rounded-lg bg-zinc-100 dark:bg-white/5"
+                        class="grid gap-1 p-4 font-mono text-sm rounded-lg bg-fg-surface-sunk"
                         role="list"
                         aria-label="{{ __('Recovery codes') }}"
                     >

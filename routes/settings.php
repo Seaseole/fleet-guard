@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->group(function () {
-    Route::redirect('settings', 'settings/profile');
+    Route::redirect('settings', '/settings/profile');
 
     Route::livewire('settings/profile', 'pages::settings.profile')->name('profile.edit');
 });
@@ -21,6 +21,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'password.confirm',
         ])
         ->name('security.edit');
+
+    /*
+     * §9.3's Settings row, application scope. It is company-held policy, not a per-person
+     * preference, which is why it lives at its own URL rather than in the personal list beside it.
+     * The row is ⚑, so the route asks for the password again within §9.1's window; the page itself
+     * refuses a save without `settings.manage` (Owner), while Operations and Accounting may read it.
+     */
+    Route::redirect('settings/company', '/settings/application')
+        ->middleware(['can:settings.view']);
+
+    Route::livewire('settings/application', 'pages::settings.application')
+        ->middleware([
+            'can:settings.view',
+            'reauth:password.confirm,'.config('fleet.identity.reauth_window_seconds'),
+        ])
+        ->name('application.edit');
 });
 
 Route::get('.well-known/passkey-endpoints', function () {

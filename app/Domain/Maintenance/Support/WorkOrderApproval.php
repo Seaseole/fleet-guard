@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Maintenance\Support;
 
 use App\Domain\Kernel\Audit\ActorKind;
+use App\Domain\Kernel\Settings\CompanySettings;
 use App\Domain\Maintenance\Models\WorkOrder;
 use App\Domain\Maintenance\WorkOrderStatus;
 
@@ -13,9 +14,10 @@ use App\Domain\Maintenance\WorkOrderStatus;
  *
  * The rule is one sentence — an order whose estimate is above the limit needs an approver before it
  * can be worked — but it has to be asked in three places (raise, add a line, remove one), and asking
- * it in three places is how a control drifts into two answers. The limit is read from config once per
- * call: an owner who lowers it next month wants the next order judged by the new figure, while the
- * rows already raised keep the number they were judged by (§10.6's copy-onto-the-row rule).
+ * it in three places is how a control drifts into two answers. The limit is read from the company's
+ * settings once per call: an owner who lowers it next month wants the next order judged by the new
+ * figure, while the rows already raised keep the number they were judged by (§10.6's copy-onto-the-row
+ * rule).
  *
  * An order an approver has already looked at is left alone. The approver approved a job, not a
  * sentence in a config file, and re-dating their approval because a line moved would make the audit
@@ -23,9 +25,11 @@ use App\Domain\Maintenance\WorkOrderStatus;
  */
 final class WorkOrderApproval
 {
+    public function __construct(private readonly CompanySettings $settings) {}
+
     public function limit(): int
     {
-        return max(0, (int) config('fleet.maintenance.work_order_approval_threshold_base', 500_000));
+        return max(0, (int) $this->settings->get('maintenance.work_order_approval_threshold_base'));
     }
 
     /**

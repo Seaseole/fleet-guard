@@ -8,6 +8,7 @@ use App\Domain\Fuel\Data\KioskFuelDto;
 use App\Domain\Fuel\Models\FuelIssue;
 use App\Domain\Fuel\Models\FuelStation;
 use App\Domain\Fuel\Models\FuelTank;
+use App\Domain\Fuel\Support\FuelPriceList;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Operations\Actions\RedeemKioskToken;
 use App\Domain\Operations\Models\Trip;
@@ -72,11 +73,15 @@ new #[Layout('layouts::auth')] #[Title('Fuel on the road')] class extends Compon
     /** Minted per page load and refreshed after each accepted issue — see the class note on the retry. */
     public string $pendingUuid = '';
 
+    /** The settings price for this trip's fuel type, restored after each accepted slip. */
+    #[Locked]
+    public string $defaultPrice = '';
+
     public bool $sent = false;
 
     public string $lastLine = '';
 
-    public function mount(): void
+    public function mount(FuelPriceList $prices): void
     {
         $this->pendingUuid = (string) Str::uuid();
         $this->companyId = (string) request()->route('company');
@@ -85,7 +90,13 @@ new #[Layout('layouts::auth')] #[Title('Fuel on the road')] class extends Compon
         $trip = $this->tripFor();
 
         if ($trip?->truck_id !== null) {
-            $this->odometer = (string) (Truck::query()->whereKey($trip->truck_id)->value('odometer_km') ?? '');
+            $truck = Truck::query()->find($trip->truck_id);
+
+            if ($truck !== null) {
+                $this->odometer = (string) $truck->odometer_km;
+                $this->price = $prices->input($truck->fuel_type);
+                $this->defaultPrice = $this->price;
+            }
         }
 
         $tanks = $this->tanks();
@@ -145,6 +156,7 @@ new #[Layout('layouts::auth')] #[Title('Fuel on the road')] class extends Compon
 
         $this->pendingUuid = (string) Str::uuid();
         $this->reset(['litres', 'price', 'invoiceNo', 'note', 'pin']);
+        $this->price = $this->defaultPrice;
         unset($this->issues);
 
         $this->dispatch('toast', message: __('Fuel recorded and posted.'), kind: 'success');
@@ -165,6 +177,18 @@ new #[Layout('layouts::auth')] #[Title('Fuel on the road')] class extends Compon
         }
 
         return Truck::query()->whereKey($trip->truck_id)->first()?->label() ?? __('this trip’s truck');
+    }
+
+    /** The product this trip's truck takes — the type the slip will record. */
+    public function fuelTypeLabel(): string
+    {
+        $trip = $this->tripFor();
+
+        if ($trip?->truck_id === null) {
+            return __('—');
+        }
+
+        return Truck::query()->whereKey($trip->truck_id)->first()?->fuel_type->label() ?? __('—');
     }
 
     /** §10.2: a closed, cancelled or aborted trip has costs that are final rather than editable. */
@@ -375,9 +399,13 @@ new #[Layout('layouts::auth')] #[Title('Fuel on the road')] class extends Compon
                         </p>
                     @endif
 
+                    <p class="text-xs text-fg-ink-muted">
+                        {{ __('This truck takes :fuel. The slip records that, and the price below starts at the settings figure for it.', ['fuel' => $this->fuelTypeLabel()]) }}
+                    </p>
+
                     <div class="grid gap-3 sm:grid-cols-2">
                         <x-ui.input name="litres" wire:model="litres" numeric :label="__('Litres')" placeholder="{{ __('250.00') }}" required />
-                        <x-ui.input name="price" wire:model="price" numeric :label="__('Price per litre')" placeholder="{{ __('19.75') }}" required />
+                        <x-ui.input name="price" wire:model="price" numeric :label="__('Price per litre')" :hint="__('Starts at the :fuel price in application settings; the receipt’s figure is what gets recorded.', ['fuel' => $this->fuelTypeLabel()])" placeholder="{{ __('19.75') }}" required />
                     </div>
 
                     <x-ui.input name="odometer" wire:model="odometer" numeric :label="__('Odometer reading')" :hint="__('The figure on the dashboard now.')" required />
@@ -391,7 +419,7 @@ new #[Layout('layouts::auth')] #[Title('Fuel on the road')] class extends Compon
                         <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
                     @enderror
 
-                    <x-ui.button type="submit" class="w-full">{{ __('Record the fuel') }}</x-ui.button>
+                    <x-ui.button type="submit" size="lg" class="w-full">{{ __('Record the fuel') }}</x-ui.button>
                 </form>
             </x-ui.card>
         @endif

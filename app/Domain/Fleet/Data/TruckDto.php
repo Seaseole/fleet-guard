@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Fleet\Data;
 
 use App\Domain\Fleet\FleetStatus;
+use App\Domain\Fleet\FuelType;
 use InvalidArgumentException;
 
 /**
@@ -34,7 +35,7 @@ final readonly class TruckDto
         public ?int $serviceIntervalKm = null,
         public ?int $serviceIntervalHours = null,
         public ?int $serviceIntervalMonths = null,
-        public string $fuelType = 'diesel',
+        public FuelType $fuelType = FuelType::Diesel,
         public ?int $mainTankLitres = null,
         public ?int $auxTankLitres = null,
         public ?float $expectedConsumptionPer100 = null,
@@ -84,7 +85,7 @@ final readonly class TruckDto
             serviceIntervalKm: self::optionalInt($input['service_interval_km'] ?? null),
             serviceIntervalHours: self::optionalInt($input['service_interval_hours'] ?? null),
             serviceIntervalMonths: self::optionalInt($input['service_interval_months'] ?? null),
-            fuelType: (string) ($input['fuel_type'] ?? 'diesel'),
+            fuelType: self::fuelType($input['fuel_type'] ?? null),
             mainTankLitres: self::optionalInt($input['main_tank_litres'] ?? null),
             auxTankLitres: self::optionalInt($input['aux_tank_litres'] ?? null),
             expectedConsumptionPer100: self::optionalFloat($input['expected_consumption_per_100'] ?? null),
@@ -97,6 +98,14 @@ final readonly class TruckDto
     private static function optionalString(mixed $value): ?string
     {
         return is_string($value) && trim($value) !== '' ? trim($value) : null;
+    }
+
+    /** A blank cell means the ordinary case — the truck burns diesel. */
+    private static function fuelType(mixed $value): FuelType
+    {
+        $key = trim((string) ($value ?? ''));
+
+        return $key === '' ? FuelType::Diesel : FuelType::fromKey($key);
     }
 
     private static function optionalInt(mixed $value): ?int

@@ -29,7 +29,9 @@ final class EndTruckTrip
     public function __invoke(int $truckId, string $reason): void
     {
         DB::transaction(function () use ($truckId, $reason): void {
-            $truck = Truck::query()->find($truckId);
+            // The same lock as the departure side: the return is decided by where the truck is now, not by
+            // where the caller's page last saw it.
+            $truck = Truck::query()->whereKey($truckId)->lockForUpdate()->first();
 
             if ($truck === null) {
                 throw new InvalidArgumentException(sprintf('Truck #%d is not in this company\'s fleet.', $truckId));

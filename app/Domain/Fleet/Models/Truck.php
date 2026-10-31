@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Fleet\Models;
 
 use App\Domain\Fleet\FleetStatus;
+use App\Domain\Fleet\FuelType;
 use App\Domain\Fleet\Policies\TruckPolicy;
 use App\Domain\Kernel\State\CanTransition;
 use App\Domain\Kernel\Tenancy\BelongsToCompany;
@@ -47,7 +48,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
  * @property int|null $service_interval_km
  * @property int|null $service_interval_hours
  * @property int|null $service_interval_months
- * @property string $fuel_type
+ * @property FuelType $fuel_type
  * @property int|null $main_tank_litres
  * @property int|null $aux_tank_litres
  * @property string|float|null $expected_consumption_per_100
@@ -92,6 +93,7 @@ final class Truck extends Model implements AuditableContract
             'company_id' => 'integer',
             'year' => 'integer',
             'status' => FleetStatus::class,
+            'fuel_type' => FuelType::class,
             'state_changed_at' => 'datetime',
             'capacity_tonnes_10_2' => 'float',
             'odometer_km' => 'integer',

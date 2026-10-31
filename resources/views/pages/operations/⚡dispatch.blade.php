@@ -64,19 +64,59 @@ new #[Title('Dispatch')] class extends Component {
 
     public string $holdReason = '';
 
+    /**
+     * The job a register row handed over, and the day it asked for — both in the URL, so the link survives
+     * a refresh, a second tab, and the trip back from the board.
+     *
+     * This is the accepted job's way into a trip. Before it, the register said "Accepted" and stopped: the
+     * dispatcher had to find the board, remember the reference, and re-pick the job from a dropdown of
+     * every accepted job in the company. `plan_job` carries the one fact the register already knew.
+     */
+    #[Url('plan_job')]
+    public string $planJob = '';
+
+    #[Url('on')]
+    public string $planOn = '';
+
+    /** The hour the trip leaves on its day. It used to be a constant written after the fact. */
+    public string $planDepartureTime = '06:00';
+
     public function mount(): void
     {
         if ($this->start === '') {
             $this->start = $this->today()->toDateString();
         }
+
+        // Arriving from a job row: open the plan dialog with that job already chosen, on the day the job
+        // asked for, with the board already showing that week. The truck is the dispatcher's to pick, and
+        // it is picked here rather than in a cell so the row's intent is not lost on the way.
+        if ($this->planJob !== '') {
+            /** @var Job|null $job */
+            $job = Job::query()->find($this->planJob);
+
+            if ($job !== null) {
+                $day = $this->planOn !== ''
+                    ? $this->planOn
+                    : ($job->required_load_on?->timezone(CurrentCompany::timezone())->toDateString() ?? $this->today()->toDateString());
+
+                $this->planJobId = $job->id;
+                $this->planDate = $day;
+                $this->start = $day;
+                $this->resetErrorBag();
+                $this->dispatch('open-dispatch-plan');
+            } else {
+                $this->planJob = '';
+            }
+        }
     }
 
     public function updated(string $property): void
     {
-        // Moving the week or switching trips invalidates whatever was typed into a dialog for the
-        // previous selection; leaving it set would offer to dispatch a trip that has scrolled away.
+        // Moving the week invalidates the cell the dialog was opened from: leaving it set would offer to
+        // plan into a truck and day that are no longer on screen. The job and the driver are not cell
+        // facts — they survive the week they were typed in, because they describe the freight, not the grid.
         if ($property === 'start') {
-            $this->reset('tripId', 'planTruckId', 'planDate', 'planJobId', 'planDriverId', 'planTrailerId', 'holdReason');
+            $this->reset('tripId', 'planTruckId', 'planDate', 'holdReason');
         }
     }
 
@@ -95,6 +135,26 @@ new #[Title('Dispatch')] class extends Component {
         $this->planDate = $date;
         $this->resetErrorBag();
         $this->dispatch('open-dispatch-plan');
+    }
+
+    /**
+     * Closing the plan dialog wipes the choices, not the job the register handed over.
+     *
+     * The dialog is opened against whichever cell was clicked, so a half-typed plan left on the server was
+     * one reopen away from being committed against a different truck. `planJob` is exempt: it is the URL,
+     * and Escape is not a way to lose the job a dispatcher was told to move.
+     */
+    public function clearPlanForm(): void
+    {
+        $this->reset('planTruckId', 'planDate', 'planJobId', 'planDriverId', 'planTrailerId');
+        $this->planDepartureTime = '06:00';
+        $this->resetValidation();
+    }
+
+    public function clearTripDialog(): void
+    {
+        $this->reset('tripId', 'holdReason');
+        $this->resetValidation();
     }
 
     public function shiftWeek(int $days): void
@@ -166,20 +226,39 @@ new #[Title('Dispatch')] class extends Component {
         $this->validate([
             'planJobId' => ['required', 'string'],
             'planDriverId' => ['required', 'integer'],
+            'planTruckId' => ['required', 'integer', 'gt:0'],
+            'planDate' => ['required', 'date'],
+            'planDepartureTime' => ['required', 'date_format:H:i'],
         ]);
-
-        if ((int) $this->planTruckId <= 0 || $this->planDate === '') {
-            $this->addError('plan', __('The cell lost its truck or day. Reopen it and try again.'));
-
-            return;
-        }
 
         try {
             /** @var Job|null $job */
             $job = Job::query()->find($this->planJobId);
 
             if ($job === null) {
-                throw new InvalidArgumentException('No such job is open in this company.');
+                $this->addError('plan', __('That job is not in this company, or it has moved on. Reload the register and pick it again.'));
+
+                return;
+            }
+
+            // The truck and the driver are named before the trip is opened, because the draft has no way
+            // back: §10.2 lets a draft go only to `planned`, so a trip created under a refusal is a row
+            // the board hides and nobody can cancel. PlanTrip asks the same two questions — checking them
+            // here costs two lookups and saves the orphan rather than duplicating a state rule.
+            $truck = app(FleetDirectory::class)->truck((int) $this->planTruckId);
+
+            if ($truck === null) {
+                $this->addError('plan', __('That truck is not in this company. Pick it again from the rows on the left of the board.'));
+
+                return;
+            }
+
+            $driver = app(DriverDirectory::class)->find((int) $this->planDriverId);
+
+            if ($driver === null) {
+                $this->addError('plan', __('That driver is not in this company. Choose them again from the list.'));
+
+                return;
             }
 
             $trip = $create($job, (int) auth()->id());
@@ -188,7 +267,7 @@ new #[Title('Dispatch')] class extends Component {
                 jobId: $job->id,
                 truckId: (int) $this->planTruckId,
                 driverId: (int) $this->planDriverId,
-                plannedDepartureAt: $this->planDate.'T06:00:00',
+                plannedDepartureAt: $this->planDate.'T'.$this->planDepartureTime.':00',
                 trailerId: $this->planTrailerId === '' ? null : (int) $this->planTrailerId,
             ), (int) auth()->id());
         } catch (Throwable $refused) {
@@ -199,12 +278,22 @@ new #[Title('Dispatch')] class extends Component {
 
         $this->closeDialogs();
         unset($this->trips, $this->findings, $this->jobChoices);
-        $this->dispatch('toast', message: __(':trip planned on :day.', ['trip' => $trip->trip_no, 'day' => $this->planDate]), kind: 'success');
+        $this->dispatch('toast', message: __(':trip is planned for :day at :time — dispatch it from the board when it is ready to leave.', [
+            'trip' => $trip->trip_no,
+            'day' => $this->date($this->planDate)->format('d M'),
+            'time' => $this->planDepartureTime,
+        ]), kind: 'success');
     }
 
     public function closeDialogs(): void
     {
         $this->reset('tripId', 'planTruckId', 'planDate', 'planJobId', 'planDriverId', 'planTrailerId', 'holdReason');
+        $this->planDepartureTime = '06:00';
+
+        // The deep link is spent once the plan is made: leaving `?plan_job=` in the address bar would
+        // reopen the dialog on the next refresh, on a trip that is already on the board.
+        $this->planJob = '';
+        $this->planOn = '';
 
         // Two separate browser events: `dispatch()` takes one event name and its *payload*, so passing
         // the second name as an argument would send a window listener nobody registered.
@@ -397,6 +486,17 @@ new #[Title('Dispatch')] class extends Component {
     }
 
     /**
+     * Whether the open trip is sitting on hold right now.
+     *
+     * The same reason as {@see tripIsHoldable()}: the template may not name a status by literal, and the
+     * hold form asks this to decide whether to demand a reason at all.
+     */
+    public function tripIsHeld(): bool
+    {
+        return $this->selectedTrip()?->status === TripStatus::OnHold;
+    }
+
+    /**
      * What the one hold button does, in the operator's words.
      *
      * §10.2 gives the edge both directions, so the board offers one control and names it from the trip's
@@ -405,15 +505,7 @@ new #[Title('Dispatch')] class extends Component {
      */
     public function tripHoldLabel(): string
     {
-        return $this->selectedTrip()?->status === TripStatus::OnHold
-            ? __('Release the hold')
-            : __('Put on hold');
-    }
-
-    /** The cell's truck by the name the register uses, so the dialog confirms the row that was clicked. */
-    public function planTruckLabel(): string
-    {
-        return $this->trucks()->firstWhere('id', (int) $this->planTruckId)?->label ?? '#'.$this->planTruckId;
+        return $this->tripIsHeld() ? __('Release the hold') : __('Put on hold');
     }
 
     /**
@@ -510,12 +602,17 @@ new #[Title('Dispatch')] class extends Component {
                                         <button
                                             type="button"
                                             wire:click="openPlan({{ $truck->id }}, '{{ $date }}')"
+                                            aria-label="{{ __('Plan a trip for :truck on :day', ['truck' => $truck->label, 'day' => $day->format('D j M')]) }}"
                                             class="w-full rounded-fg-sm border border-dashed border-fg-line-strong px-2 py-3 text-xs text-fg-ink-muted hover:border-accent hover:text-accent"
                                         >
                                             + {{ __('Plan a trip') }}
                                         </button>
                                     @else
-                                        <span class="block px-2 py-3 text-xs text-fg-ink-muted">—</span>
+                                        {{-- The reason the cell cannot take a plan, printed instead of the dash
+                                             that read as "the board is broken". --}}
+                                        <span class="block px-2 py-3 text-xs text-fg-ink-muted" title="{{ $truck->status->label() }}">
+                                            {{ $truck->mayBeDispatched() ? __('Planning is not on this seat') : __('— '.$truck->status->label()) }}
+                                        </span>
                                     @endif
                                 @else
                                     <div class="grid gap-1.5">
@@ -527,6 +624,11 @@ new #[Title('Dispatch')] class extends Component {
                                             <button
                                                 type="button"
                                                 wire:click="openTrip('{{ $trip->id }}')"
+                                                aria-label="{{ __('Open trip :trip, :status, with :driver', [
+                                                    'trip' => $trip->trip_no,
+                                                    'status' => $trip->status->label(),
+                                                    'driver' => $this->driverNames[$trip->driver_id] ?? __('no driver named'),
+                                                ]) }}"
                                                 class="w-full rounded-fg-sm border border-fg-line bg-fg-surface-sunk px-2 py-1.5 text-left hover:border-accent"
                                             >
                                                 <span class="flex items-center justify-between gap-2">
@@ -558,9 +660,13 @@ new #[Title('Dispatch')] class extends Component {
                     <tr>
                         <td colspan="8" class="px-3 py-6">
                             <x-ui.empty-state
-                                title="{{ __('No trucks') }}"
-                                description="{{ __('Nothing is on the fleet register. Add a truck before the board can hold a day.') }}"
-                            />
+                                title="{{ __('No trucks on the board') }}"
+                                description="{{ __('A week needs a fleet down the side of it. Nothing is registered yet, so there is no row to plan into.') }}"
+                            >
+                                @can('viewAny', App\Domain\Fleet\Models\Truck::class)
+                                    <x-ui.link :href="route('fleet.index')" wire:navigate>{{ __('Open the fleet register') }}</x-ui.link>
+                                @endcan
+                            </x-ui.empty-state>
                         </td>
                     </tr>
                 @endforelse
@@ -573,7 +679,7 @@ new #[Title('Dispatch')] class extends Component {
          render is how a screen ends up showing one trip while acting on another. --}}
     @php $trip = $this->selectedTrip(); @endphp
 
-    <x-ui.dialog name="dispatch-trip" :title="$trip === null ? '' : $trip->trip_no">
+    <x-ui.dialog name="dispatch-trip" :title="$trip === null ? '' : $trip->trip_no" x-on:dialog-closed="$wire.call('clearTripDialog')">
         @if ($trip !== null)
             <form wire:submit="dispatchTrip" class="grid gap-4 p-5">
                 <div class="grid gap-1">
@@ -593,20 +699,24 @@ new #[Title('Dispatch')] class extends Component {
                                 <li>· {{ $issue }}</li>
                             @endforeach
                         </ul>
+                        <p class="mt-2 text-xs text-fg-ink-secondary">
+                            {{ __('Fix the paper or move the day, then come back to this cell. Nothing has been committed yet.') }}
+                        </p>
                     </x-ui.alert>
                 @endif
 
                 @error('trip')
-                    <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                    <x-ui.alert tone="danger" :title="__('Dispatch did not go through')">{{ $message }}</x-ui.alert>
                 @enderror
 
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     @can('trips.dispatch')
-                        <x-ui.button type="submit" :disabled="$issues !== []">
-                            {{ __('Dispatch this trip') }}
+                        <x-ui.button type="submit" :disabled="$issues !== []" wire:loading.attr="disabled" wire:target="dispatchTrip">
+                            <span wire:loading.remove wire:target="dispatchTrip">{{ __('Dispatch this trip') }}</span>
+                            <span wire:loading wire:target="dispatchTrip">{{ __('Sending it out…') }}</span>
                         </x-ui.button>
                     @else
-                        <span class="text-xs text-fg-ink-muted">{{ __('You may read the board but not dispatch from it (§9.3).') }}</span>
+                        <span class="text-xs text-fg-ink-muted">{{ __('You can see the board, but this seat cannot send a truck out. Ask dispatch or the owner.') }}</span>
                     @endcan
 
                     {{-- The board commits; the trip is worked on its own page, where the schedule and the trail are. --}}
@@ -617,15 +727,28 @@ new #[Title('Dispatch')] class extends Component {
 
             @if ($this->tripIsHoldable())
                 @can('trips.dispatch')
+                    {{-- The reason is asked by the hold and not by the release: the trip already carries the
+                         reason it was held, and demanding a new excuse to undo a hold asks the operator for
+                         a fact the screen is showing them. --}}
+                    @php($holding = $this->tripIsHeld() === false)
                     <form wire:submit="holdTrip" class="grid gap-3 border-t border-fg-line p-5">
-                        <x-ui.input
-                            name="holdReason"
-                            wire:model="holdReason"
-                            :label="__('Reason for the hold (§10.2: a blocker, not a cancellation)')"
-                        />
+                        @if ($holding)
+                            <x-ui.input
+                                name="holdReason"
+                                wire:model="holdReason"
+                                :label="__('What is blocking it? The hold stays on the trip’s trail.')"
+                            />
+                        @else
+                            <p class="text-xs text-fg-ink-secondary">
+                                {{ __('Releasing the hold puts the trip back as planned. The reason it was held stays on its trail.') }}
+                            </p>
+                        @endif
 
                         <div>
-                            <x-ui.button type="submit" variant="outline" size="sm">{{ $this->tripHoldLabel() }}</x-ui.button>
+                            <x-ui.button type="submit" variant="outline" size="sm" wire:loading.attr="disabled" wire:target="holdTrip">
+                                <span wire:loading.remove wire:target="holdTrip">{{ $this->tripHoldLabel() }}</span>
+                                <span wire:loading wire:target="holdTrip">{{ __('Working…') }}</span>
+                            </x-ui.button>
                         </div>
                     </form>
                 @endcan
@@ -633,15 +756,33 @@ new #[Title('Dispatch')] class extends Component {
         @endif
     </x-ui.dialog>
 
-    {{-- The empty-cell dialog: pick the job, the driver, optionally the trailer. --}}
-    <x-ui.dialog name="dispatch-plan" :title="__('Plan a trip')">
+    {{-- The plan dialog: truck, day, hour, job, driver — the five facts a trip needs, in the order the
+         desk gets them. It opens from an empty cell or straight from a job row on the register. --}}
+    <x-ui.dialog name="dispatch-plan" :title="__('Plan a trip')" x-on:dialog-closed="$wire.call('clearPlanForm')">
         <form wire:submit="planTrip" class="grid gap-4 p-5">
             <p class="text-sm text-fg-ink-secondary">
-                {{ __('Truck :truck · :day, leaving 06:00', [
-                    'truck' => $this->planTruckLabel(),
-                    'day' => $this->planDate,
-                ]) }}
+                {{ $this->planTruckId === ''
+                    ? __('Choose the truck and the day. The board books nothing until you press this.')
+                    : __('Planning from the cell you opened — change any of it here.') }}
             </p>
+
+            <div class="grid gap-3 sm:grid-cols-2">
+                <div class="grid gap-1">
+                    <label for="plan-truck" class="text-sm text-fg-ink">{{ __('Truck') }}</label>
+                    <x-ui.select name="planTruckId" id="plan-truck" wire:model="planTruckId">
+                        <option value="">{{ __('Choose a truck…') }}</option>
+                        @foreach ($this->trucks as $truck)
+                            <option value="{{ $truck->id }}">
+                                {{ $truck->label }}{{ $truck->mayBeDispatched() ? '' : ' — '.$truck->status->label() }}
+                            </option>
+                        @endforeach
+                    </x-ui.select>
+                </div>
+
+                <x-ui.input name="planDate" wire:model="planDate" :label="__('Leaves on')" type="date" />
+
+                <x-ui.input name="planDepartureTime" wire:model="planDepartureTime" :label="__('Departure time')" type="time" />
+            </div>
 
             <div class="grid gap-1">
                 <label for="plan-job" class="text-sm text-fg-ink">{{ __('Job') }}</label>
@@ -654,6 +795,12 @@ new #[Title('Dispatch')] class extends Component {
                         <option value="{{ $job['id'] }}">{{ $job['label'] }}</option>
                     @endforeach
                 </x-ui.select>
+                @if ($this->jobChoices === [])
+                    <p class="text-xs text-fg-ink-muted">
+                        {{ __('Nothing is accepted and waiting, so there is nothing to plan. Jobs that are still an enquiry or a quote cannot carry a trip.') }}
+                        <x-ui.link :href="route('operations.jobs').'?needs=trip'">{{ __('See the register') }}</x-ui.link>
+                    </p>
+                @endif
             </div>
 
             <div class="grid gap-1">
@@ -670,7 +817,7 @@ new #[Title('Dispatch')] class extends Component {
                     @endforeach
                 </x-ui.select>
                 <p class="text-xs text-fg-ink-muted">
-                    {{ __('A driver whose papers do not cover the day is still listed — dispatch refuses at the commitment and says why (§10.2).') }}
+                    {{ __('A driver whose papers do not cover the day is still listed on purpose: you may plan them, but dispatch will stop the trip from leaving until the paper is fixed — and it will say which one.') }}
                 </p>
             </div>
 
@@ -690,11 +837,14 @@ new #[Title('Dispatch')] class extends Component {
             @endif
 
             @error('plan')
-                <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                <x-ui.alert tone="danger" :title="__('This plan did not go through')">{{ $message }}</x-ui.alert>
             @enderror
 
             <div class="flex items-center justify-between gap-3">
-                <x-ui.button type="submit">{{ __('Plan the trip') }}</x-ui.button>
+                <x-ui.button type="submit" wire:loading.attr="disabled" wire:target="planTrip">
+                    <span wire:loading.remove wire:target="planTrip">{{ __('Plan the trip') }}</span>
+                    <span wire:loading wire:target="planTrip">{{ __('Planning…') }}</span>
+                </x-ui.button>
                 <x-ui.button type="button" variant="ghost" x-on:click="$dispatch('close-dispatch-plan')">{{ __('Cancel') }}</x-ui.button>
             </div>
         </form>

@@ -13,6 +13,6 @@
         <span
             class="truncate"
             @if($collapsible) x-show="! collapsed" x-cloak @endif
-        >{{ config('app.name', 'Fleet Guard') }}</span>
+        >{{ \App\Domain\Kernel\Tenancy\SiteName::current() }}</span>
     @endunless
 </a>

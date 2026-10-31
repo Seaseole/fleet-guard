@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="{{ App\Domain\Kernel\Settings\Theme::htmlClass() }}" data-theme-default="{{ App\Domain\Kernel\Settings\Theme::defaultMode() }}">
     <head>
         @include('partials.head')
     </head>
@@ -12,7 +12,7 @@
                         <x-ui.icon name="truck" size="5" />
                     </span>
 
-                    <span class="text-base font-semibold">{{ config('app.name', 'Fleet Guard') }}</span>
+                    <span class="text-base font-semibold">{{ \App\Domain\Kernel\Tenancy\SiteName::current() }}</span>
                 </a>
             </div>
 

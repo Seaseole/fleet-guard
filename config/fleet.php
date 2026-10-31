@@ -18,6 +18,26 @@ return [
         'max_wait_seconds' => 300,
     ],
 
+    /*
+     * §20.37 — the two things a Owner now sets at runtime rather than in a deploy.
+     *
+     * `appearance.theme` is what every device in the company opens in (light | dark | system); a seat
+     * may still override it for its own browser, which is stored client-side because it has to apply
+     * before first paint. The deployment default matters for the login screen, which has no company.
+     *
+     * `tax.standard_rate_pct` is only the **starting** figure: the standard VAT rate's truth is the
+     * `tax_rates` register, dated window and all (§17 Q4), and the Application-settings field reads and
+     * writes that register through `SetStandardVatRate`. The default lives here so the field has a
+     * number to show before the register is seeded, not so the blob can hold a second rate.
+     */
+    'appearance' => [
+        'theme' => env('FLEET_DEFAULT_THEME', 'system'),
+    ],
+
+    'tax' => [
+        'standard_rate_pct' => 12.0,
+    ],
+
     'numbering' => [
 
         /*
@@ -49,6 +69,13 @@ return [
             'job' => ['format' => 'JOB-{SEQ:5}', 'restart' => 'continuous', 'fiscal' => false],
             'work_order' => ['format' => 'WO-{SEQ:5}', 'restart' => 'continuous', 'fiscal' => false],
             'purchase_order' => ['format' => 'PO-{SEQ:5}', 'restart' => 'continuous', 'fiscal' => false],
+            // §20.35 (Phase 5 slice 5a). A bill is the *supplier's* fiscal document, not ours — our own
+            // reference needs never-reused, not gap-free-at-issue — so it takes the operational shape
+            // and is numbered at creation like `WO-`.
+            'bill' => ['format' => 'BILL-{SEQ:5}', 'restart' => 'continuous', 'fiscal' => false],
+            // §20.36 (Phase 5 slice 5b). Our own bank fact, not a fiscal document: same operational
+            // shape as the bill it settles.
+            'supplier_payment' => ['format' => 'PAY-{SEQ:5}', 'restart' => 'continuous', 'fiscal' => false],
         ],
 
         /*
@@ -63,7 +90,13 @@ return [
          *                 (number at issue, never at creation) can be verified as data
          */
         'stores' => [
-            // 'invoice' => ['table' => 'invoices', 'number_column' => 'number', 'status_column' => 'status', 'draft_status' => 'draft'],
+            // Registered by §20.32. The `status_column` is what lets `documents:number-integrity` prove §7.4's
+            // rule as data: a draft invoice must carry no number, and every issued one must carry the number
+            // its sequence gave it. `credit_note` and `receipt` join when their issue paths exist.
+            'invoice' => ['table' => 'invoices', 'number_column' => 'number', 'status_column' => 'status', 'draft_status' => 'draft'],
+            // §20.34. A credit note is issued and applied in one transaction today, but the draft state the
+            // column carries is the one §7.4's rule must be able to prove the day a draft editor exists.
+            'credit_note' => ['table' => 'credit_notes', 'number_column' => 'number', 'status_column' => 'status', 'draft_status' => 'draft'],
 
             // Operational references are numbered **at creation**, not at issue (§7: "never reused
             // matters more here than no gaps"), so none declares a `status_column`. A draft trip
@@ -73,6 +106,11 @@ return [
             'trip' => ['table' => 'trips', 'number_column' => 'trip_no'],
             'job' => ['table' => 'freight_jobs', 'number_column' => 'job_no'],
             'work_order' => ['table' => 'work_orders', 'number_column' => 'wo_no'],
+            // §20.35. Numbered at creation, so no `status_column`: even a draft bill carries its
+            // BILL- reference, exactly as a draft trip carries its TRP- number.
+            'bill' => ['table' => 'bills', 'number_column' => 'number'],
+            // §20.36. The same shape: a payment is created already recorded.
+            'supplier_payment' => ['table' => 'supplier_payments', 'number_column' => 'number'],
         ],
 
         'integrity' => [
@@ -332,6 +370,15 @@ return [
      * siphoning takes.
      */
     'fuel' => [
+        /*
+         * The pump's reference price per litre, in the base currency's minor units. These prefill the
+         * office slip and the driver link; the slip's own figure is what the register records, so a
+         * changed reference never re-prices a litre that was already bought.
+         */
+        'price_diesel' => (int) env('FLEET_FUEL_PRICE_DIESEL', 1_975),
+        'price_petrol' => (int) env('FLEET_FUEL_PRICE_PETROL', 2_150),
+        'price_paraffin' => (int) env('FLEET_FUEL_PRICE_PARAFFIN', 1_450),
+
         'variance_threshold_pct' => (float) env('FLEET_FUEL_VARIANCE_THRESHOLD_PCT', 10),
         'variance_critical_pct' => (float) env('FLEET_FUEL_VARIANCE_CRITICAL_PCT', 25),
 

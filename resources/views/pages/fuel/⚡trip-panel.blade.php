@@ -485,7 +485,7 @@ new class extends Component {
                                 <x-ui.select name="purchaseId" id="trip-fuel-slip" wire:model="purchaseId" :label="__('Slip it comes from')">
                                     <option value="">{{ __('Choose a slip') }}</option>
                                     @foreach ($this->slips as $slip)
-                                        <option value="{{ $slip->id }}">{{ $slip->invoice_no ?? substr($slip->id, -8) }} · {{ $this->remaining($slip) }} L left</option>
+                                        <option value="{{ $slip->id }}">{{ $slip->invoice_no ?? substr($slip->id, -8) }} · {{ $slip->fuel_type->label() }} · {{ $this->remaining($slip) }} L left</option>
                                     @endforeach
                                 </x-ui.select>
                             @endif

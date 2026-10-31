@@ -39,25 +39,31 @@ final class StopTrip
     public function __invoke(Trip $trip, string $reason, ?int $actorId = null): Trip
     {
         return DB::transaction(function () use ($trip, $reason, $actorId): Trip {
-            $aborted = $trip->status->isPreDeparture() === false;
+            // Locked, because the cancelled/aborted fork below reads the status: a trip that departed
+            // while this transaction was waiting is an abort, not a cancellation, and the difference is
+            // whether the truck has to be called back from the road.
+            /** @var Trip $locked */
+            $locked = Trip::query()->whereKey($trip->id)->lockForUpdate()->firstOrFail();
 
-            $trip->moveTo($aborted ? TripStatus::Aborted : TripStatus::Cancelled, $reason, [], ActorKind::User, $actorId);
-            $trip->save();
+            $aborted = $locked->status->isPreDeparture() === false;
 
-            ($this->releaseAssignment)($trip->id);
+            $locked->moveTo($aborted ? TripStatus::Aborted : TripStatus::Cancelled, $reason, [], ActorKind::User, $actorId);
+            $locked->save();
+
+            ($this->releaseAssignment)($locked->id);
 
             // Only an aborted trip had put its truck on the road; §10.2's cancelled branch never
             // reached departure, and EndTruckTrip would rightly refuse to "return" a truck that is
             // still sitting in the yard.
-            if ($aborted && $trip->truck_id !== null) {
-                $truck = $this->fleet->truck((int) $trip->truck_id);
+            if ($aborted && $locked->truck_id !== null) {
+                $truck = $this->fleet->truck((int) $locked->truck_id);
 
                 if ($truck !== null && $truck->status === FleetStatus::OnTrip) {
-                    ($this->endTruckTrip)((int) $trip->truck_id, 'Aborted on trip '.$trip->trip_no);
+                    ($this->endTruckTrip)((int) $locked->truck_id, 'Aborted on trip '.$locked->trip_no);
                 }
             }
 
-            return $trip->refresh();
+            return $locked->refresh();
         });
     }
 }

@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace App\Domain\Kernel\Commercial;
 
+use DateTimeInterface;
+use Illuminate\Support\Carbon;
+use InvalidArgumentException;
+
 /**
  * The payment-terms vocabulary shared by customers and suppliers.
  *
@@ -30,6 +34,33 @@ final class PaymentTerms
     public static function isValid(string $terms): bool
     {
         return preg_match(self::PATTERN, self::normalise($terms)) === 1;
+    }
+
+    /**
+     * The date an invoice issued on `$issuedOn` falls due — the date §10.4's ageing axis measures from.
+     *
+     * Kept beside {@see self::label()} because terms are interpreted in exactly one place: a second
+     * parser in a screen is how `net_30` becomes 30 days on the form and 31 in the report. Calendar days,
+     * not business days — §17 Q3's fiscal calendar question is unresolved and a "next working day" rule
+     * invented here would silently disagree with the accountant's reading.
+     */
+    public static function dueOn(string $terms, DateTimeInterface $issuedOn): Carbon
+    {
+        $issued = Carbon::instance($issuedOn)->startOfDay();
+        $terms = self::normalise($terms);
+
+        if ($terms === 'cash') {
+            return $issued;
+        }
+
+        if (preg_match('/^net_([1-9][0-9]{0,2})$/', $terms, $matches) === 1) {
+            return $issued->addDays((int) $matches[1]);
+        }
+
+        throw new InvalidArgumentException(sprintf(
+            '"%s" is not a payment term, so the invoice has no due date to age against. Use cash or net_<days> (§4.1).',
+            $terms,
+        ));
     }
 
     /** "Cash on delivery", "Net 30 days" — how an invoice footer reads a stored term. */

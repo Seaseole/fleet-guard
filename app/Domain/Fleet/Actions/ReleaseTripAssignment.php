@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Domain\Fleet\Actions;
 
 use App\Domain\Fleet\Exceptions\AssignmentRejected;
+use App\Domain\Fleet\Models\Trailer;
+use App\Domain\Fleet\Models\Truck;
 use App\Domain\Fleet\Models\VehicleAssignment;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -28,9 +30,30 @@ final class ReleaseTripAssignment
     public function __invoke(string $tripId): int
     {
         return DB::transaction(function () use ($tripId): int {
+            // Which assets the trip is holding, read without a lock and only to learn the ids worth
+            // taking one on.
+            $promised = VehicleAssignment::query()
+                ->where('trip_id', $tripId)
+                ->whereNull('to_at')
+                ->get(['id', 'truck_id', 'trailer_id']);
+
+            // The asset rows come before the windows, in the order every other Action in this path takes
+            // them — trip, truck, trailer, assignments. A release that locked only the windows would sit
+            // opposite {@see AssignVehicle} with the two halves crossed: one holding a window and reaching
+            // for a truck, the other holding a truck and reaching for a window, and MySQL choosing which
+            // dispatcher loses.
+            foreach ($promised->pluck('truck_id')->filter()->unique() as $truckId) {
+                Truck::query()->whereKey((int) $truckId)->lockForUpdate()->first();
+            }
+
+            foreach ($promised->pluck('trailer_id')->filter()->unique() as $trailerId) {
+                Trailer::query()->whereKey((int) $trailerId)->lockForUpdate()->first();
+            }
+
             $open = VehicleAssignment::query()
                 ->where('trip_id', $tripId)
                 ->whereNull('to_at')
+                ->lockForUpdate()
                 ->get();
 
             $closed = 0;

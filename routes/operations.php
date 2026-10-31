@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Operations\DownloadDriverLinkQrController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -44,4 +45,14 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         ->whereUlid('trip')
         ->middleware('can:trips.view')
         ->name('operations.trip');
+
+    /*
+     * The QR of a driver link (§9.6). `kiosk.token.issue` rather than `trips.view`, because the file it
+     * draws is the live door itself: a seat that may only read the trip must not be able to ask for the
+     * code a driver scans at the gate.
+     */
+    Route::get('trips/{trip}/driver-link/qr.svg', DownloadDriverLinkQrController::class)
+        ->whereUlid('trip')
+        ->middleware('can:kiosk.token.issue')
+        ->name('operations.trip.driver-link.qr');
 });

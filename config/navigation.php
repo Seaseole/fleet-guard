@@ -44,6 +44,7 @@ return [
             ['label' => 'Invoices', 'route' => 'invoicing.index', 'icon' => 'receipt-percent', 'permission' => 'invoices.view', 'phase' => 4],
             ['label' => 'Customers', 'route' => 'invoicing.customers', 'icon' => 'building-storefront', 'permission' => 'customers.view', 'phase' => 1],
             ['label' => 'Suppliers', 'route' => 'accounting.suppliers', 'icon' => 'scale', 'permission' => 'suppliers.view', 'phase' => 1],
+            ['label' => 'Bills', 'route' => 'accounting.bills', 'icon' => 'document-text', 'permission' => 'accounting.view', 'phase' => 5],
             ['label' => 'Accounting', 'route' => 'accounting.journal', 'icon' => 'calculator', 'permission' => 'ledger.view', 'phase' => 0],
             ['label' => 'Bank & cash', 'route' => 'accounting.bank-accounts', 'icon' => 'banknotes', 'permission' => 'bank.view', 'phase' => 0],
             ['label' => 'Cutover', 'route' => 'accounting.cutover', 'icon' => 'circle-stack', 'permission' => 'cutover.import', 'phase' => 0.5],

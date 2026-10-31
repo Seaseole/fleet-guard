@@ -19,19 +19,22 @@ The visual and interaction contract for every screen. Token values here are the 
 
 ## 2. Colour
 
-### 2.1 Neutrals (warm, low-chroma — avoids the cold grey default)
+### 2.1 Neutrals (cool, low-chroma — the shadcn grey, not a warm tint)
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
-| `--fg-canvas` | `#F7F7F4` | `#0D0F0E` | Page background |
-| `--fg-surface` | `#FFFFFF` | `#151816` | Cards, sheets, modals |
-| `--fg-surface-raised` | `#FFFFFF` + shadow-2 | `#1B1F1D` | Popovers, sticky table headers |
-| `--fg-surface-sunk` | `#F0F1EC` | `#101312` | Filter bars, code/ID blocks |
-| `--fg-ink` | `#121413` | `#E9EBE7` | Primary text |
-| `--fg-ink-secondary` | `#4C524E` | `#A9B1AC` | Secondary text |
-| `--fg-ink-muted` | `#6B726D` | `#8B938E` | Labels, meta — **AA-checked at 4.60:1 / 4.94:1 on light surfaces and 6.10:1 / 5.67:1 on dark surfaces** |
-| `--fg-line` | `#E2E4DE` | `#2A2F2C` | Hairlines, table rules |
-| `--fg-line-strong` | `#C9CCC4` | `#3A403C` | Input borders, dividers that carry meaning |
+| `--fg-canvas` | `#FAFAFA` | `#0E1013` | Page background |
+| `--fg-surface` | `#FFFFFF` | `#171A1F` | Cards, sheets, modals |
+| `--fg-surface-raised` | `#FFFFFF` + shadow-2 | `#1D2127` | Popovers, dropdown panels |
+| `--fg-surface-sunk` | `#F4F4F5` | `#21252B` | Filter bars, code/ID blocks, segmented-control wells |
+| `--fg-surface-hover` | `#F0F0F2` | `#22262D` | Hover wash for outline/secondary controls — **not** named `accent`; see DESIGN-SYSTEM.md §2.5 |
+| `--fg-ink` | `#131417` | `#E7E9EA` | Primary text — 17.65:1 / 15.64:1 on the canvas |
+| `--fg-ink-secondary` | `#52555C` | `#A8ADB5` | Secondary text — 7.15:1 / 8.45:1 on the canvas |
+| `--fg-ink-muted` | `#6B6F77` | `#90949D` | Labels, meta — **AA-checked at 4.83:1 / 5.04:1 on light surfaces, 4.59:1 on `surface-sunk`; 6.27:1 / 5.74:1 / 5.06:1 dark** |
+| `--fg-line` | `#E4E4E7` | `#2A2F37` | Hairlines, table rules |
+| `--fg-line-strong` | `#C8C9CE` | `#3A4048` | Input borders, dividers that carry meaning |
+
+Borders are **decorative**: `--fg-line` is 1.27:1 against a surface and `--fg-line-strong` 1.65:1, so neither is the sole signal that a control exists. WCAG 1.4.11 is met by the affordance that has to be perceivable — every field carries a visible label, and keyboard focus paints the 5.24:1 focus outline (§10). Pretending a hairline is a 3:1 boundary would be the dishonest version of this table.
 
 ### 2.2 Accent — "corridor teal", used once per view
 
@@ -52,13 +55,24 @@ Teal, not indigo/violet, and **one accent** — if every action is highlighted n
 | `--fg-warning` | `#B54708` | `#F79009` | Due soon, variance, expiring in ≤30 days |
 | `--fg-danger` | `#B42318` | `#F97066` | Overdue, expired, out of balance, blocked, overloaded |
 | `--fg-info` | `#175CD3` | `#7CA9F9` | In progress, neutral notices |
-| `--fg-neutral-badge` | `#5A615C` | `#98A29B` | Draft, archived, unknown |
+| `--fg-neutral-badge` | `#5A5F66` | `#99A0A8` | Draft, archived, unknown |
 
-Each has a `-soft` background variant (`#FFFAEB`, `#FFF1F0`, `#ECFDF3`, `#EFF6FF` light / desaturated deep variants dark). Solid danger controls use `--fg-on-danger` — `#FFFFFF` on the light danger (6.57:1) and `#0D0F0E` on the dark danger (6.90:1) — so the foreground is never assumed to be white in both themes.
+Each has a `-soft` background variant (`#FFFAEB`, `#FFF1F0`, `#ECFDF3`, `#EFF6FF` light / desaturated deep variants dark). Solid danger controls use `--fg-on-danger` — `#FFFFFF` on the light danger (6.57:1) and `#0E1013` on the dark danger (6.84:1) — so the foreground is never assumed to be white in both themes.
 
 ### 2.4 Data-visualisation ramp
 
 Sequential (single-hue teal, 5 steps) for magnitude; divergent (`danger → neutral → success`) for variance and profit/loss; categorical max 4 series, distinguished **by line style and label placement as well as colour**. Charts get no fill gradients and no 3D.
+
+### 2.5 The shadcn alias contract
+
+The components follow shadcn's look and its token *names*, without shadcn's React: `resources/css/app.css` declares `--background`, `--foreground`, `--card`, `--popover`, `--primary`, `--secondary`, `--muted`, `--muted-foreground`, `--destructive`, `--border`, `--input`, `--ring` in a `@theme inline` block pointing at the `--fg-*` values above. It is an alias layer, not a second palette — an alias cannot drift from what it points at, and `.dark` remains the single place a value changes. Utilities written either way (`bg-fg-surface` or `bg-background`) emit the same variable.
+
+Two differences from stock shadcn, both deliberate:
+
+- **`primary` is teal, not near-black.** The brand accent is the affirmative action here; `--color-accent` stays the brand and is referenced ~52 times across the pages. shadcn's own `accent` slot is a hover *surface*, so that role maps to `--color-muted` / `--fg-surface-hover` instead of re-pointing the name.
+- **Focus is one global outline, not a per-control ring.** `:where(a, button, input, select, textarea, [tabindex]):focus-visible` paints `outline-2 outline-offset-2` in `--color-focus`. That reaches a `<summary>`, a sort button or a `[tabindex]` signature canvas — none of them shadcn components — and survives an `overflow-x-auto` table, where a `ring-offset` box shadow clips.
+
+Control metrics follow shadcn: 36 px tall (`h-9`), 8 px radius, 1 px `--color-input` border, a 1 px shadow, and 14 px labels above a 14 px field. Small controls step down to 32 px (`h-8`) and dense row actions to 28 px (`h-7`).
 
 ---
 
@@ -70,7 +84,7 @@ Sequential (single-hue teal, 5 steps) for magnitude; divergent (`danger → neut
 | Title | IBM Plex Sans | 20 / 26, -0.011em | 600 | Card and section headers |
 | Body | IBM Plex Sans | 14 / 20 | 400 | Everything readable |
 | Body small | IBM Plex Sans | 13 / 18 | 400 | Table cells, dense lists |
-| Label | IBM Plex Sans | 12 / 16, `+0.02em` | 500, `text-case: none` | Field labels, table headers — **not** uppercase micro-type |
+| Label | IBM Plex Sans | 14 / 20 above fields, 12 / 16 in table heads | 500, `text-case: none` | Field labels, table headers — **not** uppercase micro-type |
 | Numeric | `IBM Plex Mono`, `font-variant-numeric: tabular-nums` | 13–14 / 18 | 500 | Money, odometer, litres, tonnes, hours |
 | Identifier | IBM Plex Mono | 12 / 16 | 400 | Registration plates, ULIDs, document numbers, invoice refs |
 
@@ -82,16 +96,16 @@ Rationale for Plex over Inter: tabular monospace numerals are the backbone of a 
 
 **Spacing** (4 px base): `2, 4, 8, 12, 16, 24, 32, 48, 64`. Card padding 20; section gap 24; page gutter 24 (16 on phone); form field vertical gap 16, group gap 24; table row height 40 (comfortable) / 32 (dense, the default on fleet and ledger grids).
 
-**Radii:** `--r-sm 4` inputs, chips · `--r-md 8` cards, menus, buttons · `--r-lg 14` modals, sheets · `--r-full` only for status dots and avatars. No blanket pill geometry.
+**Radii:** `--radius-fg-sm 6` chips, menu items · `--radius-fg-md 8` inputs, buttons, cards, menus · `--radius-fg-lg 10` dialogs, table containers · `--radius-fg-xl 14` reserved for sheets · 4 px only for the checkbox square, `--r-full` only for status dots and avatars. No blanket pill geometry.
 
 **Elevation** (never more than 3 layers in one view):
 
 ```
---sh-1  0 1px 1px rgba(17,20,18,.04), 0 1px 2px rgba(17,20,18,.06)   /* cards, sticky headers */
---sh-2  0 2px 4px rgba(17,20,18,.06), 0 8px 16px rgba(17,20,18,.08)  /* popovers, dropdowns */
---sh-3  0 12px 32px rgba(17,20,18,.14), 0 4px 8px rgba(17,20,18,.08) /* modals, command palette */
+--shadow-fg-1  0 1px 2px rgba(15,18,23,.06)                          /* cards, controls, sticky headers */
+--shadow-fg-2  0 1px 3px rgba(15,18,23,.08), 0 4px 10px rgba(15,18,23,.06)  /* popovers, dropdowns */
+--shadow-fg-3  0 4px 8px rgba(15,18,23,.08), 0 16px 40px rgba(15,18,23,.14) /* modals, command palette */
 ```
-Dark mode uses the same structure with `rgba(0,0,0,.5)` and adds a 1px `--fg-line` rim, because shadows disappear on near-black.
+Dark mode uses the same structure with `rgba(0,0,0,.4–.6)`, because shadows disappear on near-black.
 
 **Motion:** durations `--t-fast 120ms` (hover, focus) · `--t-base 180ms` (panels, drawers) · `--t-slow 240ms` (modals, page transitions). Easing `cubic-bezier(.2,0,.1,1)` standard, `cubic-bezier(.2,.8,.2,1)` emphasis. Only `transform` and `opacity`, hardware-accelerated, on the compositor. `wire:navigate` transitions at 120 ms opacity only — never a slide on a data app. **`prefers-reduced-motion: reduce` disables all transitions and the skeleton shimmer.**
 
@@ -103,8 +117,8 @@ Each component lives at `resources/views/components/ui/{name}.blade.php` with a 
 
 | Component | Required states | Rules |
 |---|---|---|
-| `button` | default, hover, active, focus-visible, loading, disabled, destructive, as-link | Sizes `sm/md/lg`. `sm` is icon-only with a tooltip. Destructive uses `--fg-danger` as text/border, filled only on the confirm step. Minimum 32 px tall (44 px on kiosk). Never two `primary` buttons in one view — and **a button that states no variant follows its job, not a default style**: `type="submit"` is the affirmative action of its form so it is filled, everything else is quiet. An unstated variant was `primary` for every button until 2026-10-30, which is how a page with three forms got three filled actions; the resolution lives in `resources/views/components/ui/button.blade.php` and is enforced twice — `scripts/lint-ui.php` (U1, per source container) and the `assertOneFilledAction` count in `scripts/render-operations.php`, which is the only one that can see a real state's screen. |
-| `input` / `textarea` / `select` | rest, hover, focus, filled, error, disabled, prefix/suffix | 100 % width in forms, label always above and associated via `for`, helper text slot, error replaces helper in `--fg-danger` with an icon. Money inputs right-align monospace and show the currency code as a suffix; a foreign-currency field shows the BWP equivalent beneath as read-only derived text. All three are one contract: `label`/`name`/`hint`/`error`/`options`, the `for`-`id` pairing derived from `name`, and the error replacing the hint in the same `aria-describedby` slot. `x-ui.select` landed 2026-10-30 and replaced 64 hand-copied `<select>` blocks; a raw `<select>` in a page is now a build failure (`scripts/lint-ui.php`, U2). The copies are the argument for the rule: each carried a truncated class string — no hover, no focus transition, no disabled treatment — and none of the 64 said `aria-invalid`, so a failed select looked identical to a valid one. |
+| `button` | default, hover, active, focus-visible, loading, disabled, destructive, as-link | Variants `primary` (and its shadcn spelling `default`), `secondary`, `outline`, `ghost`, `link`, `danger`, `destructive`/`danger-solid`. Sizes `xs` 28 px (dense row actions), `sm` 32 px, `md` 36 px, `lg` 44 px (the kiosk's touch minimum); `sm` is icon-only with a tooltip. Destructive uses `--fg-danger` as text/border, filled only on the confirm step. Minimum 28 px tall (44 px on kiosk). Never two `primary` buttons in one view — and **a button that states no variant follows its job, not a default style**: `type="submit"` is the affirmative action of its form so it is filled, everything else is quiet. An unstated variant was `primary` for every button until 2026-10-30, which is how a page with three forms got three filled actions; the resolution lives in `resources/views/components/ui/button.blade.php` and is enforced twice — `scripts/lint-ui.php` (U1, per source container) and the `assertOneFilledAction` count in `scripts/render-operations.php`, which is the only one that can see a real state's screen. |
+| `input` / `textarea` / `select` | rest, hover, focus, filled, error, disabled, prefix/suffix | 100 % width in forms, 36 px tall (`h-9`) and 8 px radius, label 14 px above and associated via `for`, helper text slot, error replaces helper in `--fg-danger` with an icon. Money inputs right-align monospace and show the currency code as a suffix; a foreign-currency field shows the BWP equivalent beneath as read-only derived text. All three are one contract: `label`/`name`/`hint`/`error`/`options`, the `for`-`id` pairing derived from `name`, and the error replacing the hint in the same `aria-describedby` slot. `x-ui.select` landed 2026-10-30 and replaced 64 hand-copied `<select>` blocks; a raw `<select>` in a page is now a build failure (`scripts/lint-ui.php`, U2). The copies are the argument for the rule: each carried a truncated class string — no hover, no focus transition, no disabled treatment — and none of the 64 said `aria-invalid`, so a failed select looked identical to a valid one. |
 | `date-field` / `date-range` | as input, plus preset menu | Presets: today, 7d, month-to-date, last month, quarter, YTD, custom. The range drives every report and the dashboard. |
 | `table` | rest, row hover, selected, loading, empty, sorted, sticky header, dense/comfortable | Server-side sort + pagination always. `:caption` is not optional — it is the table's accessible name and every `<x-ui.table>` in the app carries one (lint U3). Header carries the column's metric definition in a tooltip. **One numeric path:** a figure column is `numeric` (`.fg-numeric` — monospace, tabular, right-aligned), a machine-read code is `identifier` (`.fg-identifier` — monospace, tabular, left), a long value is `nowrap`. Typing `text-right`/`font-mono` into a cell's class is a build failure (lint U5); the two raw `<table>`s in the app use the token classes directly. Row click navigates (`wire:navigate`); a keyboard-focusable "open" affordance always exists. Bulk selection bar replaces the top bar when rows are selected. |
 | `filter-bar` | default, active-count, saved views | Above the table, never inside a drawer on desktop; shows a chip per active filter with a clear-×, plus "clear all"; state lives in the query string so a filtered list is shareable and survives `wire:navigate` back-navigation. |

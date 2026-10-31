@@ -21,6 +21,7 @@ require __DIR__.'/../vendor/autoload.php';
 
 use App\Domain\Fleet\Actions\CreateTruck;
 use App\Domain\Fleet\Data\TruckDto;
+use App\Domain\Fleet\FuelType;
 use App\Domain\Fuel\Actions\CreateBulkTank;
 use App\Domain\Fuel\Actions\CreateFuelPurchase;
 use App\Domain\Fuel\Actions\CreateFuelStation;
@@ -188,6 +189,7 @@ final class FuelRenderSweep extends TestCase
             purchasedOn: Carbon::now(),
             litresX100: 40_000,
             pricePerLitreMinor: 1850,
+            fuelType: FuelType::Diesel,
             stationId: $station->id,
             invoiceNo: 'FUE-SLIP-1',
         ), 1);
@@ -212,6 +214,7 @@ final class FuelRenderSweep extends TestCase
             purchasedOn: Carbon::now(),
             litresX100: 500_000,
             pricePerLitreMinor: 2000,
+            fuelType: FuelType::Diesel,
             stationId: $station->id,
             invoiceNo: 'FUE-BULK-1',
             bulkTankId: $bulk->id,

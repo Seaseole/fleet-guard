@@ -39,6 +39,25 @@ final class PlanTrip
     public function __invoke(Trip $trip, TripDto $dto, ?int $actorId = null): Trip
     {
         return DB::transaction(function () use ($trip, $dto, $actorId): Trip {
+            // Locked first, because this writes the truck and the driver the dispatch then commits. A
+            // plan saved from a stale dialog used to re-point a trip that had already been assigned:
+            // the reservation stayed on the old vehicle while the trip row named a new one.
+            /** @var Trip $locked */
+            $locked = Trip::query()->whereKey($trip->id)->lockForUpdate()->firstOrFail();
+
+            if (! in_array($locked->status, [TripStatus::Draft, TripStatus::Planned, TripStatus::OnHold], true)) {
+                $remedy = $locked->status->isPreDeparture()
+                    ? 'Put it on hold to free the truck and the driver, then plan it again.'
+                    : 'It has already left, so its crew cannot be changed from here.';
+
+                throw new InvalidArgumentException(sprintf(
+                    'Trip %s is %s. %s (§10.2)',
+                    $locked->trip_no,
+                    $locked->status->label(),
+                    $remedy,
+                ));
+            }
+
             $truck = $this->fleet->truck($dto->truckId)
                 ?? throw new InvalidArgumentException(sprintf('Truck #%d is not in this company\'s fleet.', $dto->truckId));
 
@@ -51,7 +70,7 @@ final class PlanTrip
 
             $planned = Carbon::parse($dto->plannedDepartureAt)->timezone(CurrentCompany::timezone());
 
-            $trip->fill([
+            $locked->fill([
                 'truck_id' => $truck->id,
                 'trailer_id' => $dto->trailerId,
                 'driver_id' => $driver->id,
@@ -59,13 +78,13 @@ final class PlanTrip
                 'planned_departure_at' => $planned,
             ]);
 
-            if ($trip->status === TripStatus::Draft) {
-                $trip->moveTo(TripStatus::Planned, null, [], ActorKind::User, $actorId);
+            if ($locked->status === TripStatus::Draft) {
+                $locked->moveTo(TripStatus::Planned, null, [], ActorKind::User, $actorId);
             }
 
-            $trip->save();
+            $locked->save();
 
-            return $trip->refresh();
+            return $locked->refresh();
         });
     }
 }

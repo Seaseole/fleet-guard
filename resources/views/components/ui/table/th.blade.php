@@ -4,7 +4,7 @@
     scope="col"
     @if($sortable) aria-sort="{{ $direction === 'asc' ? 'ascending' : ($direction === 'desc' ? 'descending' : 'none') }}" @endif
     {{ $attributes->class([
-        'whitespace-nowrap border-b border-fg-line bg-fg-surface-sunk px-3 py-2 text-start text-xs font-medium text-fg-ink-muted',
+        'whitespace-nowrap border-b border-fg-line px-3 py-2 text-start text-xs font-medium text-fg-ink-muted',
         'text-right' => $numeric,
     ]) }}
 >

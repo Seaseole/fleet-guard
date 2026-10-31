@@ -1,7 +1,7 @@
 @component('mail::message')
 # You have been invited
 
-{{ $invitedBy }} invited you to **{{ config('app.name') }}** as **{{ $roleLabel }}**.
+{{ $invitedBy }} invited you to **{{ $companyName }}** as **{{ $roleLabel }}**.
 
 @component('mail::button', ['url' => $acceptUrl])
 Accept the invitation

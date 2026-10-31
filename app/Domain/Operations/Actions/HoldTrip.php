@@ -30,19 +30,26 @@ final class HoldTrip
     public function __invoke(Trip $trip, ?string $reason = null, ?int $actorId = null): Trip
     {
         return DB::transaction(function () use ($trip, $reason, $actorId): Trip {
-            if ($trip->status === TripStatus::OnHold) {
-                $trip->moveTo(TripStatus::Planned, null, [], ActorKind::User, $actorId);
-                $trip->save();
+            // The hold and its release are the same edge in opposite directions, so which one this is has
+            // to be answered from the locked row: two tabs clicking one trip's hold button used to read
+            // `planned` in both, reserve nothing twice over, and leave one of them holding the other's
+            // release.
+            /** @var Trip $locked */
+            $locked = Trip::query()->whereKey($trip->id)->lockForUpdate()->firstOrFail();
 
-                return $trip->refresh();
+            if ($locked->status === TripStatus::OnHold) {
+                $locked->moveTo(TripStatus::Planned, null, [], ActorKind::User, $actorId);
+                $locked->save();
+
+                return $locked->refresh();
             }
 
-            $trip->moveTo(TripStatus::OnHold, $reason, [], ActorKind::User, $actorId);
-            $trip->save();
+            $locked->moveTo(TripStatus::OnHold, $reason, [], ActorKind::User, $actorId);
+            $locked->save();
 
-            ($this->releaseAssignment)($trip->id);
+            ($this->releaseAssignment)($locked->id);
 
-            return $trip->refresh();
+            return $locked->refresh();
         });
     }
 }

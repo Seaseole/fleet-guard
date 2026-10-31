@@ -5,6 +5,11 @@
     about its weight came out as the loudest control on the screen — and a page with three forms then had
     three filled teal buttons competing (§5's "never two"). Leaving a variant unstated is now the quiet
     case: a button has to be told it is the affirmative action of its form, dialog or page.
+
+    Names follow the shadcn contract (primary / secondary / outline / ghost / destructive / link). The
+    three older spellings still in the pages — `default`, `danger`, `danger-solid`, plus the two that never
+    existed here (`subtle`, `quiet`) — resolve through the same map rather than falling back to outline,
+    which is how a `quiet` button on the bills page silently painted a border.
 --}}
 @props([
     'variant' => null,
@@ -18,14 +23,23 @@
 ])
 
 @php
-    $base = 'inline-flex items-center justify-center gap-2 rounded-fg-md font-medium transition duration-(--t-fast) ease-(--ease-standard) select-none disabled:cursor-not-allowed disabled:opacity-55';
+    $base = 'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-fg-md font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform] duration-(--t-fast) ease-(--ease-standard) select-none disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50';
+
+    $filled = 'bg-primary text-primary-foreground shadow-fg-1 hover:bg-accent-hover active:translate-y-px';
+    $destructive = 'bg-destructive text-destructive-foreground shadow-fg-1 hover:bg-danger-hover';
 
     $variants = [
-        'primary' => 'bg-accent text-on-accent hover:bg-accent-hover active:translate-y-px',
-        'outline' => 'border border-fg-line-strong bg-fg-surface text-fg-ink hover:bg-fg-surface-sunk',
-        'ghost' => 'text-fg-ink-secondary hover:bg-fg-surface-sunk hover:text-fg-ink',
+        'primary' => $filled,
+        'default' => $filled,                  /* shadcn's name for the same slot */
+        'secondary' => 'bg-secondary text-secondary-foreground hover:bg-fg-surface-hover',
+        'outline' => 'border border-input bg-background text-foreground shadow-fg-1 hover:bg-fg-surface-hover',
+        'ghost' => 'text-fg-ink-secondary hover:bg-secondary hover:text-foreground',
+        'link' => 'text-primary underline-offset-4 hover:underline',
         'danger' => 'border border-danger/40 bg-transparent text-danger hover:bg-danger-soft',
-        'danger-solid' => 'bg-danger text-on-danger hover:bg-danger-hover',
+        'danger-solid' => $destructive,
+        'destructive' => $destructive,
+        'subtle' => 'bg-secondary text-secondary-foreground hover:bg-fg-surface-hover',
+        'quiet' => 'text-fg-ink-secondary hover:bg-secondary hover:text-foreground',
     ];
 
     /**
@@ -40,9 +54,10 @@
     $variant ??= ($type === 'submit' && $href === null) ? 'primary' : 'outline';
 
     $sizes = [
-        'sm' => 'h-8 px-2.5 text-xs',      /* icon-only with tooltip */
-        'md' => 'h-10 px-3.5 text-sm',
-        'lg' => 'h-11 px-5 text-sm',
+        'xs' => 'h-7 gap-1.5 rounded-fg-sm px-2 text-xs',   /* dense row actions */
+        'sm' => 'h-8 gap-1.5 px-3 text-xs',
+        'md' => 'h-9 px-4 text-sm',
+        'lg' => 'h-11 px-6 text-sm',       /* 44px: the kiosk's touch minimum (§5) */
     ];
 
     $tag = $href ? 'a' : 'button';

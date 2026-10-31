@@ -15,6 +15,7 @@ use App\Domain\Kernel\Alerts\AlertSeverity;
 use App\Domain\Kernel\Alerts\AlertType;
 use App\Domain\Kernel\Alerts\Data\ReminderCandidate;
 use App\Domain\Kernel\Alerts\Support\AlertDelivery;
+use App\Domain\Kernel\Settings\CompanySettings;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Operations\Models\Trip;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -43,6 +44,7 @@ final class EvaluateFuelVariance
     public function __construct(
         private readonly RaiseAlert $raise,
         private readonly AlertDelivery $delivery,
+        private readonly CompanySettings $settings,
     ) {}
 
     public function __invoke(Trip $trip): ?FuelVariance
@@ -75,7 +77,7 @@ final class EvaluateFuelVariance
         $figures = FuelConsumption::compare($litresX100, $distanceKm, $truck->expected_consumption_per_100);
         $variancePctX100 = $figures['variance_pct_x100'];
 
-        $thresholdPctX100 = (int) round((float) config('fleet.fuel.variance_threshold_pct', 10) * 100);
+        $thresholdPctX100 = (int) round((float) $this->settings->get('fuel.variance_threshold_pct') * 100);
 
         if (abs($variancePctX100) < $thresholdPctX100) {
             return null;
@@ -127,7 +129,7 @@ final class EvaluateFuelVariance
 
     private function raise(FuelVariance $variance, Trip $trip, Truck $truck): void
     {
-        $criticalX100 = (int) round((float) config('fleet.fuel.variance_critical_pct', 25) * 100);
+        $criticalX100 = (int) round((float) $this->settings->get('fuel.variance_critical_pct') * 100);
         $severity = abs((int) round((float) $variance->variance_pct_10_2 * 100)) >= $criticalX100
             ? AlertSeverity::Critical
             : AlertSeverity::Warning;

@@ -275,6 +275,7 @@ final class KioskRenderSweep extends TestCase
                 'Fuel on the road',
                 $tripC->trip_no,
                 'Record what the pump gave you',
+                'This truck takes',
                 'Litres',
                 'Price per litre',
                 'Odometer reading',

@@ -17,6 +17,7 @@ use App\Domain\Operations\Models\Job;
 use App\Domain\Operations\Models\Route;
 use App\Domain\Operations\RouteRateType;
 use App\Domain\Operations\Support\JobProgress;
+use App\Domain\Operations\TripStatus;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
@@ -55,6 +56,24 @@ new #[Title('Jobs')] class extends Component {
 
     #[Url('status')]
     public string $statusFilter = '';
+
+    /**
+     * The column the register is ordered by, and which way — both in the URL, because a dispatcher who
+     * sorts the list to find tonight's loads then follows a trip and comes back has not lost the view.
+     */
+    #[Url('sort')]
+    public string $sort = 'due';
+
+    #[Url('dir')]
+    public string $dir = 'asc';
+
+    /**
+     * The worklist filter: the three states where the register is waiting on *this desk* rather than on
+     * the road. `status` asks what a job is; this asks what it needs, and it is the only way to see an
+     * accepted job that nobody has put a truck on yet.
+     */
+    #[Url('needs')]
+    public string $needs = '';
 
     /** The row being edited as a new enquiry; null while the create dialog is empty. */
     public ?string $editingId = null;
@@ -101,22 +120,101 @@ new #[Title('Jobs')] class extends Component {
 
     public function updated(string $property): void
     {
-        if (in_array($property, ['search', 'statusFilter'], true)) {
+        if (in_array($property, ['search', 'statusFilter', 'sort', 'dir', 'needs'], true)) {
             $this->resetPage();
             unset($this->jobs);
         }
     }
 
+    /**
+     * Clicking a heading sorts by it; clicking the sorted one flips the direction.
+     *
+     * A fresh column starts in the direction that column reads top-down by — a reference and a status
+     * climb, a date and a price fall, because the useful end of "latest load" and "biggest quote" is
+     * the top of the screen, not the bottom.
+     */
+    public function sortBy(string $column): void
+    {
+        if ($this->sort === $column) {
+            $this->dir = $this->dir === 'asc' ? 'desc' : 'asc';
+
+            return;
+        }
+
+        $this->sort = $column;
+        $this->dir = in_array($column, ['job_no', 'status'], true) ? 'asc' : 'desc';
+    }
+
+    public function sortDirection(string $column): ?string
+    {
+        return $this->sort === $column ? $this->dir : null;
+    }
+
+    /** The direction actually applied — a hand-typed `?dir=anything` sorts ascending, and nothing interpolates it raw. */
+    public function appliedDirection(): string
+    {
+        return $this->dir === 'desc' ? 'desc' : 'asc';
+    }
+
     public function clearFilters(): void
     {
-        $this->reset(['search', 'statusFilter']);
+        $this->reset(['search', 'statusFilter', 'needs']);
         $this->resetPage();
         unset($this->jobs);
     }
 
     public function hasFilters(): bool
     {
-        return $this->search !== '' || $this->statusFilter !== '';
+        return $this->search !== '' || $this->statusFilter !== '' || $this->needs !== '';
+    }
+
+    /** @return array<string, string> the worklist chips, in the order the desk meets them */
+    #[Computed]
+    public function needsOptions(): array
+    {
+        return [
+            'quote' => __('Needs a price'),
+            'answer' => __('Needs the customer'),
+            'trip' => __('Needs a truck'),
+        ];
+    }
+
+    /**
+     * How many jobs sit behind each chip, so a dispatcher can read the queue without clicking through it.
+     *
+     * `needs=trip` is deliberately "no trip that still has work to do" rather than "no trip row": a job
+     * whose only trip came back yesterday still needs the next one, and it is exactly the row that was
+     * invisible while the register offered no filter for it.
+     *
+     * @return array<string, int>
+     */
+    #[Computed]
+    public function needsCounts(): array
+    {
+        $finished = [
+            TripStatus::Completed->value,
+            TripStatus::Closed->value,
+            TripStatus::Cancelled->value,
+            TripStatus::Aborted->value,
+        ];
+
+        return [
+            'quote' => Job::query()->where('status', JobStatus::Enquiry->value)->count(),
+            'answer' => Job::query()->where('status', JobStatus::Quoted->value)->count(),
+            'trip' => Job::query()
+                ->whereIn('status', [JobStatus::Accepted->value, JobStatus::InExecution->value])
+                ->whereDoesntHave('trips', static fn ($q) => $q->whereNotIn('status', $finished))
+                ->count(),
+        ];
+    }
+
+    /** The one route the accepted job must lead to: the board, already holding this job open. */
+    public function planTripUrl(Job $job): string
+    {
+        return route('operations.dispatch', array_filter([
+            'plan_job' => $job->id,
+            'on' => $job->required_load_on?->toDateString(),
+        ], static fn (?string $v): bool => $v !== null && $v !== ''));
     }
 
     /* ---------------------------------------------------------------- create */
@@ -126,6 +224,32 @@ new #[Title('Jobs')] class extends Component {
         $this->reset(['editingId', 'formCustomerId', 'formRouteId', 'formCommodity', 'formTonnes', 'formLoadOn', 'formDeliveryOn', 'formNotes']);
         $this->resetValidation();
         $this->dispatch('open-job-form');
+    }
+
+    /**
+     * Closing a dialog wipes what was typed into it — server side, not just on screen.
+     *
+     * Livewire keeps public properties between renders, so a dialog dismissed with Escape held its half
+     * typed values until the next `open*` happened to clear them. Three of these screens are opened
+     * against whichever row is clicked next, so the stale half of a previous job was one careless reopen
+     * away from being saved against the wrong one.
+     */
+    public function clearJobForm(): void
+    {
+        $this->reset(['editingId', 'formCustomerId', 'formRouteId', 'formCommodity', 'formTonnes', 'formLoadOn', 'formDeliveryOn', 'formNotes']);
+        $this->resetValidation();
+    }
+
+    public function clearQuoteForm(): void
+    {
+        $this->reset(['quoteJobId', 'quoteAmount', 'quoteRate', 'quoteRateType', 'quoteRateDate']);
+        $this->resetValidation();
+    }
+
+    public function clearDecisionForm(): void
+    {
+        $this->reset(['decisionJobId', 'decisionKind', 'decisionReason']);
+        $this->resetValidation();
     }
 
     public function edit(string $jobId): void
@@ -231,6 +355,10 @@ new #[Title('Jobs')] class extends Component {
             'quoteCurrency' => ['required', 'string', 'size:3', Rule::in(array_keys($this->currencies()))],
             'quoteRate' => ['nullable', 'string'],
             'quoteRateDate' => ['nullable', 'date'],
+            // The quote carries the dates it was priced for, so the form that sets the price answers for
+            // them too: they are on screen and editable here rather than written from a field nobody sees.
+            'formLoadOn' => ['nullable', 'date'],
+            'formDeliveryOn' => ['nullable', 'date', 'after_or_equal:formLoadOn'],
         ]);
 
         try {
@@ -300,7 +428,7 @@ new #[Title('Jobs')] class extends Component {
                 'accept' => $accept($job, (int) auth()->id()),
                 'decline' => $decline($job, $this->decisionReason, (int) auth()->id()),
                 'close' => $close($job, $this->decisionReason, (int) auth()->id()),
-                default => throw new InvalidArgumentException('Unknown job decision.'),
+                default => throw new InvalidArgumentException('This decision is not one the register knows how to record. Close the dialog and choose the job again.'),
             };
         } catch (Throwable $refused) {
             $this->addError('decision', $refused->getMessage());
@@ -311,7 +439,10 @@ new #[Title('Jobs')] class extends Component {
         $this->reset(['decisionJobId', 'decisionKind', 'decisionReason']);
         unset($this->jobs);
         $this->dispatch('close-job-decision');
-        $this->dispatch('toast', message: __(':job is :status.', ['job' => $moved->job_no, 'status' => $moved->status->label()]), kind: 'success');
+        $this->dispatch('toast', message: $moved->status === JobStatus::Accepted
+            // The register cannot hand the row to the board, so the answer says where to go next.
+            ? __(':job is accepted — now put a truck on it with "Plan a trip".', ['job' => $moved->job_no])
+            : __(':job is :status.', ['job' => $moved->job_no, 'status' => $moved->status->label()]), kind: 'success');
     }
 
     /* ------------------------------------------------------------------ reads */
@@ -322,10 +453,22 @@ new #[Title('Jobs')] class extends Component {
     {
         $search = trim($this->search);
         $status = $this->statusFilter;
+        $needs = $this->needs;
+        $direction = $this->appliedDirection();
 
-        return Job::query()
+        $query = Job::query()
             ->with(['customer:id,name,code', 'route:id,code,origin,destination', 'trips'])
             ->when($status !== '', static fn ($q) => $q->where('status', $status))
+            ->when($needs === 'quote', static fn ($q) => $q->where('status', JobStatus::Enquiry->value))
+            ->when($needs === 'answer', static fn ($q) => $q->where('status', JobStatus::Quoted->value))
+            ->when($needs === 'trip', static fn ($q) => $q
+                ->whereIn('status', [JobStatus::Accepted->value, JobStatus::InExecution->value])
+                ->whereDoesntHave('trips', static fn ($t) => $t->whereNotIn('status', [
+                    TripStatus::Completed->value,
+                    TripStatus::Closed->value,
+                    TripStatus::Cancelled->value,
+                    TripStatus::Aborted->value,
+                ])))
             ->when($search !== '', function ($q) use ($search): void {
                 $q->where(static function ($inner) use ($search): void {
                     $inner->where('job_no', 'like', "%{$search}%")
@@ -333,9 +476,18 @@ new #[Title('Jobs')] class extends Component {
                         ->orWhere('notes', 'like', "%{$search}%")
                         ->orWhereHas('customer', static fn ($c) => $c->where('name', 'like', "%{$search}%"));
                 });
-            })
-            // A job with a load date is a job somebody is waiting for; everything else is backlog.
-            ->orderByRaw('required_load_on is null, required_load_on asc, created_at desc')
+            });
+
+        // The untouched register is a queue, not an archive: a job with a load date is a job somebody is
+        // waiting for, and everything without one is backlog. Sorting replaces that reading, so the
+        // dispatcher who wants "biggest quote first" gets it instead of a fixed order with one hope.
+        return (match ($this->sort) {
+            'job_no' => $query->orderBy('job_no', $direction),
+            'load_on' => $query->orderByRaw("required_load_on is null, required_load_on {$direction}"),
+            'status' => $query->orderBy('status', $direction),
+            'quote' => $query->orderBy('base_amount', $direction),
+            default => $query->orderByRaw('required_load_on is null, required_load_on asc, created_at desc'),
+        })
             ->paginate(15)
             ->withQueryString();
     }
@@ -430,7 +582,7 @@ new #[Title('Jobs')] class extends Component {
         <div class="grid gap-1">
             <x-ui.heading size="xl" level="1">{{ __('Jobs') }}</x-ui.heading>
             <x-ui.text>
-                {{ __('Freight work, from enquiry to closed. Prices appear only for the seats §9.3 says may read them.') }}
+                {{ __('Freight work, from enquiry to close. Quotes show only to the seats allowed to read them.') }}
             </x-ui.text>
         </div>
 
@@ -438,6 +590,24 @@ new #[Title('Jobs')] class extends Component {
             <x-ui.button wire:click="openCreate">{{ __('New job') }}</x-ui.button>
         @endcan
     </header>
+
+    {{-- The worklist, before the register: three questions the desk is asked every morning, each with the
+         count already on it so nobody has to click to find out how much they owe. --}}
+    <div class="flex flex-wrap items-center gap-2">
+        <span class="text-xs text-fg-ink-muted">{{ __('Waiting on us') }}</span>
+
+        @foreach ($this->needsOptions as $kind => $label)
+            <x-ui.button
+                size="sm"
+                :variant="$needs === $kind ? 'primary' : 'outline'"
+                wire:click="$set('needs', '{{ $needs === $kind ? '' : $kind }}')"
+                aria-pressed="{{ $needs === $kind ? 'true' : 'false' }}"
+            >
+                {{ $label }}
+                <span class="fg-numeric text-xs opacity-70">{{ $this->needsCounts[$kind] }}</span>
+            </x-ui.button>
+        @endforeach
+    </div>
 
     <div class="flex flex-wrap items-end gap-3">
         <x-ui.input name="search" wire:model.live.debounce.300ms="search" :label="__('Search')" placeholder="{{ __('Job reference, commodity, customer…') }}" />
@@ -456,17 +626,25 @@ new #[Title('Jobs')] class extends Component {
         </div>
 
         @if ($this->hasFilters())
-            <x-ui.button type="button" size="sm" variant="ghost" wire:click="clearFilters">{{ __('Clear') }}</x-ui.button>
+            <x-ui.button type="button" size="sm" variant="ghost" wire:click="clearFilters">{{ __('Clear filters') }}</x-ui.button>
         @endif
     </div>
 
     <x-ui.table :caption="__('The freight job register — every job, its corridor, and the state it has reached')">
         <x-slot name="head">
-            <x-ui.table.th>{{ __('Job') }}</x-ui.table.th>
+            <x-ui.table.th sortable :direction="$this->sortDirection('job_no')" wire:click="sortBy('job_no')">
+                {{ __('Job') }}
+            </x-ui.table.th>
             <x-ui.table.th>{{ __('Customer · corridor') }}</x-ui.table.th>
-            <x-ui.table.th>{{ __('Load on') }}</x-ui.table.th>
-            <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
-            <x-ui.table.th numeric>{{ __('Quoted') }}</x-ui.table.th>
+            <x-ui.table.th sortable :direction="$this->sortDirection('load_on')" wire:click="sortBy('load_on')">
+                {{ __('Load on') }}
+            </x-ui.table.th>
+            <x-ui.table.th sortable :direction="$this->sortDirection('status')" wire:click="sortBy('status')">
+                {{ __('Status') }}
+            </x-ui.table.th>
+            <x-ui.table.th numeric sortable :direction="$this->sortDirection('quote')" wire:click="sortBy('quote')">
+                {{ __('Quoted') }}
+            </x-ui.table.th>
             <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
         </x-slot>
 
@@ -521,6 +699,15 @@ new #[Title('Jobs')] class extends Component {
                 </x-ui.table.td>
 
                 <x-ui.table.td numeric nowrap>
+                    {{-- The spine's one broken link, closed here: an accepted job used to offer nothing, so
+                         the trip that follows it depended on the dispatcher knowing to open the board and
+                         find the same job again in a dropdown. --}}
+                    @can('trips.plan')
+                        @if (in_array($job->status, [App\Domain\Operations\JobStatus::Accepted, App\Domain\Operations\JobStatus::InExecution], true))
+                            <x-ui.link wire:navigate :href="$this->planTripUrl($job)" class="mr-2">{{ __('Plan a trip') }}</x-ui.link>
+                        @endif
+                    @endcan
+
                     @can('quote', $job)
                         <x-ui.button size="sm" variant="ghost" wire:click="openQuote('{{ $job->id }}')">{{ $job->currency_code === null ? __('Quote') : __('Re-quote') }}</x-ui.button>
                     @endcan
@@ -542,6 +729,14 @@ new #[Title('Jobs')] class extends Component {
                     @can('close', $job)
                         <x-ui.button size="sm" variant="ghost" wire:click="openDecision('{{ $job->id }}', 'close')">{{ __('Close') }}</x-ui.button>
                     @endcan
+
+                    {{-- A row with no buttons is a row a seat cannot read the reason for; §9.3's seats are
+                         allowed to open this register, so the silence was the only answer they got. --}}
+                    @if ($job->status->isTerminal())
+                        <span class="text-xs text-fg-ink-muted">{{ __('Finished — nothing to do here') }}</span>
+                    @elseif (! (Gate::any(['quote', 'accept', 'decline', 'close'], $job) || Gate::allows('trips.plan')))
+                        <span class="text-xs text-fg-ink-muted">{{ __('This seat reads the register only') }}</span>
+                    @endif
                 </x-ui.table.td>
             </tr>
         @empty
@@ -549,9 +744,15 @@ new #[Title('Jobs')] class extends Component {
                 <td colspan="6">
                     <x-ui.empty-state
                         icon="clipboard-document-list"
-                        title="{{ $this->hasFilters() ? __('No jobs match') : __('No jobs yet') }}"
-                        description="{{ $this->hasFilters() ? __('Nothing on the register answers that search or status.') : __('Freight work starts here: open an enquiry, price the corridor, accept it.') }}"
-                    />
+                        title="{{ $this->hasFilters() ? __('Nothing answers that filter') : __('No jobs yet') }}"
+                        description="{{ $this->hasFilters() ? __('The register is empty with these filters on — that is usually the filter, not the week.') : __('Freight work starts here: open an enquiry, price the corridor, accept it.') }}"
+                    >
+                        @if ($this->hasFilters())
+                            <x-ui.button size="sm" wire:click="clearFilters">{{ __('Clear filters') }}</x-ui.button>
+                        @elseif (Gate::allows('create', App\Domain\Operations\Models\Job::class))
+                            <x-ui.button size="sm" wire:click="openCreate">{{ __('Open the first enquiry') }}</x-ui.button>
+                        @endif
+                    </x-ui.empty-state>
                 </td>
             </tr>
         @endforelse
@@ -562,7 +763,7 @@ new #[Title('Jobs')] class extends Component {
     </div>
 
     {{-- The enquiry form: who, where, what, by when. No price — that is the next decision. --}}
-    <x-ui.dialog name="job-form" :title="$editingId === null ? __('New job') : __('Correct this enquiry')">
+    <x-ui.dialog name="job-form" :title="$editingId === null ? __('New job') : __('Correct this enquiry')" x-on:dialog-closed="$wire.call('clearJobForm')">
         <form wire:submit="saveJob" class="grid gap-4 p-5">
             <div class="grid gap-1">
                 <label for="form-customer" class="text-sm text-fg-ink">{{ __('Customer') }}</label>
@@ -572,6 +773,14 @@ new #[Title('Jobs')] class extends Component {
                         <option value="{{ $customer['id'] }}">{{ $customer['label'] }}</option>
                     @endforeach
                 </x-ui.select>
+                @if ($this->customerChoices === [])
+                    <p class="text-xs text-fg-ink-muted">
+                        {{ __('No active customer to choose. Add one to the customer register first.') }}
+                        @can('viewAny', App\Domain\Invoicing\Models\Customer::class)
+                            <x-ui.link :href="route('invoicing.customers')" wire:navigate>{{ __('Open customers') }}</x-ui.link>
+                        @endcan
+                    </p>
+                @endif
             </div>
 
             <div class="grid gap-1">
@@ -582,6 +791,14 @@ new #[Title('Jobs')] class extends Component {
                         <option value="{{ $route['id'] }}">{{ $route['label'] }}</option>
                     @endforeach
                 </x-ui.select>
+                @if ($this->routeChoices === [])
+                    <p class="text-xs text-fg-ink-muted">
+                        {{ __('No active corridor to choose. Add the lane to the route register first.') }}
+                        @can('viewAny', App\Domain\Operations\Models\Route::class)
+                            <x-ui.link :href="route('operations.routes')" wire:navigate>{{ __('Open routes') }}</x-ui.link>
+                        @endcan
+                    </p>
+                @endif
             </div>
 
             <div class="grid gap-3 sm:grid-cols-2">
@@ -591,24 +808,29 @@ new #[Title('Jobs')] class extends Component {
                 <x-ui.input name="formDeliveryOn" wire:model="formDeliveryOn" :label="__('Must deliver by')" type="date" />
             </div>
 
+            <p class="text-xs text-fg-ink-muted">{{ __('Only the customer and the corridor are needed to open an enquiry. The rest can wait until the price does.') }}</p>
+
             <x-ui.input name="formNotes" wire:model="formNotes" :label="__('Notes')" />
 
             @error('form')
-                <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                <x-ui.alert tone="danger" :title="__('We could not open that job')">{{ $message }}</x-ui.alert>
             @enderror
 
             <div class="flex items-center justify-between gap-3">
-                <x-ui.button type="submit">{{ $editingId === null ? __('Open the enquiry') : __('Save the correction') }}</x-ui.button>
+                <x-ui.button type="submit" wire:loading.attr="disabled" wire:target="saveJob">
+                    <span wire:loading.remove wire:target="saveJob">{{ $editingId === null ? __('Open the enquiry') : __('Save the correction') }}</span>
+                    <span wire:loading wire:target="saveJob">{{ $editingId === null ? __('Opening…') : __('Saving…') }}</span>
+                </x-ui.button>
                 <x-ui.button type="button" variant="ghost" x-on:click="$dispatch('close-job-form')">{{ __('Cancel') }}</x-ui.button>
             </div>
         </form>
     </x-ui.dialog>
 
     {{-- The quote: §5's money, with the conversion rate the books will read back. --}}
-    <x-ui.dialog name="job-quote" :title="__('Quote this job')">
+    <x-ui.dialog name="job-quote" :title="__('Quote this job')" x-on:dialog-closed="$wire.call('clearQuoteForm')">
         <form wire:submit="saveQuote" class="grid gap-4 p-5">
             <p class="text-sm text-fg-ink-secondary">
-                {{ __('A price turns an enquiry into an offer. Nothing can be dispatched against a job until it is accepted (§4.1).') }}
+                {{ __('A price turns an enquiry into an offer. Nothing can be dispatched against a job until the customer accepts it.') }}
             </p>
 
             <div class="grid gap-3 sm:grid-cols-2">
@@ -636,44 +858,56 @@ new #[Title('Jobs')] class extends Component {
                     <x-ui.input name="quoteRate" wire:model="quoteRate" :label="__('Rate to base (:code)', ['code' => $this->companyCurrency()])" type="text" inputmode="decimal" />
                     <x-ui.input name="quoteRateDate" wire:model="quoteRateDate" :label="__('Rate dated')" type="date" />
                 @endif
+
+                {{-- The quote carries the dates it was priced for. They were written silently from the
+                     enquiry before; a price agreed against a delivery date nobody re-read is a promise
+                     with two versions. --}}
+                <x-ui.input name="formLoadOn" wire:model="formLoadOn" :label="__('Load on')" type="date" />
+                <x-ui.input name="formDeliveryOn" wire:model="formDeliveryOn" :label="__('Deliver by')" type="date" />
             </div>
 
             <p class="text-xs text-fg-ink-muted">
-                {{ __('The base figure is written at the rate you state and never re-derived — §5.3, so the books keep agreeing after the FX moves.') }}
+                {{ __('A foreign price is converted once, at the rate you type here, and the base figure is never worked out again — so the books still agree after the rate moves.') }}
             </p>
 
             @error('quote')
-                <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                <x-ui.alert tone="danger" :title="__('We could not price this job')">{{ $message }}</x-ui.alert>
             @enderror
 
             <div class="flex items-center justify-between gap-3">
-                <x-ui.button type="submit">{{ __('Put a price on it') }}</x-ui.button>
+                <x-ui.button type="submit" wire:loading.attr="disabled" wire:target="saveQuote">
+                    <span wire:loading.remove wire:target="saveQuote">{{ __('Put a price on it') }}</span>
+                    <span wire:loading wire:target="saveQuote">{{ __('Pricing…') }}</span>
+                </x-ui.button>
                 <x-ui.button type="button" variant="ghost" x-on:click="$dispatch('close-job-quote')">{{ __('Cancel') }}</x-ui.button>
             </div>
         </form>
     </x-ui.dialog>
 
     {{-- Accept / decline / close: the three states a person sets, with the reason §10.2 insists on. --}}
-    <x-ui.dialog name="job-decision" :title="$this->decisionTitle()">
+    <x-ui.dialog name="job-decision" :title="$this->decisionTitle()" x-on:dialog-closed="$wire.call('clearDecisionForm')">
         <form wire:submit="commitDecision" class="grid gap-4 p-5">
             @if ($this->decisionWantsReason())
                 <x-ui.input
                     name="decisionReason"
                     wire:model="decisionReason"
-                    :label="$this->decisionKind === 'close' ? __('Why is this job closed? (§10.3 — the only hand-set end)') : __('Why? (kept on the trail, §4.4)')"
+                    :label="$this->decisionKind === 'close' ? __('Why is this job closed? It stays on the job’s trail.') : __('Reason — kept on the job’s trail.')"
                 />
             @else
                 <p class="text-sm text-fg-ink-secondary">
-                    {{ __('Accepting commits the price to the customer and lets trips run against it (§4.1).') }}
+                    {{ __('Accepting commits this price to the customer and lets trucks run against it. The next step is a trip on the dispatch board.') }}
                 </p>
             @endif
 
             @error('decision')
-                <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                <x-ui.alert tone="danger" :title="__('We could not record that')">{{ $message }}</x-ui.alert>
             @enderror
 
             <div class="flex items-center justify-between gap-3">
-                <x-ui.button type="submit">{{ $this->decisionTitle() }}</x-ui.button>
+                <x-ui.button type="submit" wire:loading.attr="disabled" wire:target="commitDecision">
+                    <span wire:loading.remove wire:target="commitDecision">{{ $this->decisionTitle() }}</span>
+                    <span wire:loading wire:target="commitDecision">{{ __('Working…') }}</span>
+                </x-ui.button>
                 <x-ui.button type="button" variant="ghost" x-on:click="$dispatch('close-job-decision')">{{ __('Cancel') }}</x-ui.button>
             </div>
         </form>

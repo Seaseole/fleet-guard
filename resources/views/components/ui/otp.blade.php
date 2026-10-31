@@ -20,9 +20,9 @@
     ])));
 @endphp
 
-<div class="grid gap-1.5">
+<div class="grid gap-2">
     @if($label)
-        <label for="{{ $id }}" class="text-xs font-medium text-fg-ink-secondary">{{ $label }}</label>
+        <label for="{{ $id }}" class="text-sm font-medium text-fg-ink-secondary">{{ $label }}</label>
     @endif
 
     <input
@@ -37,9 +37,9 @@
         @if($message) aria-invalid="true" @endif
         @if($describedBy !== '') aria-describedby="{{ $describedBy }}" @endif
         {{ $attributes->except(['id', 'name', 'aria-describedby'])->class([
-            'fg-identifier w-full rounded-fg-sm border bg-fg-surface px-3 py-2 text-center text-lg tracking-[0.5em] text-fg-ink transition duration-(--t-fast)',
+            'fg-identifier h-12 w-full rounded-fg-md border bg-fg-surface px-3 text-center text-lg tracking-[0.5em] text-fg-ink shadow-fg-1 transition duration-(--t-fast)',
             'border-danger' => $message,
-            'border-fg-line-strong' => ! $message,
+            'border-input' => ! $message,
         ]) }}
     />
 

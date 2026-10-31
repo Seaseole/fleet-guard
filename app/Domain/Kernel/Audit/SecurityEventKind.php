@@ -31,6 +31,7 @@ enum SecurityEventKind: string
     case DocumentDownloaded = 'document_downloaded';
     case DocumentVersionDeleted = 'document_version_deleted';
     case DocumentVoided = 'document_voided';
+    case SettingsChanged = 'settings_changed';
 
     public function label(): string
     {
@@ -48,6 +49,7 @@ enum SecurityEventKind: string
             self::DocumentDownloaded => 'Document downloaded',
             self::DocumentVersionDeleted => 'Document version deleted',
             self::DocumentVoided => 'Document voided',
+            self::SettingsChanged => 'Company settings changed',
         };
     }
 }

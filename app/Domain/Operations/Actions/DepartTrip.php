@@ -76,31 +76,46 @@ final class DepartTrip
         }
 
         return DB::transaction(function () use ($trip, $odometerStartKm, $engineHoursStart, $truck, $actorId, $actorKind): Trip {
+            // The trip row, locked, before anything is written against it: `assigned → departed` is the
+            // edge a driver's kiosk submission and a dispatcher's click can both reach, and the odometer
+            // reading below has exactly one honest answer — which trip opened it.
+            /** @var Trip $locked */
+            $locked = Trip::query()->whereKey($trip->id)->lockForUpdate()->firstOrFail();
+
+            if (! in_array($locked->status, [TripStatus::Assigned, TripStatus::Loaded], true)) {
+                throw new InvalidArgumentException(sprintf(
+                    'Trip %s is %s; only an assigned or loaded trip can depart (§10.2).',
+                    $locked->trip_no,
+                    $locked->status->label(),
+                ));
+            }
+
             ($this->recordOdometer)(new OdometerReadingDto(
                 truckId: $truck->id,
                 odometerKm: $odometerStartKm,
-                readOn: now($trip->planned_departure_at?->timezone->getName() ?? null)->toDateString(),
+                readOn: now($locked->planned_departure_at?->timezone->getName() ?? null)->toDateString(),
                 source: OdometerSource::TripDeparture,
                 engineHours: $engineHoursStart,
-                tripId: $trip->id,
+                tripId: $locked->id,
             ));
 
-            $trip->fill([
+            $locked->fill([
                 'odometer_start_km' => $odometerStartKm,
                 'engine_hours_start_10_2' => $engineHoursStart,
                 'departed_at' => now(),
             ]);
 
-            $trip->moveTo(TripStatus::Departed, null, [], $actorKind, $actorId);
-            $trip->save();
+            $locked->moveTo(TripStatus::Departed, null, [], $actorKind, $actorId);
+            $locked->save();
 
             // The truck's own state move is Fleet's, with the trip named as the reason, so the
             // operational trail answers "why is this truck on a trip" from the truck's side too.
             // It goes through `BeginTruckTrip` rather than a `Truck` model Operations may not import
-            // (§3.1 D5), and the id is the whole contract.
-            ($this->beginTruckTrip)($truck->id, 'Departed on trip '.$trip->trip_no);
+            // (§3.1 D5), and the id is the whole contract. The asset row is taken *after* the trip,
+            // which is the order every Action in this path keeps so no two of them can cross.
+            ($this->beginTruckTrip)($truck->id, 'Departed on trip '.$locked->trip_no);
 
-            return $trip->refresh();
+            return $locked->refresh();
         });
     }
 }

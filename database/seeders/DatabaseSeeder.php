@@ -8,6 +8,7 @@ use Database\Seeders\Production\ChartOfAccountsSeeder;
 use Database\Seeders\Production\CompanySeeder;
 use Database\Seeders\Production\CurrenciesSeeder;
 use Database\Seeders\Production\RolesSeeder;
+use Database\Seeders\Production\TaxRateSeeder;
 use Illuminate\Database\Seeder;
 
 /**
@@ -30,6 +31,10 @@ final class DatabaseSeeder extends Seeder
             CurrenciesSeeder::class,
             RolesSeeder::class,
             ChartOfAccountsSeeder::class,
+            // §17 Q4's default rate, so an invoice can point a line at a tax rate the day Phase 4's
+            // first draft opens. A seed rather than a hard-coded 12% because the rate is a fact about
+            // the country, editable by the accountant without a deploy.
+            TaxRateSeeder::class,
         ]);
     }
 }

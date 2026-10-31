@@ -29,35 +29,39 @@
     Mirrors `x-ui.input` deliberately, including reading `$errors` by `name`: an existing `<label for="…">`
     still points at the forwarded `id`, so converting a field does not require rewriting its label.
 --}}
-<div class="grid gap-1.5">
+<div class="grid gap-2">
     @if($label)
-        <label for="{{ $id }}" class="text-xs font-medium text-fg-ink-secondary">{{ $label }}</label>
+        <label for="{{ $id }}" class="text-sm font-medium text-fg-ink-secondary">{{ $label }}</label>
     @endif
 
-    <select
-        id="{{ $id }}"
-        name="{{ $name }}"
-        @if($required) required @endif
-        @if($message) aria-invalid="true" @endif
-        @if($describedBy !== '') aria-describedby="{{ $describedBy }}" @endif
-        {{ $attributes->except(['id', 'name', 'aria-describedby'])->class([
-            'w-full rounded-fg-sm border bg-fg-surface px-3 py-2 text-sm text-fg-ink transition duration-(--t-fast) ease-(--ease-standard) disabled:cursor-not-allowed disabled:opacity-60',
-            'border-danger' => $message,
-            'border-fg-line-strong hover:border-fg-ink-muted' => ! $message,
-        ]) }}
-    >
-        @if($placeholder !== null)
-            <option value="">{{ $placeholder }}</option>
-        @endif
+    <div class="relative">
+        <select
+            id="{{ $id }}"
+            name="{{ $name }}"
+            @if($required) required @endif
+            @if($message) aria-invalid="true" @endif
+            @if($describedBy !== '') aria-describedby="{{ $describedBy }}" @endif
+            {{ $attributes->except(['id', 'name', 'aria-describedby'])->class([
+                'h-9 w-full appearance-none rounded-fg-md border bg-fg-surface ps-3 pe-9 text-sm text-fg-ink shadow-fg-1 transition duration-(--t-fast) ease-(--ease-standard) disabled:cursor-not-allowed disabled:opacity-60',
+                'border-danger' => $message,
+                'border-input hover:border-fg-ink-muted' => ! $message,
+            ]) }}
+        >
+            @if($placeholder !== null)
+                <option value="">{{ $placeholder }}</option>
+            @endif
 
-        @if(is_array($options))
-            @foreach($options as $value => $optionLabel)
-                <option value="{{ $value }}">{{ $optionLabel }}</option>
-            @endforeach
-        @endif
+            @if(is_array($options))
+                @foreach($options as $value => $optionLabel)
+                    <option value="{{ $value }}">{{ $optionLabel }}</option>
+                @endforeach
+            @endif
 
-        {{ $slot }}
-    </select>
+            {{ $slot }}
+        </select>
+
+        <x-ui.icon name="chevron-down" size="4" class="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-fg-ink-muted" />
+    </div>
 
     @if($message)
         <p id="{{ $id }}-error" class="flex items-center gap-1.5 text-xs text-danger" role="alert">

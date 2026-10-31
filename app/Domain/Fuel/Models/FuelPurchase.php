@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Fuel\Models;
 
+use App\Domain\Fleet\FuelType;
 use App\Domain\Fuel\FuelIssueStatus;
 use App\Domain\Kernel\Money\FxRateSource;
 use App\Domain\Kernel\Money\Money;
@@ -27,6 +28,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
  * @property int $company_id
  * @property int|null $fuel_station_id
  * @property int|null $fuel_card_id
+ * @property FuelType $fuel_type
  * @property string $currency_code
  * @property int $amount
  * @property string $fx_rate
@@ -60,6 +62,7 @@ final class FuelPurchase extends Model implements AuditableContract
         'fuel_station_id',
         'fuel_card_id',
         'bulk_tank_id',
+        'fuel_type',
         'currency_code',
         'amount',
         'fx_rate',
@@ -84,6 +87,7 @@ final class FuelPurchase extends Model implements AuditableContract
             'fuel_station_id' => 'integer',
             'fuel_card_id' => 'integer',
             'bulk_tank_id' => 'integer',
+            'fuel_type' => FuelType::class,
             'amount' => 'integer',
             'base_amount' => 'integer',
             'fx_rate_source' => FxRateSource::class,

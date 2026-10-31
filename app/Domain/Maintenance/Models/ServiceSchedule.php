@@ -6,6 +6,7 @@ namespace App\Domain\Maintenance\Models;
 
 use App\Domain\Fleet\FleetStatus;
 use App\Domain\Fleet\Models\Truck;
+use App\Domain\Kernel\Settings\CompanySettings;
 use App\Domain\Kernel\Tenancy\BelongsToCompany;
 use App\Domain\Maintenance\ServiceDueState;
 use App\Domain\Maintenance\ServiceScheduleKind;
@@ -230,9 +231,9 @@ final class ServiceSchedule extends Model implements AuditableContract
     private function warningWindow(): int
     {
         return match ($this->kind) {
-            ServiceScheduleKind::Km => (int) config('fleet.maintenance.due_soon_km', 1000),
-            ServiceScheduleKind::Hours => (int) config('fleet.maintenance.due_soon_hours', 50) * 100,
-            ServiceScheduleKind::Date => (int) config('fleet.maintenance.due_soon_days', 14),
+            ServiceScheduleKind::Km => (int) app(CompanySettings::class)->get('maintenance.due_soon_km'),
+            ServiceScheduleKind::Hours => (int) app(CompanySettings::class)->get('maintenance.due_soon_hours') * 100,
+            ServiceScheduleKind::Date => (int) app(CompanySettings::class)->get('maintenance.due_soon_days'),
             ServiceScheduleKind::Condition => 0,
         };
     }

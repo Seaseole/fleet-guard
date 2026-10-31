@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Domain\Fleet\Actions\CreateTruck;
 use App\Domain\Fleet\Data\TruckDto;
 use App\Domain\Fleet\FleetStatus;
+use App\Domain\Fleet\FuelType;
 use App\Domain\Fuel\Actions\CreateBulkTank;
 use App\Domain\Fuel\Actions\CreateFuelPurchase;
 use App\Domain\Fuel\Actions\CreateFuelStation;
@@ -565,6 +566,7 @@ refuses(
         purchasedOn: Carbon::now(),
         litresX100: 40_000,
         pricePerLitreMinor: 1850,
+        fuelType: FuelType::Diesel,
         stationId: $station->id,
         invoiceNo: 'XFL-BAD',
     )),
@@ -582,6 +584,7 @@ refuses(
         purchasedOn: Carbon::now(),
         litresX100: 0,
         pricePerLitreMinor: 1850,
+        fuelType: FuelType::Diesel,
         stationId: $station->id,
     )),
     InvalidArgumentException::class,
@@ -597,6 +600,7 @@ $purchase = $createPurchase(new FuelPurchaseDto(
     purchasedOn: Carbon::now(),
     litresX100: 40_000,
     pricePerLitreMinor: 1850,
+    fuelType: FuelType::Diesel,
     stationId: $station->id,
     invoiceNo: 'XFL-SLIP-1',
     sourceUuid: 'XFL-SLIP-1',
@@ -615,6 +619,7 @@ $retry = $createPurchase(new FuelPurchaseDto(
     purchasedOn: Carbon::now(),
     litresX100: 40_000,
     pricePerLitreMinor: 1850,
+    fuelType: FuelType::Diesel,
     stationId: $station->id,
     invoiceNo: 'XFL-SLIP-1',
     sourceUuid: 'XFL-SLIP-1',
@@ -637,6 +642,7 @@ $subCent = $createPurchase(new FuelPurchaseDto(
     purchasedOn: Carbon::now(),
     litresX100: 2_530,
     pricePerLitreMinor: 1975,
+    fuelType: FuelType::Diesel,
     stationId: $station->id,
     invoiceNo: 'XFL-SUB-CENT',
 ));
@@ -811,6 +817,7 @@ $secondSlip = $createPurchase(new FuelPurchaseDto(
     purchasedOn: Carbon::now(),
     litresX100: 60_000,
     pricePerLitreMinor: 1850,
+    fuelType: FuelType::Diesel,
     stationId: $station->id,
     invoiceNo: 'XFL-SLIP-2',
 ));
@@ -878,6 +885,7 @@ $delivery = $createPurchase(new FuelPurchaseDto(
     purchasedOn: Carbon::now(),
     litresX100: 1_000_000,
     pricePerLitreMinor: 2000,
+    fuelType: FuelType::Diesel,
     stationId: $station->id,
     invoiceNo: 'XFL-BULK-1',
     bulkTankId: $bulk->id,
@@ -921,6 +929,7 @@ $secondDelivery = $createPurchase(new FuelPurchaseDto(
     purchasedOn: Carbon::now(),
     litresX100: 500_000,
     pricePerLitreMinor: 2400,
+    fuelType: FuelType::Diesel,
     stationId: $station->id,
     invoiceNo: 'XFL-BULK-2',
     bulkTankId: $bulk->id,
@@ -1007,6 +1016,7 @@ refuses(
         purchasedOn: Carbon::now(),
         litresX100: 100_000,
         pricePerLitreMinor: 2000,
+        fuelType: FuelType::Diesel,
         invoiceNo: 'XFL-BULK-OFF',
         bulkTankId: $bulk->id,
     )),
@@ -1535,6 +1545,7 @@ refuses(
         purchasedOn: Carbon::now(),
         litresX100: 40_000,
         pricePerLitreMinor: 1850,
+        fuelType: FuelType::Diesel,
         stationId: $crossCompany->id,
     )),
     InvalidArgumentException::class,
@@ -1551,6 +1562,7 @@ refuses(
         purchasedOn: Carbon::now(),
         litresX100: 1_000_000,
         pricePerLitreMinor: 2000,
+        fuelType: FuelType::Diesel,
         invoiceNo: 'XFL-CROSS-BULK',
         bulkTankId: $bulk->id,
     )),

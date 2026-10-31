@@ -22,6 +22,8 @@ use App\Domain\Kernel\Documents\Scan\NoScanner;
 use App\Domain\Kernel\Documents\Scan\VirusScanner;
 use App\Domain\Kernel\Money\RateResolver;
 use App\Domain\Kernel\Money\StoredRateResolver;
+use App\Domain\Kernel\Settings\CachedSettings;
+use App\Domain\Kernel\Settings\CompanySettings;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Maintenance\Actions\ImportParts;
 use App\Domain\Maintenance\Alerts\ServiceDueSource;
@@ -31,6 +33,7 @@ use App\Domain\People\Actions\ImportDrivers;
 use App\Domain\People\Actions\ImportEmployees;
 use App\Domain\People\Alerts\DriverPaperExpirySource;
 use App\Domain\Security\Sessions\EndSessionOnLogout;
+use Egough\LaravelSettings\Contracts\SettingsRepository;
 use Illuminate\Auth\Events\Logout;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
@@ -48,6 +51,20 @@ final class DomainServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(RateResolver::class, StoredRateResolver::class);
+
+        // §14.2/T4: settings are company-held, so the package's storage seam is replaced with the
+        // one over `companies.settings`. `settings()`, its Blade directives and its console
+        // commands then speak for the current company instead of a tenant-less table. This is
+        // the package's documented extension point, not a fork.
+        $this->app->bind(SettingsRepository::class, CompanySettings::class);
+
+        // The package answers keys it cannot find from `settings.defaults`. The app's defaults are
+        // `config/fleet.php`, so they are mirrored there once: `settings()->get()` and
+        // `CompanySettings::get()` must not be able to disagree about a starting value.
+        config(['settings.defaults' => array_merge(
+            (array) config('settings.defaults', []),
+            CachedSettings::flatten((array) config('fleet', [])),
+        )]);
 
         // §15.2's master-data datasets, mapped to the module that owns each one. This is the seam
         // that keeps D2 true: the engine under `app/Domain/Kernel` asks for a dataset handler and

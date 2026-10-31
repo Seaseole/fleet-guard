@@ -19,8 +19,8 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         // Added by EnvKit so shared (public) URLs keep the https scheme and
-        // public host. Safe locally; remove to opt out.
-        $middleware->trustProxies(at: '*');
+        // public host. Trusts loopback only (the tunnel/Octane proxy); remove to opt out.
+        $middleware->trustProxies(at: ['127.0.0.1', '::1', '::ffff:127.0.0.1']);
         $middleware->alias([
             'company' => ResolveCurrentCompany::class,
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Kernel\Documents;
 
+use App\Domain\Kernel\Settings\CompanySettings;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
@@ -102,7 +103,7 @@ enum Validity: string
     public static function for(?CarbonInterface $expiresOn): self
     {
         /** @var int $warningDays */
-        $warningDays = (int) config('fleet.documents.expiry_warning_days', 60);
+        $warningDays = (int) app(CompanySettings::class)->get('documents.expiry_warning_days');
 
         return self::derive($expiresOn, Carbon::now(CurrentCompany::timezone()), $warningDays);
     }

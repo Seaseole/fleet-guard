@@ -92,6 +92,7 @@ final class CreateFuelPurchase
                 'fuel_station_id' => $dto->stationId,
                 'fuel_card_id' => $dto->cardId,
                 'bulk_tank_id' => $tank?->id,
+                'fuel_type' => $dto->fuelType->value,
                 'purchased_on' => $dto->purchasedOn->format('Y-m-d'),
                 'litres' => $dto->litresX100,
                 'price_per_litre_minor' => $dto->pricePerLitreMinor,

@@ -13,6 +13,7 @@ use App\Domain\Fleet\Data\EquipmentDto;
 use App\Domain\Fleet\Data\TrailerDto;
 use App\Domain\Fleet\Data\TruckDto;
 use App\Domain\Fleet\FleetStatus;
+use App\Domain\Fleet\FuelType;
 use App\Domain\Fleet\Models\Equipment;
 use App\Domain\Fleet\Models\Trailer;
 use App\Domain\Fleet\Models\Truck;
@@ -89,7 +90,7 @@ new #[Title('Fleet')] class extends Component {
 
     public string $serviceIntervalMonths = '';
 
-    public string $fuelType = 'diesel';
+    public string $fuelType = FuelType::Diesel->value;
 
     public string $mainTankLitres = '';
 
@@ -166,6 +167,11 @@ new #[Title('Fleet')] class extends Component {
         } else {
             $this->editEquipment($id);
         }
+
+        // The editor lives below the table: without this, pressing Edit on a row changed nothing the
+        // user could see until they happened to scroll. The view scrolls the form into view and
+        // moves focus to its first field, so the click is acknowledged where the answer is.
+        $this->dispatch('fleet-edit-opened');
     }
 
     public function clearForm(): void
@@ -420,6 +426,12 @@ new #[Title('Fleet')] class extends Component {
         return FleetStatus::cases();
     }
 
+    /** @return list<FuelType> */
+    public function fuelTypes(): array
+    {
+        return FuelType::cases();
+    }
+
     public function formTitle(): string
     {
         if ($this->editingId !== null) {
@@ -458,7 +470,7 @@ new #[Title('Fleet')] class extends Component {
         $this->serviceIntervalKm = (string) $truck->service_interval_km;
         $this->serviceIntervalHours = (string) $truck->service_interval_hours;
         $this->serviceIntervalMonths = (string) $truck->service_interval_months;
-        $this->fuelType = $truck->fuel_type;
+        $this->fuelType = $truck->fuel_type->value;
         $this->mainTankLitres = (string) $truck->main_tank_litres;
         $this->auxTankLitres = (string) $truck->aux_tank_litres;
         $this->expectedConsumption = $truck->expected_consumption_per_100 === null ? '' : (string) $truck->expected_consumption_per_100;
@@ -515,7 +527,7 @@ new #[Title('Fleet')] class extends Component {
             'serviceIntervalKm' => ['nullable', 'integer', 'min:0', 'max:99999'],
             'serviceIntervalHours' => ['nullable', 'integer', 'min:0', 'max:99999'],
             'serviceIntervalMonths' => ['nullable', 'integer', 'min:0', 'max:120'],
-            'fuelType' => ['required', 'string', 'max:16'],
+            'fuelType' => ['required', Rule::enum(FuelType::class)],
             'mainTankLitres' => ['nullable', 'integer', 'min:0', 'max:2000'],
             'auxTankLitres' => ['nullable', 'integer', 'min:0', 'max:2000'],
             'expectedConsumption' => ['nullable', 'numeric', 'min:0', 'max:200'],
@@ -1017,6 +1029,15 @@ new #[Title('Fleet')] class extends Component {
     </x-ui.card>
 
     @can('fleet.create')
+        <div
+            id="fleet-form"
+            class="scroll-mt-20"
+            x-data
+            x-on:fleet-edit-opened.window="$nextTick(() => {
+                $el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                $el.querySelector('form input:not([disabled]), form select')?.focus({ preventScroll: true });
+            })"
+        >
         <x-ui.card :title="$this->formTitle()">
             <form class="grid gap-4" wire:submit="save">
                 @if ($tab === 'trucks')
@@ -1040,7 +1061,11 @@ new #[Title('Fleet')] class extends Component {
                         <x-ui.input wire:model="engineHours" name="engineHours" type="number" step="0.01" numeric :label="__('Engine hours (optional)')" />
                         <x-ui.input wire:model="purchasedOn" name="purchasedOn" type="date" :label="__('Purchased on (optional)')" />
                         <x-ui.input wire:model="tyreSize" name="tyreSize" :label="__('Tyre size (optional)')" />
-                        <x-ui.input wire:model="fuelType" name="fuelType" :label="__('Fuel type')" />
+                        <x-ui.select name="fuelType" id="fuel-type" wire:model="fuelType" :label="__('Fuel type')">
+                            @foreach ($this->fuelTypes() as $fuel)
+                                <option value="{{ $fuel->value }}">{{ $fuel->label() }}</option>
+                            @endforeach
+                        </x-ui.select>
                     </div>
 
                     <div class="grid gap-4 sm:grid-cols-3">
@@ -1117,5 +1142,6 @@ new #[Title('Fleet')] class extends Component {
                 </div>
             </form>
         </x-ui.card>
+        </div>
     @endcan
 </div>

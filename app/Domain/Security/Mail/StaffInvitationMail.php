@@ -44,6 +44,7 @@ final class StaffInvitationMail extends Mailable
             markdown: 'emails.security.invitation',
             with: [
                 'invitation' => $this->invitation,
+                'companyName' => $this->invitation->company->name,
                 'acceptUrl' => route('security.invitations.accept', ['token' => $this->token]),
                 'expiresAt' => $this->invitation->expires_at,
                 'roleLabel' => $this->invitation->role()->label(),

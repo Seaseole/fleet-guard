@@ -189,6 +189,29 @@ final class MasterRenderSweep extends TestCase
             }
         });
 
+        $this->attempt('the readings table says how far the truck went between measurements (§20.37)', function () use ($owner, $truck): void {
+            Livewire::actingAs($owner)
+                ->test('pages::fleet.vehicle', ['truck' => $truck])
+                ->set('odometerKm', '41900')
+                ->call('recordOdometer')
+                ->assertHasNoErrors();
+
+            $html = Livewire::actingAs($owner)
+                ->test('pages::fleet.vehicle', ['truck' => $truck])
+                ->html();
+
+            if (! str_contains($html, 'Travelled')) {
+                throw new Exception('the readings table has no Travelled column');
+            }
+
+            // 41,900 less the 41,250 before it. The suspect 30,000 row reports no distance at all:
+            // a figure invented out of a measurement the truck contradicts would sit in the same row
+            // as a real one.
+            if (! str_contains($html, '650 km')) {
+                throw new Exception('the reading after 41,250 km did not report 650 km travelled');
+            }
+        });
+
         $this->attempt('dispatch refuses the lapsed driver on screen, as an error beside the button', function () use ($owner, $truck, $lapsedDriver): void {
             Livewire::actingAs($owner)
                 ->test('pages::fleet.vehicle', ['truck' => $truck])

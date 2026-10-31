@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Domain\Kernel\Settings\CompanySettings;
 use App\Domain\Telematics\Data\LiveVehicle;
 use App\Domain\Telematics\Models\GpsPosition;
 use App\Domain\Telematics\Queries\LiveMap;
@@ -169,7 +170,7 @@ new #[Title('Live map')] class extends Component {
 
     public function pollSeconds(): int
     {
-        return (int) config('fleet.telematics.poll_seconds', 60);
+        return (int) app(CompanySettings::class)->get('telematics.poll_seconds');
     }
 }; ?>
 

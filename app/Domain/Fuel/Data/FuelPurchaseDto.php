@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Fuel\Data;
 
+use App\Domain\Fleet\FuelType;
 use App\Domain\Kernel\Money\FxRateSource;
 use App\Domain\Kernel\Money\Money;
 use Carbon\CarbonImmutable;
@@ -20,6 +21,10 @@ use InvalidArgumentException;
  * `bulkTankId` is where the delivery went when it is not a slip the trucks draw from: a purchase
  * naming a tank becomes stock the moment it is recorded (§15.2 phase 3), and its litres are no
  * longer a slip an issue can drain.
+ *
+ * `fuelType` is the product the pump sold — the slip's own fact, because a station slip names no
+ * truck. The per-type price in settings is only what the form starts at; the price here is what
+ * gets recorded.
  */
 final readonly class FuelPurchaseDto
 {
@@ -31,6 +36,7 @@ final readonly class FuelPurchaseDto
         public DateTimeInterface|CarbonImmutable $purchasedOn,
         public int $litresX100,
         public int $pricePerLitreMinor,
+        public FuelType $fuelType,
         public ?int $stationId = null,
         public ?int $cardId = null,
         public ?string $invoiceNo = null,

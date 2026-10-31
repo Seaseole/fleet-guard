@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Domain\Fleet\FuelType;
 use App\Domain\Fleet\Models\Truck;
 use App\Domain\Fuel\Actions\CreateBulkTank;
 use App\Domain\Fuel\Actions\CreateFuelPurchase;
@@ -19,6 +20,7 @@ use App\Domain\Fuel\Models\FuelPurchase;
 use App\Domain\Fuel\Models\FuelStation;
 use App\Domain\Fuel\Models\FuelTank;
 use App\Domain\Fuel\Models\FuelVariance;
+use App\Domain\Fuel\Support\FuelPriceList;
 use App\Domain\Kernel\Money\Currency;
 use App\Domain\Kernel\Money\FxRateSource;
 use App\Domain\Kernel\Money\Money;
@@ -48,7 +50,8 @@ use Livewire\WithPagination;
  * the Accountant reads with `fuel.view`. Every write is a dialog of its own, because each Action
  * refuses by name and the sentence belongs beside the form that caused it.
  */
-new #[Title('Fuel')] class extends Component {
+new #[Title('Fuel')] class extends Component
+{
     use WithPagination;
 
     public string $stationName = '';
@@ -87,6 +90,8 @@ new #[Title('Fuel')] class extends Component {
 
     public string $slipPrice = '';
 
+    public string $slipFuelType = FuelType::Diesel->value;
+
     public string $slipCurrency = '';
 
     public string $slipRate = '1';
@@ -99,11 +104,26 @@ new #[Title('Fuel')] class extends Component {
 
     public string $varianceNote = '';
 
-    public function mount(): void
+    public function mount(FuelPriceList $prices): void
     {
         $this->slipDate = Carbon::now(CurrentCompany::timezone())->toDateString();
         $this->dipDate = $this->slipDate;
         $this->slipCurrency = $this->baseCurrency();
+        $this->slipPrice = $prices->input(FuelType::from($this->slipFuelType));
+    }
+
+    /** A foreign pump's price is typed; the setting speaks only for the company's own currency. */
+    public function updatedSlipCurrency(): void
+    {
+        $this->slipPrice = $this->isForeignSlip() ? '' : app(FuelPriceList::class)->input(FuelType::from($this->slipFuelType));
+    }
+
+    /** Choosing the product is what decides which settings price the form starts at. */
+    public function updatedSlipFuelType(): void
+    {
+        if (! $this->isForeignSlip()) {
+            $this->slipPrice = app(FuelPriceList::class)->input(FuelType::from($this->slipFuelType));
+        }
     }
 
     public function canRecord(): bool
@@ -229,7 +249,7 @@ new #[Title('Fuel')] class extends Component {
         $this->dispatch('toast', message: __('Book adjusted by :litres L.', ['litres' => $movement->litresDeltaMajor()]), kind: 'success');
     }
 
-    public function recordSlip(CreateFuelPurchase $create): void
+    public function recordSlip(CreateFuelPurchase $create, FuelPriceList $prices): void
     {
         abort_unless($this->canRecord(), 403);
 
@@ -243,6 +263,7 @@ new #[Title('Fuel')] class extends Component {
             'slipBulkTankId' => ['nullable', 'integer', Rule::exists('bulk_tanks', 'id')->where('company_id', CurrentCompany::id())],
             'slipLitres' => ['required', 'string'],
             'slipPrice' => ['required', 'string'],
+            'slipFuelType' => ['required', Rule::in(FuelType::values())],
             'slipCurrency' => ['required', 'string', 'size:3', Rule::exists('currencies', 'code')],
             'slipRate' => ['nullable', 'numeric', 'gt:0'],
             'slipRateSource' => ['required', Rule::in(array_map(static fn (FxRateSource $source): string => $source->value, FxRateSource::cases()))],
@@ -250,6 +271,7 @@ new #[Title('Fuel')] class extends Component {
 
         $currency = Currency::normalise($validated['slipCurrency']);
         $base = $this->baseCurrency();
+        $fuelType = FuelType::from($validated['slipFuelType']);
         $purchasedOn = Carbon::parse($validated['slipDate']);
 
         try {
@@ -268,6 +290,7 @@ new #[Title('Fuel')] class extends Component {
                 purchasedOn: $purchasedOn,
                 litresX100: $litresX100,
                 pricePerLitreMinor: $priceMinor,
+                fuelType: $fuelType,
                 stationId: ($validated['slipStationId'] ?? null) === null ? null : (int) $validated['slipStationId'],
                 invoiceNo: $validated['slipInvoice'] ?? null,
                 bulkTankId: ($validated['slipBulkTankId'] ?? null) === null ? null : (int) $validated['slipBulkTankId'],
@@ -282,6 +305,7 @@ new #[Title('Fuel')] class extends Component {
         $this->slipDate = Carbon::now(CurrentCompany::timezone())->toDateString();
         $this->slipRate = '1';
         $this->slipRateSource = FxRateSource::Manual->value;
+        $this->slipPrice = $this->isForeignSlip() ? '' : $prices->input($fuelType);
         unset($this->purchases, $this->bulkTanks);
         $this->dispatch('close-fuel-slip');
         $this->dispatch('toast', message: __('Slip recorded: :litres L.', ['litres' => $slip->litresMajor()]), kind: 'success');
@@ -424,6 +448,12 @@ new #[Title('Fuel')] class extends Component {
         return FuelTankKind::cases();
     }
 
+    /** @return list<FuelType> */
+    public function fuelTypeChoices(): array
+    {
+        return FuelType::cases();
+    }
+
     /** @return array<string, Currency> */
     public function currencies(): array
     {
@@ -490,11 +520,12 @@ new #[Title('Fuel')] class extends Component {
         @endif
     </header>
 
-    <x-ui.card :title="__('Diesel bought')" class="min-w-0">
+    <x-ui.card :title="__('Fuel bought')" class="min-w-0">
         <x-ui.table :caption="__('Fuel purchases, newest first — the slip, its station and the litres still to be issued')">
             <x-slot name="head">
                 <x-ui.table.th>{{ __('Slip') }}</x-ui.table.th>
                 <x-ui.table.th>{{ __('Bought') }}</x-ui.table.th>
+                <x-ui.table.th>{{ __('Fuel') }}</x-ui.table.th>
                 <x-ui.table.th numeric>{{ __('Litres') }}</x-ui.table.th>
                 <x-ui.table.th numeric>{{ __('Price / L') }}</x-ui.table.th>
                 <x-ui.table.th numeric>{{ __('Amount') }}</x-ui.table.th>
@@ -513,6 +544,7 @@ new #[Title('Fuel')] class extends Component {
                         @endif
                     </x-ui.table.td>
                     <x-ui.table.td nowrap>{{ $slip->purchased_on?->format('d M Y') ?? '—' }}</x-ui.table.td>
+                    <x-ui.table.td>{{ $slip->fuel_type->label() }}</x-ui.table.td>
                     <x-ui.table.td numeric>{{ $slip->litresMajor() }}</x-ui.table.td>
                     <x-ui.table.td numeric>{{ $this->money($slip->pricePerLitre()) }}</x-ui.table.td>
                     <x-ui.table.td numeric>{{ $this->money($slip->amountMoney()) }}</x-ui.table.td>
@@ -533,7 +565,7 @@ new #[Title('Fuel')] class extends Component {
                 </tr>
             @empty
                 <tr>
-                    <td colspan="7">
+                    <td colspan="8">
                         <x-ui.empty-state
                             icon="circle-stack"
                             title="{{ __('No fuel has been bought yet') }}"
@@ -554,7 +586,7 @@ new #[Title('Fuel')] class extends Component {
     <x-ui.card :title="__('Bulk tank')" class="min-w-0">
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
             <x-ui.text size="sm" color="muted">
-                {{ __('Diesel delivered into the yard tank is stock until a trip draws from it, at the tank’s moving average. A slip is a purchase the trucks draw from; a delivery into a tank is an asset the moment it is unloaded.') }}
+                {{ __('Fuel delivered into the yard tank is stock until a trip draws from it, at the tank’s moving average. A slip is a purchase the trucks draw from; a delivery into a tank is an asset the moment it is unloaded.') }}
             </x-ui.text>
 
             @if ($this->canRecord())
@@ -572,7 +604,7 @@ new #[Title('Fuel')] class extends Component {
             <x-ui.empty-state
                 icon="circle-stack"
                 title="{{ __('No bulk tank yet') }}"
-                description="{{ __('Deliveries go onto slips by default. Open a tank to hold diesel in stock instead — its litres, its value and its moving average move together, and a dip reconciles the book against the gauge.') }}"
+                description="{{ __('Deliveries go onto slips by default. Open a tank to hold fuel in stock instead — its litres, its value and its moving average move together, and a dip reconciles the book against the gauge.') }}"
             />
         @else
             <x-ui.table :caption="__('Every bulk tank, with the stock it holds, the average it is worth and its reconciliation state')">
@@ -908,7 +940,7 @@ new #[Title('Fuel')] class extends Component {
                     <x-ui.input name="slipInvoice" wire:model="slipInvoice" :label="__('Invoice or slip number')" />
 
                     <div class="sm:col-span-2">
-                        <x-ui.select name="slipBulkTankId" id="slip-bulk-tank" wire:model.live="slipBulkTankId" :label="__('Where the diesel went')" :hint="__('A slip is drained by trips; a delivery into a tank becomes stock and posts Dr 1180 / Cr 2110 on delivery.')">
+                        <x-ui.select name="slipBulkTankId" id="slip-bulk-tank" wire:model.live="slipBulkTankId" :label="__('Where the fuel went')" :hint="__('A slip is drained by trips; a delivery into a tank becomes stock and posts Dr 1180 / Cr 2110 on delivery.')">
                             <option value="">{{ __('Into slips the trucks draw from') }}</option>
                             @foreach ($this->bulkTanks as $tank)
                                 <option value="{{ $tank->id }}">{{ $tank->name }} · {{ $tank->capacity_litres }} L</option>
@@ -916,9 +948,15 @@ new #[Title('Fuel')] class extends Component {
                         </x-ui.select>
                     </div>
 
+                    <x-ui.select name="slipFuelType" id="slip-fuel-type" wire:model.live="slipFuelType" :label="__('Fuel')">
+                        @foreach ($this->fuelTypeChoices() as $type)
+                            <option value="{{ $type->value }}">{{ $type->label() }}</option>
+                        @endforeach
+                    </x-ui.select>
+
                     <x-ui.input name="slipLitres" wire:model="slipLitres" numeric :label="__('Litres')" placeholder="{{ __('400.00') }}" />
 
-                    <x-ui.input name="slipPrice" wire:model="slipPrice" numeric :label="__('Price per litre')" :hint="__('As the pump printed it, in the currency chosen below.')" />
+                    <x-ui.input name="slipPrice" wire:model="slipPrice" numeric :label="__('Price per litre')" :hint="__('As the pump printed it. In the company\'s own currency it starts at the price application settings hold for the fuel you chose; the slip\'s own figure is what gets recorded.')" />
 
                     <x-ui.select name="slipCurrency" id="slip-currency" wire:model.live="slipCurrency" :label="__('Currency')">
                         @foreach ($this->currencies() as $currency)

@@ -18,7 +18,7 @@
     x-on:close-{{ $name }}.window="if ($el.open) $el.close()"
     x-on:close="! $el.open && $dispatch('dialog-closed')"
     {{ $attributes->class([
-        'm-auto w-full rounded-fg-lg border border-fg-line bg-fg-surface p-0 text-fg-ink shadow-fg-3 backdrop:bg-fg-ink/45 backdrop:backdrop-blur-[2px]',
+        'm-auto w-full rounded-fg-lg border border-fg-line bg-fg-surface p-0 text-fg-ink shadow-fg-3 backdrop:bg-black/50 backdrop:backdrop-blur-[2px]',
         $widths[$maxWidth] ?? $widths['lg'],
     ])->merge($title ? ['aria-labelledby' => 'dialog-'.$name.'-title'] : []) }}
 >

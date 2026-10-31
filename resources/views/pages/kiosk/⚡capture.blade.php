@@ -11,6 +11,7 @@ use App\Domain\Operations\Models\Trip;
 use App\Domain\Operations\Models\TripAccessToken;
 use App\Domain\Operations\PodStatus;
 use App\Domain\Operations\TripAccessScope;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
@@ -52,7 +53,13 @@ new #[Layout('layouts::auth')] #[Title('Proof of delivery')] class extends Compo
 
     public string $signatureData = '';
 
-    public ?\Livewire\TemporaryUploadedFile $photo = null;
+    /**
+     * Left untyped on purpose: Livewire's temporary upload class has moved namespace more than once
+     * (`TemporaryUploadedFile` under `Livewire\`, then under `Features\SupportFileUploads`), and a
+     * property typed to the old name makes hydration fail with a type error before this page can say
+     * anything. The value is always an `UploadedFile`; {@see save()} checks that rather than trusting it.
+     */
+    public $photo = null;
 
     /** Minted once per page load, not per submit — see the class note on the offline retry. */
     public string $clientUuid = '';
@@ -109,7 +116,14 @@ new #[Layout('layouts::auth')] #[Title('Proof of delivery')] class extends Compo
 
         try {
             $files['signature'] = $this->signatureInput();
-            $files['photo'] = DocumentInput::fromUploadedFile($this->photo->instance());
+
+            // The temporary upload *is* an `UploadedFile` (it extends one), so it goes to the document
+            // module as-is. `instance()` was a Livewire 2 method and does not exist on the v4 object.
+            if (! $this->photo instanceof UploadedFile) {
+                throw new RuntimeException('The photo did not arrive as a file. Take it again.');
+            }
+
+            $files['photo'] = DocumentInput::fromUploadedFile($this->photo);
         } catch (Throwable $unreadable) {
             $this->addError('form', $unreadable->getMessage());
 
@@ -324,21 +338,18 @@ new #[Layout('layouts::auth')] #[Title('Proof of delivery')] class extends Compo
                 required
             />
 
-            <div class="grid gap-2">
-                <label for="exceptions" class="text-xs font-medium text-fg-ink-secondary">{{ __('What went wrong? (one per line)') }}</label>
-                <textarea
-                    id="exceptions"
-                    wire:model="exceptionsText"
-                    rows="3"
-                    class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink"
-                    placeholder="{{ __('Short damaged, two pallets wet…') }}"
-                ></textarea>
+            <x-ui.textarea
+                name="exceptionsText"
+                wire:model="exceptionsText"
+                :label="__('What went wrong? (one per line)')"
+                :placeholder="__('Short damaged, two pallets wet…')"
+            />
 
-                <label class="flex items-center gap-2 text-sm text-fg-ink">
-                    <input type="checkbox" wire:model="nothingWrong" class="rounded-fg-sm border-fg-line-strong" />
-                    {{ __('Nothing went wrong — deliver the same as the manifest') }}
-                </label>
-            </div>
+            <x-ui.checkbox
+                name="nothingWrong"
+                wire:model="nothingWrong"
+                :label="__('Nothing went wrong — deliver the same as the manifest')"
+            />
 
             <div class="grid gap-1">
                 <label for="photo" class="text-xs font-medium text-fg-ink-secondary">{{ __('Photo of the delivered load') }}</label>
@@ -348,41 +359,113 @@ new #[Layout('layouts::auth')] #[Title('Proof of delivery')] class extends Compo
                     accept="image/*"
                     capture="environment"
                     wire:model="photo"
+                    @error('photo') aria-invalid="true" aria-describedby="photo-error" @enderror
                     class="w-full text-sm text-fg-ink file:mr-3 file:rounded-fg-sm file:border-0 file:bg-fg-surface-sunk file:px-3 file:py-2"
                 />
-                @error('photo') <span class="text-xs text-danger">{{ $message }}</span> @enderror
+                @error('photo')
+                    <p id="photo-error" class="flex items-center gap-1.5 text-xs text-danger" role="alert">
+                        <x-ui.icon name="x-circle" size="3" />
+                        {{ $message }}
+                    </p>
+                @enderror
             </div>
 
-            {{-- The signature canvas: Alpine owns the drawing, Livewire only ever sees the finished PNG. --}}
-            <div class="grid gap-1" x-data="{ drawing: false, start(e){ const p=e.touches?e.touches[0]:e; this.drawing=true; $refs.c.getContext('2d').beginPath(); $refs.c.getContext('2d').moveTo(p.offsetX,p.offsetY); }, move(e){ if(!this.drawing) return; const p=e.touches?e.touches[0]:e; const c=$refs.c.getContext('2d'); c.lineWidth=3; c.lineCap='round'; c.lineTo(p.offsetX,p.offsetY); c.stroke(); e.preventDefault(); }, stop(){ this.drawing=false; $wire.set('signatureData', $refs.c.toDataURL('image/png')); } }">
-                <span class="text-xs font-medium text-fg-ink-secondary">{{ __('Signature — draw with a finger') }}</span>
+            {{--
+                The signature canvas: Alpine owns the drawing, Livewire only ever sees the finished PNG.
+
+                The backing store is sized from the rendered box (device-pixel-ratio aware), and every
+                pointer position is mapped through the element's rect — the old fixed 600x200 canvas
+                stretched by `w-full` put the stroke up to 1.7x away from the finger on a phone, which
+                is most of the screens this page runs on. Pointer events cover mouse, touch and stylus
+                in one path; the drawing survives a rotation because fit() re-projects the snapshot.
+            --}}
+            <div
+                class="grid gap-2"
+                x-data="{
+                    drawing: false,
+                    ratio: 1,
+                    fit() {
+                        const c = $refs.c;
+                        const rect = c.getBoundingClientRect();
+                        if (rect.width === 0) return;
+                        const snapshot = c.width > 0 ? c.toDataURL('image/png') : null;
+                        this.ratio = window.devicePixelRatio || 1;
+                        c.width = Math.round(rect.width * this.ratio);
+                        c.height = Math.round(rect.height * this.ratio);
+                        const ctx = c.getContext('2d');
+                        ctx.lineWidth = 3 * this.ratio;
+                        ctx.lineCap = 'round';
+                        ctx.lineJoin = 'round';
+                        if (snapshot) {
+                            const img = new Image();
+                            img.onload = () => ctx.drawImage(img, 0, 0, c.width, c.height);
+                            img.src = snapshot;
+                        }
+                    },
+                    point(e) {
+                        const rect = $refs.c.getBoundingClientRect();
+                        return { x: (e.clientX - rect.left) * this.ratio, y: (e.clientY - rect.top) * this.ratio };
+                    },
+                    start(e) {
+                        $refs.c.setPointerCapture(e.pointerId);
+                        const p = this.point(e);
+                        this.drawing = true;
+                        const ctx = $refs.c.getContext('2d');
+                        ctx.beginPath();
+                        ctx.moveTo(p.x, p.y);
+                    },
+                    move(e) {
+                        if (! this.drawing) return;
+                        const p = this.point(e);
+                        const ctx = $refs.c.getContext('2d');
+                        ctx.lineTo(p.x, p.y);
+                        ctx.stroke();
+                    },
+                    stop() {
+                        if (! this.drawing) return;
+                        this.drawing = false;
+                        $wire.set('signatureData', $refs.c.toDataURL('image/png'));
+                    },
+                    clear() {
+                        const c = $refs.c;
+                        c.getContext('2d').clearRect(0, 0, c.width, c.height);
+                        $wire.set('signatureData', '');
+                    },
+                }"
+                x-init="fit(); new ResizeObserver(() => fit()).observe($refs.c)"
+            >
+                <span id="signature-label" class="text-xs font-medium text-fg-ink-secondary">{{ __('Signature — draw with a finger or stylus') }}</span>
 
                 <canvas
                     x-ref="c"
-                    width="600"
-                    height="200"
-                    @mousedown.prevent="start($event)"
-                    @mousemove.prevent="move($event)"
-                    @mouseup="stop()"
-                    @mouseleave="stop()"
-                    @touchstart.prevent="start($event)"
-                    @touchmove.prevent="move($event)"
-                    @touchend="stop()"
-                    class="w-full touch-none rounded-fg-sm border border-dashed border-fg-line-strong bg-fg-surface"
+                    role="img"
+                    aria-labelledby="signature-label"
+                    @pointerdown.prevent="start($event)"
+                    @pointermove.prevent="move($event)"
+                    @pointerup="stop()"
+                    @pointercancel="stop()"
+                    class="h-44 w-full touch-none rounded-fg-sm border border-dashed border-fg-line-strong bg-fg-surface"
                 ></canvas>
 
-                <button type="button" class="justify-self-start text-xs text-fg-ink-muted" x-on:click="$refs.c.getContext('2d').clearRect(0,0,600,200); $wire.set('signatureData','')">{{ __('Clear') }}</button>
+                <x-ui.button type="button" variant="ghost" size="sm" class="justify-self-start" x-on:click="clear()">
+                    {{ __('Clear the signature') }}
+                </x-ui.button>
 
-                @error('signatureData') <span class="text-xs text-danger">{{ $message }}</span> @enderror
+                @error('signatureData')
+                    <p class="flex items-center gap-1.5 text-xs text-danger" role="alert">
+                        <x-ui.icon name="x-circle" size="3" />
+                        {{ $message }}
+                    </p>
+                @enderror
             </div>
 
-            <x-ui.input name="pin" wire:model="pin" :label="__('6-digit PIN from the dispatcher')" type="text" inputmode="numeric" required />
+            <x-ui.input name="pin" wire:model="pin" :label="__('6-digit PIN from the dispatcher')" type="text" inputmode="numeric" autocomplete="one-time-code" required />
 
             @error('form')
                 <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
             @enderror
 
-            <x-ui.button type="submit" class="w-full">{{ __('Send the proof') }}</x-ui.button>
+            <x-ui.button type="submit" size="lg" class="w-full">{{ __('Send the proof') }}</x-ui.button>
         </form>
     @endif
 </div>

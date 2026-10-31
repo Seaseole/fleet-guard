@@ -145,6 +145,17 @@ final class ChartOfAccountsSeeder extends Seeder
             ['code' => '2120', 'name' => 'Purchase tax / VAT payable', 'type' => AccountType::Liability, 'normal' => Side::Credit, 'parent' => '2100', 'is_postable' => true],
             ['code' => '2130', 'name' => 'PAYE and employee deductions payable', 'type' => AccountType::Liability, 'normal' => Side::Credit, 'parent' => '2100', 'is_postable' => true],
             ['code' => '2140', 'name' => 'Driver settlements payable', 'type' => AccountType::Liability, 'normal' => Side::Credit, 'parent' => '2100', 'is_postable' => true, 'requires' => [Dimension::Driver]],
+            // Phase 4: §6.8 posts VAT on *both* sides and the two must be held apart — a filing that
+            // nets output VAT against input VAT in one account cannot be shown to BRBS, and the
+            // accountant's ledger keeps them as separate controls. 2120 stays exactly where it is
+            // because Phase 3 already posted diesel deliveries' input VAT onto it (§20.25); these two
+            // rows give each side its own home without reopening the 1180 postings already in the book.
+            ['code' => '2125', 'name' => 'Output VAT — sales', 'type' => AccountType::Liability, 'normal' => Side::Credit, 'parent' => '2100', 'is_postable' => true],
+            ['code' => '2126', 'name' => 'Input VAT — purchases', 'type' => AccountType::Liability, 'normal' => Side::Debit, 'parent' => '2100', 'is_postable' => true],
+            // Money the customer has paid that no invoice has claimed yet (§5.5's allocation, §6.8's
+            // `PaymentAllocated`). An overpayment never "adjusts" an invoice, so the residue needs a
+            // liability to sit in until the next allocation finds it.
+            ['code' => '2150', 'name' => 'Unapplied customer cash', 'type' => AccountType::Liability, 'normal' => Side::Credit, 'parent' => '2100', 'is_postable' => true, 'requires' => [Dimension::Customer]],
             ['code' => '2200', 'name' => 'Non-current liabilities', 'type' => AccountType::Liability, 'normal' => Side::Credit, 'parent' => '2000', 'is_postable' => false],
             ['code' => '2210', 'name' => 'Vehicle finance loans', 'type' => AccountType::Liability, 'normal' => Side::Credit, 'parent' => '2200', 'is_postable' => true],
 
@@ -186,6 +197,16 @@ final class ChartOfAccountsSeeder extends Seeder
             ['code' => '5700', 'name' => 'Overheads (rent, utilities, admin)', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true],
             ['code' => '5800', 'name' => 'Bank charges and exchange differences', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true],
             ['code' => '5900', 'name' => 'Fines, penalties and overload charges', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true],
+
+            // ── Realised exchange differences ──
+            // §5.5's payment-side rule: the difference between an open item's rate and the payment's
+            // rate is a realised gain or loss, and it needs somewhere to land that is not "bank
+            // charges" — a corridor fleet bills in ZAR and settles in BWP, so the pair is a standing
+            // part of the month. §6.8 names these codes; the 7000 section is the design's own range,
+            // opened here for the first time with the two rows Phase 4 actually posts to.
+            ['code' => '7000', 'name' => 'Exchange differences', 'type' => AccountType::Revenue, 'normal' => Side::Credit, 'is_postable' => false],
+            ['code' => '7510', 'name' => 'Realised FX gain', 'type' => AccountType::Revenue, 'normal' => Side::Credit, 'parent' => '7000', 'is_postable' => true],
+            ['code' => '7511', 'name' => 'Realised FX loss', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '7000', 'is_postable' => true],
         ];
     }
 }

@@ -29,7 +29,11 @@ final class BeginTruckTrip
     public function __invoke(int $truckId, string $reason): void
     {
         DB::transaction(function () use ($truckId, $reason): void {
-            $truck = Truck::query()->find($truckId);
+            // Read `FOR UPDATE`, because the question is "where is this truck right now" and the workshop
+            // moves the same row: a status answered from a snapshot is how a truck leaves the yard on a
+            // trip and into a work order in the same minute. The locked instance is the one handed to
+            // `ChangeTruckStatus`, so the move is written against what the lock just read.
+            $truck = Truck::query()->whereKey($truckId)->lockForUpdate()->first();
 
             if ($truck === null) {
                 throw new InvalidArgumentException(sprintf('Truck #%d is not in this company\'s fleet.', $truckId));

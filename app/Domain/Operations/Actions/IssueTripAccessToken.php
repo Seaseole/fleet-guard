@@ -6,6 +6,7 @@ namespace App\Domain\Operations\Actions;
 
 use App\Domain\Kernel\Audit\AuditRecorder;
 use App\Domain\Kernel\Audit\SecurityEventKind;
+use App\Domain\Kernel\Settings\CompanySettings;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Operations\Exceptions\KioskScopeUnavailable;
 use App\Domain\Operations\Models\Trip;
@@ -38,6 +39,7 @@ final class IssueTripAccessToken
     public function __construct(
         private readonly DriverDirectory $drivers,
         private readonly AuditRecorder $audit,
+        private readonly CompanySettings $settings,
     ) {}
 
     /**
@@ -116,9 +118,23 @@ final class IssueTripAccessToken
                 'pin' => $pin,
                 // The company is in the path because a driver request has no session to resolve one from
                 // (guard is fail-closed), so the link has to name it.
-                'url' => route('kiosk.capture', ['company' => CurrentCompany::id(), 'secret' => $secret]),
+                'url' => route($this->landingRoute($wanted), ['company' => CurrentCompany::id(), 'secret' => $secret]),
             ];
         });
+    }
+
+    /**
+     * Which kiosk screen the issued link opens.
+     *
+     * One secret serves both routes, so a `fuel`-only link is live on the POD page and refuses there.
+     * Pointing the dispatcher at the capture URL anyway is how a driver standing at a pump is handed a
+     * signature pad; the URL names the screen the scopes can actually use (§15.2's 3g).
+     *
+     * @param  list<TripAccessScope>  $scopes
+     */
+    private function landingRoute(array $scopes): string
+    {
+        return $scopes === [TripAccessScope::Fuel] ? 'kiosk.fuel' : 'kiosk.capture';
     }
 
     /**
@@ -129,7 +145,7 @@ final class IssueTripAccessToken
      */
     private function horizon(Trip $trip): Carbon
     {
-        $ttl = (int) config('fleet.kiosk.ttl_hours_after_trip_end', 24);
+        $ttl = (int) $this->settings->get('kiosk.ttl_hours_after_trip_end');
 
         $end = $trip->arrived_at
             ?? $trip->completed_at

@@ -27,6 +27,18 @@ use Illuminate\Support\Facades\DB;
  *
  * The assignment does not move the truck to `on_trip`: assignment is "who has it", departure is the
  * Phase 2 trip state, and conflating them would leave a truck on trip with no trip.
+ *
+ * **This is where "is this truck free" is decided, so it is decided under a lock.** The asset rows are
+ * read `FOR UPDATE` in the order the rest of the dispatch path takes them (truck, then trailer) and the
+ * overlap scans are locking reads, which is what closes the two holes a plain `SELECT` leaves:
+ *
+ * - two dispatchers on **the same truck** from different trips both read "no overlap" from their
+ *   snapshots and both insert; the second now waits on the truck's row lock and sees the first's window;
+ * - one window is never inserted twice by a retry, because the scan that decides takes the gap lock that
+ *   the insert would need.
+ *
+ * The driver question is locked the same way and for the same reason: two *different* trucks can be given
+ * to one driver by two tabs, and no asset row is shared between them.
  */
 final class AssignVehicle
 {
@@ -37,7 +49,7 @@ final class AssignVehicle
         return DB::transaction(function () use ($dto): VehicleAssignment {
             $from = CarbonImmutable::parse($dto->fromAt);
 
-            $truck = Truck::query()->findOrFail($dto->truckId);
+            $truck = Truck::query()->whereKey($dto->truckId)->lockForUpdate()->firstOrFail();
 
             if (! $truck->status->mayBeDispatched()) {
                 throw AssignmentRejected::vehicleNotAvailable('Truck', $truck->label(), $truck->status->label());
@@ -48,7 +60,7 @@ final class AssignVehicle
             $trailer = null;
 
             if ($dto->trailerId !== null) {
-                $trailer = Trailer::query()->findOrFail($dto->trailerId);
+                $trailer = Trailer::query()->whereKey($dto->trailerId)->lockForUpdate()->firstOrFail();
 
                 if (! $trailer->status->mayBeDispatched()) {
                     throw AssignmentRejected::vehicleNotAvailable('Trailer', $trailer->label(), $trailer->status->label());
@@ -72,6 +84,7 @@ final class AssignVehicle
                     ->where('driver_id', $driver->id)
                     ->where($this->covers($from))
                     ->orderBy('from_at')
+                    ->lockForUpdate()
                     ->first();
 
                 if ($open !== null) {
@@ -112,6 +125,9 @@ final class AssignVehicle
             ->where($column, $id)
             ->where($this->covers($from))
             ->orderBy('from_at')
+            // A locking read: the plain one answers from the transaction's snapshot, which is exactly how
+            // two "no overlap" verdicts and two rows for one truck survive to the log.
+            ->lockForUpdate()
             ->first();
 
         if ($existing !== null) {

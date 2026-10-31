@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Telematics\Data;
 
+use App\Domain\Kernel\Settings\CompanySettings;
 use App\Domain\Operations\Data\TripInMotion;
 use Carbon\CarbonImmutable;
 
@@ -44,7 +45,7 @@ final readonly class LiveVehicle
      */
     public function isStale(): bool
     {
-        $minutes = (int) config('fleet.telematics.stale_after_minutes', 15);
+        $minutes = (int) app(CompanySettings::class)->get('telematics.stale_after_minutes');
 
         return $this->fixedAt->lessThan(CarbonImmutable::now()->subMinutes($minutes));
     }

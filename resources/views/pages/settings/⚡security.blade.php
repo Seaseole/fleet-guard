@@ -297,12 +297,12 @@ new #[Title('Security settings')] class extends Component
                 <x-ui.subheading>{{ __('Manage your passkeys for passwordless sign-in') }}</x-ui.subheading>
 
                 <div class="mt-6 flex flex-col w-full mx-auto space-y-6 text-sm" wire:cloak>
-                    <div class="border rounded-lg border-zinc-200 dark:border-zinc-700 overflow-hidden">
+                    <div class="border rounded-lg border-fg-line overflow-hidden">
                         @forelse ($passkeys as $passkey)
-                            <div class="flex items-center justify-between p-4 {{ ! $loop->last ? 'border-b border-zinc-200 dark:border-zinc-700' : '' }}">
+                            <div class="flex items-center justify-between p-4 {{ ! $loop->last ? 'border-b border-fg-line' : '' }}">
                                 <div class="flex items-center gap-4">
-                                    <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800">
-                                        <x-ui.icon name="key" class="size-5 text-zinc-500 dark:text-zinc-400"  />
+                                    <div class="flex size-10 shrink-0 items-center justify-center rounded-fg-md bg-fg-surface-sunk">
+                                        <x-ui.icon name="key" class="size-5 text-fg-ink-muted"  />
                                     </div>
                                     <div class="space-y-1">
                                         <div class="flex items-center gap-2.5">
@@ -311,7 +311,7 @@ new #[Title('Security settings')] class extends Component
                                                 <x-ui.badge size="sm">{{ $passkey['authenticator'] }}</x-ui.badge>
                                             @endif
                                         </div>
-                                        <p class="text-zinc-500 dark:text-zinc-400 text-xs">
+                                        <p class="text-fg-ink-muted text-xs">
                                             {{ __('Added :time', ['time' => $passkey['created_at_diff']]) }}
                                             @if ($passkey['last_used_at_diff'])
                                                 <span class="opacity-50 mx-1">/</span>
@@ -322,18 +322,16 @@ new #[Title('Security settings')] class extends Component
                                 </div>
 
                                 <x-ui.button
-                                    variant="ghost"
+                                    variant="danger"
                                     size="sm"
                                     icon="trash"
-                                    icon:variant="outline"
                                     wire:click="confirmDelete({{ $passkey['id'] }})"
-                                    class="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50"
                                 />
                             </div>
                         @empty
                             <div class="p-8 text-center">
-                                <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-zinc-100 dark:bg-zinc-800">
-                                    <x-ui.icon name="key" class="size-7 text-zinc-400 dark:text-zinc-500"  />
+                                <div class="mx-auto mb-4 flex size-14 items-center justify-center rounded-fg-lg bg-fg-surface-sunk">
+                                    <x-ui.icon name="key" class="size-7 text-fg-ink-muted"  />
                                 </div>
                                 <p class="font-medium">{{ __('No passkeys yet') }}</p>
                                 <x-ui.text class="mt-1">{{ __('Add a passkey to sign in without a password') }}</x-ui.text>

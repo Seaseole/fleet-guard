@@ -1,7 +1,7 @@
 @props(['href' => null, 'icon' => null, 'current' => false, 'trailing' => null, 'collapsibleLabel' => false, 'chevron' => false])
 
 @php
-    $link = 'group flex items-center gap-2.5 rounded-fg-md px-2.5 py-2 text-sm transition duration-(--t-fast) ease-(--ease-standard)';
+    $link = 'group flex h-8 items-center gap-2 rounded-fg-md px-2 text-sm transition duration-(--t-fast) ease-(--ease-standard)';
 @endphp
 
 <a

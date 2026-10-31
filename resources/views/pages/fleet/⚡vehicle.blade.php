@@ -302,6 +302,38 @@ new #[Title('Vehicle')] class extends Component {
             ->get();
     }
 
+    /**
+     * Kilometres between each reading and the one before it, keyed by reading id.
+     *
+     * Computed over the truck's whole history rather than the twenty rows on show: the oldest row on
+     * the screen still needs the reading that fell off the page to answer "how far was this leg", and
+     * a column that silently blanks for the last row is a column nobody trusts.
+     *
+     * A reading **below** its predecessor has no distance to report. It is kept as evidence (§7 R7) and
+     * the Trust badge says what it is; inventing a kilometres figure out of a measurement the truck
+     * contradicts would put a fabricated number in the same row as a real one.
+     *
+     * @return array<string, int|null>
+     */
+    #[Computed]
+    public function travelled(): array
+    {
+        $previous = null;
+        $out = [];
+
+        foreach (OdometerReading::query()
+            ->where('truck_id', $this->truckId)
+            ->orderBy('read_on')
+            ->orderBy('id')
+            ->get(['id', 'odometer_km']) as $reading) {
+            $delta = $previous === null ? null : $reading->odometer_km - $previous;
+            $out[(string) $reading->id] = $delta !== null && $delta > 0 ? $delta : null;
+            $previous = $reading->odometer_km;
+        }
+
+        return $out;
+    }
+
     /** @return Collection<int, Document> */
     #[Computed]
     public function documents(): Collection
@@ -428,7 +460,7 @@ new #[Title('Vehicle')] class extends Component {
 
             <div class="grid gap-0.5">
                 <dt class="text-xs font-medium text-fg-ink-muted">{{ __('Fuel type') }}</dt>
-                <dd class="text-sm text-fg-ink">{{ ucfirst($truck->fuel_type) }}</dd>
+                <dd class="text-sm text-fg-ink">{{ $truck->fuel_type->label() }}</dd>
             </div>
 
             <div class="grid gap-0.5">
@@ -635,7 +667,7 @@ new #[Title('Vehicle')] class extends Component {
         @endif
     </x-ui.card>
 
-    <x-ui.card :title="__('Odometer')" :description="__('A reading is evidence. A lower reading is kept as suspect and never drags the truck backwards.')">
+    <x-ui.card :title="__('Odometer')" :description="__('A reading is evidence. A lower reading is kept as suspect and never drags the truck backwards. “Travelled” is the distance since the reading before it — the first row has none to compare with.')">
         @can('recordOdometer', $truck)
             <form class="grid gap-4" wire:submit="recordOdometer">
                 <div class="grid gap-4 sm:grid-cols-3">
@@ -660,6 +692,7 @@ new #[Title('Vehicle')] class extends Component {
                     <tr>
                         <x-ui.table.th>{{ __('Read on') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Odometer') }}</x-ui.table.th>
+                        <x-ui.table.th numeric>{{ __('Travelled') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Engine hours') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Source') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Trust') }}</x-ui.table.th>
@@ -670,6 +703,9 @@ new #[Title('Vehicle')] class extends Component {
                         <tr wire:key="reading-{{ $reading->id }}">
                             <x-ui.table.td nowrap>{{ $reading->read_on->format('d M Y') }}</x-ui.table.td>
                             <x-ui.table.td numeric>{{ number_format($reading->odometer_km) }}</x-ui.table.td>
+                            <x-ui.table.td numeric>
+                                {{ $this->travelled[$reading->id] === null ? '—' : number_format($this->travelled[$reading->id]).' km' }}
+                            </x-ui.table.td>
                             <x-ui.table.td numeric>{{ $reading->engine_hours_10_2 === null ? '—' : number_format($reading->engine_hours_10_2, 2) }}</x-ui.table.td>
                             <x-ui.table.td>{{ $reading->source->label() }}</x-ui.table.td>
                             <x-ui.table.td>

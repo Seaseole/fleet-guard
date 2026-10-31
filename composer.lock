@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "319fe00faa1e63a8138619e2395bbfe4",
+    "content-hash": "313ad8f2e7846cac19928de353f67fbf",
     "packages": [
         {
             "name": "bacon/bacon-qr-code",
@@ -591,6 +591,161 @@
             "time": "2026-10-01T06:59:29+00:00"
         },
         {
+            "name": "dompdf/dompdf",
+            "version": "v3.1.6",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/dompdf/dompdf.git",
+                "reference": "6d4b4eb8500f7a786da8868ba463a71b725a4005"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/dompdf/dompdf/zipball/6d4b4eb8500f7a786da8868ba463a71b725a4005",
+                "reference": "6d4b4eb8500f7a786da8868ba463a71b725a4005",
+                "shasum": ""
+            },
+            "require": {
+                "dompdf/php-font-lib": "^1.0.0",
+                "dompdf/php-svg-lib": "^1.0.0",
+                "ext-dom": "*",
+                "ext-mbstring": "*",
+                "masterminds/html5": "^2.0",
+                "php": "^7.1 || ^8.0"
+            },
+            "require-dev": {
+                "ext-gd": "*",
+                "ext-json": "*",
+                "ext-zip": "*",
+                "mockery/mockery": "^1.3",
+                "phpunit/phpunit": "^7.5 || ^8 || ^9 || ^10 || ^11",
+                "squizlabs/php_codesniffer": "^3.5",
+                "symfony/process": "^4.4 || ^5.4 || ^6.2 || ^7.0"
+            },
+            "suggest": {
+                "ext-gd": "Needed to process images",
+                "ext-gmagick": "Improves image processing performance",
+                "ext-imagick": "Improves image processing performance",
+                "ext-zlib": "Needed for pdf stream compression"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Dompdf\\": "src/"
+                },
+                "classmap": [
+                    "lib/"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "LGPL-2.1"
+            ],
+            "authors": [
+                {
+                    "name": "The Dompdf Community",
+                    "homepage": "https://github.com/dompdf/dompdf/blob/master/AUTHORS.md"
+                }
+            ],
+            "description": "DOMPDF is a CSS 2.1 compliant HTML to PDF converter",
+            "homepage": "https://github.com/dompdf/dompdf",
+            "support": {
+                "issues": "https://github.com/dompdf/dompdf/issues",
+                "source": "https://github.com/dompdf/dompdf/tree/v3.1.6"
+            },
+            "time": "2026-07-20T12:29:38+00:00"
+        },
+        {
+            "name": "dompdf/php-font-lib",
+            "version": "1.0.2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/dompdf/php-font-lib.git",
+                "reference": "a6e9a688a2a80016ac080b97be73d3e10c444c9a"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/dompdf/php-font-lib/zipball/a6e9a688a2a80016ac080b97be73d3e10c444c9a",
+                "reference": "a6e9a688a2a80016ac080b97be73d3e10c444c9a",
+                "shasum": ""
+            },
+            "require": {
+                "ext-mbstring": "*",
+                "php": "^7.1 || ^8.0"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^7.5 || ^8 || ^9 || ^10 || ^11 || ^12"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "FontLib\\": "src/FontLib"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "LGPL-2.1-or-later"
+            ],
+            "authors": [
+                {
+                    "name": "The FontLib Community",
+                    "homepage": "https://github.com/dompdf/php-font-lib/blob/master/AUTHORS.md"
+                }
+            ],
+            "description": "A library to read, parse, export and make subsets of different types of font files.",
+            "homepage": "https://github.com/dompdf/php-font-lib",
+            "support": {
+                "issues": "https://github.com/dompdf/php-font-lib/issues",
+                "source": "https://github.com/dompdf/php-font-lib/tree/1.0.2"
+            },
+            "time": "2026-01-20T14:10:26+00:00"
+        },
+        {
+            "name": "dompdf/php-svg-lib",
+            "version": "1.0.2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/dompdf/php-svg-lib.git",
+                "reference": "8259ffb930817e72b1ff1caef5d226501f3dfeb1"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/dompdf/php-svg-lib/zipball/8259ffb930817e72b1ff1caef5d226501f3dfeb1",
+                "reference": "8259ffb930817e72b1ff1caef5d226501f3dfeb1",
+                "shasum": ""
+            },
+            "require": {
+                "ext-mbstring": "*",
+                "php": "^7.1 || ^8.0",
+                "sabberworm/php-css-parser": "^8.4 || ^9.0"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^7.5 || ^8 || ^9 || ^10 || ^11"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Svg\\": "src/Svg"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "LGPL-3.0-or-later"
+            ],
+            "authors": [
+                {
+                    "name": "The SvgLib Community",
+                    "homepage": "https://github.com/dompdf/php-svg-lib/blob/master/AUTHORS.md"
+                }
+            ],
+            "description": "A library to read, parse and export to PDF SVG files.",
+            "homepage": "https://github.com/dompdf/php-svg-lib",
+            "support": {
+                "issues": "https://github.com/dompdf/php-svg-lib/issues",
+                "source": "https://github.com/dompdf/php-svg-lib/tree/1.0.2"
+            },
+            "time": "2026-01-02T16:01:13+00:00"
+        },
+        {
             "name": "dragonmantank/cron-expression",
             "version": "v3.6.1",
             "source": {
@@ -653,6 +808,78 @@
                 }
             ],
             "time": "2026-10-19T17:53:57+00:00"
+        },
+        {
+            "name": "egough/laravel-settings",
+            "version": "v1.4.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/realedwardgough/laravel-settings.git",
+                "reference": "a1820b07041302a2f6e5bb908c087d2d6c59051f"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/realedwardgough/laravel-settings/zipball/a1820b07041302a2f6e5bb908c087d2d6c59051f",
+                "reference": "a1820b07041302a2f6e5bb908c087d2d6c59051f",
+                "shasum": ""
+            },
+            "require": {
+                "illuminate/cache": "^10.0 || ^11.0 || ^12.0 || ^13.0",
+                "illuminate/config": "^10.0 || ^11.0 || ^12.0 || ^13.0",
+                "illuminate/console": "^10.0 || ^11.0 || ^12.0 || ^13.0",
+                "illuminate/database": "^10.0 || ^11.0 || ^12.0 || ^13.0",
+                "illuminate/events": "^10.0 || ^11.0 || ^12.0 || ^13.0",
+                "illuminate/support": "^10.0 || ^11.0 || ^12.0 || ^13.0",
+                "illuminate/view": "^10.0 || ^11.0 || ^12.0 || ^13.0",
+                "php": "^8.2 || ^8.3 || ^8.4"
+            },
+            "require-dev": {
+                "laravel/pint": "^1.0",
+                "phpunit/phpunit": "^11.5"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "aliases": {
+                        "Flag": "Egough\\LaravelSettings\\Facades\\Flag",
+                        "Settings": "Egough\\LaravelSettings\\Facades\\Settings"
+                    },
+                    "providers": [
+                        "Egough\\LaravelSettings\\SettingsServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "files": [
+                    "src/helpers.php"
+                ],
+                "psr-4": {
+                    "Egough\\LaravelSettings\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Edward Gough",
+                    "email": "edwardggough@gmail.com"
+                }
+            ],
+            "description": "Database-backed application and model settings for Laravel.",
+            "homepage": "https://github.com/realedwardgough/laravel-settings",
+            "keywords": [
+                "Settings",
+                "configuration",
+                "feature-flags",
+                "laravel"
+            ],
+            "support": {
+                "issues": "https://github.com/realedwardgough/laravel-settings/issues",
+                "source": "https://github.com/realedwardgough/laravel-settings/tree/v1.4.1"
+            },
+            "time": "2026-10-27T20:06:20+00:00"
         },
         {
             "name": "egulias/email-validator",
@@ -720,6 +947,81 @@
                 }
             ],
             "time": "2025-03-06T22:45:56+00:00"
+        },
+        {
+            "name": "exeque/laravel-qr",
+            "version": "v0.9.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/ExeQue/laravel-qr.git",
+                "reference": "06c83256b3e27e3101e4574130f069763fa6222d"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/ExeQue/laravel-qr/zipball/06c83256b3e27e3101e4574130f069763fa6222d",
+                "reference": "06c83256b3e27e3101e4574130f069763fa6222d",
+                "shasum": ""
+            },
+            "require": {
+                "ext-mbstring": "*",
+                "guzzlehttp/psr7": "^2.9 || ^3.0",
+                "laravel/framework": "^13.0",
+                "php": "^8.5",
+                "psr/http-message": "^2.0"
+            },
+            "require-dev": {
+                "enshrined/svg-sanitize": "^1.1",
+                "exeque/laravel-monocle": "^0.12",
+                "larastan/larastan": "^3.13",
+                "laravel/pint": "^1.21",
+                "livewire/livewire": "^4.4",
+                "orchestra/testbench": "^11.3",
+                "pestphp/pest": "^5.0",
+                "pestphp/pest-plugin-type-coverage": "^5.0"
+            },
+            "suggest": {
+                "enshrined/svg-sanitize": "Sanitizes SVG logos with a dedicated sanitizer instead of the package's own.",
+                "exeque/laravel-monocle": "Shows the codes each request rendered, with timings and advice, in the Monocle profiler.",
+                "ext-gd": "Draws PNG, JPEG and WebP codes without Imagick.",
+                "ext-imagick": "Draws PNG, JPEG and WebP codes faster than GD, and SVG logos on them."
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "aliases": {
+                        "Qr": "ExeQue\\Qr\\Facades\\Qr"
+                    },
+                    "providers": [
+                        "ExeQue\\Qr\\QrServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "ExeQue\\Qr\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Morten Harders",
+                    "email": "mmh@harders-it.dk"
+                }
+            ],
+            "description": "QR codes for Laravel.",
+            "keywords": [
+                "laravel",
+                "qr",
+                "qrcode"
+            ],
+            "support": {
+                "issues": "https://github.com/ExeQue/laravel-qr/issues",
+                "source": "https://github.com/ExeQue/laravel-qr/tree/v0.9.0"
+            },
+            "time": "2026-10-27T18:52:19+00:00"
         },
         {
             "name": "fruitcake/php-cors",
@@ -2631,6 +2933,74 @@
             "time": "2026-10-21T12:53:46+00:00"
         },
         {
+            "name": "masterminds/html5",
+            "version": "2.12.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/Masterminds/html5-php.git",
+                "reference": "15e16663bd6f512352209d0e3a789c0a691c0d9b"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/Masterminds/html5-php/zipball/15e16663bd6f512352209d0e3a789c0a691c0d9b",
+                "reference": "15e16663bd6f512352209d0e3a789c0a691c0d9b",
+                "shasum": ""
+            },
+            "require": {
+                "ext-dom": "*",
+                "ext-mbstring": "*",
+                "php": ">=7.4"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^6 || ^7 || ^8 || ^9 || ^10"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "2.7-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Masterminds\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Matt Butcher",
+                    "email": "technosophos@gmail.com"
+                },
+                {
+                    "name": "Matt Farina",
+                    "email": "matt@mattfarina.com"
+                },
+                {
+                    "name": "Asmir Mustafic",
+                    "email": "goetas@gmail.com"
+                }
+            ],
+            "description": "An HTML5 parser and serializer.",
+            "homepage": "http://masterminds.github.io/html5-php",
+            "keywords": [
+                "HTML5",
+                "dom",
+                "html",
+                "parser",
+                "querypath",
+                "serializer",
+                "xml"
+            ],
+            "support": {
+                "issues": "https://github.com/Masterminds/html5-php/issues",
+                "source": "https://github.com/Masterminds/html5-php/tree/2.12.0"
+            },
+            "time": "2026-10-25T08:57:58+00:00"
+        },
+        {
             "name": "monolog/monolog",
             "version": "3.12.1",
             "source": {
@@ -4309,6 +4679,84 @@
             "time": "2026-09-16T11:39:30+00:00"
         },
         {
+            "name": "sabberworm/php-css-parser",
+            "version": "v9.5.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/MyIntervals/PHP-CSS-Parser.git",
+                "reference": "f284e63b6e891e0c28631e54ba06c3ed102a9ef3"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/MyIntervals/PHP-CSS-Parser/zipball/f284e63b6e891e0c28631e54ba06c3ed102a9ef3",
+                "reference": "f284e63b6e891e0c28631e54ba06c3ed102a9ef3",
+                "shasum": ""
+            },
+            "require": {
+                "ext-iconv": "*",
+                "php": "^7.2.0 || ~8.0.0 || ~8.1.0 || ~8.2.0 || ~8.3.0 || ~8.4.0 || ~8.5.0 || ~8.6.0"
+            },
+            "require-dev": {
+                "php-parallel-lint/php-parallel-lint": "1.4.0",
+                "phpstan/extension-installer": "1.4.3",
+                "phpstan/phpstan": "1.12.33 || 2.2.9",
+                "phpstan/phpstan-phpunit": "1.4.2 || 2.0.18",
+                "phpstan/phpstan-strict-rules": "1.6.2 || 2.0.12",
+                "phpunit/phpunit": "8.5.54",
+                "rawr/phpunit-data-provider": "3.3.1",
+                "rector/rector": "1.2.10 || 2.6.2",
+                "rector/type-perfect": "1.0.0 || 2.1.4",
+                "squizlabs/php_codesniffer": "4.0.4"
+            },
+            "suggest": {
+                "ext-mbstring": "for parsing UTF-8 CSS"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-main": "9.6.x-dev"
+                }
+            },
+            "autoload": {
+                "files": [
+                    "src/Rule/Rule.php",
+                    "src/RuleSet/RuleContainer.php"
+                ],
+                "psr-4": {
+                    "Sabberworm\\CSS\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Raphael Schweikert"
+                },
+                {
+                    "name": "Oliver Klee",
+                    "email": "github@oliverklee.de"
+                },
+                {
+                    "name": "Jake Hotson",
+                    "email": "jake.github@qzdesign.co.uk"
+                }
+            ],
+            "description": "Parser for CSS Files written in PHP",
+            "homepage": "https://www.sabberworm.com/blog/2010/6/10/php-css-parser",
+            "keywords": [
+                "css",
+                "parser",
+                "stylesheet"
+            ],
+            "support": {
+                "issues": "https://github.com/MyIntervals/PHP-CSS-Parser/issues",
+                "source": "https://github.com/MyIntervals/PHP-CSS-Parser/tree/v9.5.0"
+            },
+            "time": "2026-09-20T15:02:00+00:00"
+        },
+        {
             "name": "spatie/laravel-package-tools",
             "version": "1.93.3",
             "source": {
@@ -4368,6 +4816,101 @@
                 }
             ],
             "time": "2026-09-28T07:16:50+00:00"
+        },
+        {
+            "name": "spatie/laravel-pdf",
+            "version": "2.14.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/spatie/laravel-pdf.git",
+                "reference": "9581e64f96092cc3a0857b76d9ee180d6abdce78"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/spatie/laravel-pdf/zipball/9581e64f96092cc3a0857b76d9ee180d6abdce78",
+                "reference": "9581e64f96092cc3a0857b76d9ee180d6abdce78",
+                "shasum": ""
+            },
+            "require": {
+                "illuminate/contracts": "^11.0|^12.0|^13.0",
+                "php": "^8.2",
+                "spatie/laravel-package-tools": "^1.16.1",
+                "spatie/temporary-directory": "^2.2.1"
+            },
+            "require-dev": {
+                "chrome-php/chrome": "^1.0",
+                "dompdf/dompdf": "^3.0",
+                "ext-imagick": "*",
+                "larastan/larastan": "^2.7.0|^3.0",
+                "laravel/pint": "^1.13.7",
+                "nunomaduro/collision": "^8.0",
+                "orchestra/testbench": "^9.6|^10.0|^11.0",
+                "pestphp/pest": "^2.30|^3.7|^4.4",
+                "pestphp/pest-plugin-arch": "^2.5|^3.0|^4.0",
+                "pestphp/pest-plugin-laravel": "^2.2|^3.1|^4.1",
+                "phpstan/extension-installer": "^1.3.1",
+                "phpstan/phpstan-deprecation-rules": "^1.1.4|^2.0",
+                "phpstan/phpstan-phpunit": "^1.3.15|^2.0",
+                "pontedilana/php-weasyprint": "^2.4",
+                "spatie/image": "^3.3.2",
+                "spatie/invade": "^2.1",
+                "spatie/laravel-ray": "^1.33",
+                "spatie/pdf-to-image": "^2.2|^3.1",
+                "spatie/pdf-to-text": "^1.52.1",
+                "spatie/pest-expectations": "^1.5",
+                "spatie/pest-plugin-snapshots": "^2.1",
+                "spatie/pixelmatch-php": "^1.0",
+                "tecnickcom/tc-lib-pdf-encrypt": "^2.5",
+                "wnx/sidecar-browsershot": "^2.0"
+            },
+            "suggest": {
+                "chrome-php/chrome": "Required for the Chrome PHP driver (^1.0)",
+                "dompdf/dompdf": "Required for the DOMPDF driver (^3.0)",
+                "spatie/browsershot": "Required for the Browsershot driver (^4.0|^5.0)",
+                "tecnickcom/tc-lib-pdf-encrypt": "Required to password-protect PDFs with the default encrypter (^2.5)"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "aliases": {
+                        "LaravelPdf": "Pdf"
+                    },
+                    "providers": [
+                        "Spatie\\LaravelPdf\\PdfServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "files": [
+                    "src/Support/functions.php"
+                ],
+                "psr-4": {
+                    "Spatie\\LaravelPdf\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Freek Van der Herten",
+                    "email": "freek@spatie.be",
+                    "role": "Developer"
+                }
+            ],
+            "description": "Create PDFs in Laravel apps",
+            "homepage": "https://github.com/spatie/laravel-pdf",
+            "keywords": [
+                "laravel",
+                "laravel-pdf",
+                "spatie"
+            ],
+            "support": {
+                "issues": "https://github.com/spatie/laravel-pdf/issues",
+                "source": "https://github.com/spatie/laravel-pdf/tree/2.14.0"
+            },
+            "time": "2026-10-05T08:48:41+00:00"
         },
         {
             "name": "spatie/laravel-permission",
@@ -4456,6 +4999,67 @@
                 }
             ],
             "time": "2026-10-19T16:31:21+00:00"
+        },
+        {
+            "name": "spatie/temporary-directory",
+            "version": "2.4.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/spatie/temporary-directory.git",
+                "reference": "32cbb9645b28839cf4f476708e99a2c70e6802c9"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/spatie/temporary-directory/zipball/32cbb9645b28839cf4f476708e99a2c70e6802c9",
+                "reference": "32cbb9645b28839cf4f476708e99a2c70e6802c9",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^8.0"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^9.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Spatie\\TemporaryDirectory\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Alex Vanderbist",
+                    "email": "alex@spatie.be",
+                    "homepage": "https://spatie.be",
+                    "role": "Developer"
+                }
+            ],
+            "description": "Easily create, use and destroy temporary directories",
+            "homepage": "https://github.com/spatie/temporary-directory",
+            "keywords": [
+                "php",
+                "spatie",
+                "temporary-directory"
+            ],
+            "support": {
+                "issues": "https://github.com/spatie/temporary-directory/issues",
+                "source": "https://github.com/spatie/temporary-directory/tree/2.4.0"
+            },
+            "funding": [
+                {
+                    "url": "https://spatie.be/open-source/support-us",
+                    "type": "custom"
+                },
+                {
+                    "url": "https://github.com/spatie",
+                    "type": "github"
+                }
+            ],
+            "time": "2026-06-22T07:55:44+00:00"
         },
         {
             "name": "spomky-labs/cbor-php",
@@ -10811,7 +11415,7 @@
         }
     ],
     "aliases": [],
-    "minimum-stability": "stable",
+    "minimum-stability": "dev",
     "stability-flags": {},
     "prefer-stable": true,
     "prefer-lowest": false,

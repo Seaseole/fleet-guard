@@ -44,6 +44,7 @@ use App\Domain\Operations\Models\Trip;
 use App\Domain\Operations\Models\TripAccessToken;
 use App\Domain\Operations\Models\TripCost;
 use App\Domain\Operations\PodStatus;
+use App\Domain\Operations\Support\DriverLinkCode;
 use App\Domain\Operations\Support\LoadingGate;
 use App\Domain\Operations\TripAccessScope;
 use App\Domain\Operations\TripCostBucket;
@@ -110,6 +111,15 @@ new #[Title('Trip')] class extends Component
 
     /** One field serves hold, cancel, abort and re-open, because §10.2 asks the same question of each. */
     public string $reason = '';
+
+    /**
+     * Which door the reason dialog was opened for — `hold`, `stop` or `reopen`.
+     *
+     * The dialog used to print every reason-shaped action it knew about, so the button that said
+     * "Cancel or abort" opened a box offering Hold, Stop and Re-open, and the dispatcher had to work out
+     * which one they had already chosen. The name is carried in instead, and the box asks once.
+     */
+    public string $reasonFor = '';
 
     /** @var list<string> §9.6's scopes the dispatcher ticks; the Action refuses any this build cannot honour. */
     public array $kioskScopes = [TripAccessScope::Pod->value];
@@ -312,6 +322,51 @@ new #[Title('Trip')] class extends Component
         $this->validate(['reason' => ['required', 'string', 'max:255']]);
 
         $this->run(fn () => $hold($this->trip(), $this->reason, (int) auth()->id()), 'reason');
+    }
+
+    /** Opens the reason box already knowing which door it is standing in front of. */
+    public function openReason(string $for): void
+    {
+        if (! in_array($for, ['hold', 'stop', 'reopen'], true)) {
+            return;
+        }
+
+        $this->reasonFor = $for;
+        $this->resetErrorBag('reason');
+        $this->dispatch('open-trip-reason');
+    }
+
+    public function reasonTitle(): string
+    {
+        return match ($this->reasonFor) {
+            'hold' => __('Put this trip on hold'),
+            'stop' => $this->stopLabel(),
+            'reopen' => __('Re-open this trip'),
+            default => __('Say why'),
+        };
+    }
+
+    public function reasonHelper(): string
+    {
+        return match ($this->reasonFor) {
+            'hold' => __('A hold is a blocker, not a cancellation: the truck keeps its plan and the board keeps showing it. The reason stays on the trip’s trail.'),
+            'stop' => $this->trip()->status->isPreDeparture()
+                ? __('Cancelling before departure frees the truck and the driver, and no cost is claimed. This cannot be undone — the job needs a new trip.')
+                : __('Aborting a trip that has already left ends it where it is. The truck comes back to the fleet and the diesel already bought stays on this trip’s costs.'),
+            'reopen' => __('A re-open takes a closed trip back to the ledger’s reach. It is an Owner decision, and the facts on it get re-checked before it closes again.'),
+            default => __('The reason is kept on the trail.'),
+        };
+    }
+
+    /** Which action the named reason door runs, so the dialog carries one button rather than three. */
+    public function reasonAction(): string
+    {
+        return match ($this->reasonFor) {
+            'hold' => 'hold',
+            'stop' => 'stop',
+            'reopen' => 'reopen',
+            default => '',
+        };
     }
 
     /**
@@ -942,6 +997,46 @@ new #[Title('Trip')] class extends Component
         return is_array($reveal) ? $reveal : null;
     }
 
+    /**
+     * The reveal's link, drawn (§9.6).
+     *
+     * Read off the session here rather than kept in a property: a Livewire property rides back to the
+     * browser in every snapshot, and the secret belongs in the page the dispatcher is looking at, not in
+     * the request that every subsequent keystroke sends.
+     */
+    public function driverQrSvg(): ?string
+    {
+        $reveal = $this->driverReveal();
+
+        return $reveal === null ? null : DriverLinkCode::svg((string) $reveal['url']);
+    }
+
+    /**
+     * The hand-off §9.6 assumes: an office with the link, a driver at a gate with a phone.
+     *
+     * WhatsApp opens with the message already typed so neither the 48-character secret nor the PIN is
+     * re-keyed on a small screen. The PIN goes in the text and deliberately not in the QR: the page asks
+     * for it on every submission, and a code that carried it would be a photograph anyone could submit
+     * with.
+     */
+    public function driverShareUrl(): ?string
+    {
+        $reveal = $this->driverReveal();
+
+        if ($reveal === null) {
+            return null;
+        }
+
+        $body = implode("\n", array_filter([
+            __('Fleet Guard :no', ['no' => $this->trip()->trip_no]),
+            $reveal['url'],
+            __('PIN :pin — the page asks for it on every submission.', ['pin' => $reveal['pin']]),
+            __('Opens until :at', ['at' => $reveal['expires_at'] ?? __('—')]),
+        ], static fn (string $line): bool => $line !== ''));
+
+        return 'https://wa.me/?text='.rawurlencode($body);
+    }
+
     /** @return list<array{value: string, label: string}> */
     public function scopeOptions(): array
     {
@@ -1082,24 +1177,70 @@ new #[Title('Trip')] class extends Component
         return $this->nextEdges() !== [] && Gate::allows('advance', $this->trip());
     }
 
-    public function canComplete(): bool
-    {
-        return in_array($this->trip()->status, [TripStatus::Delivered, TripStatus::PodPending], true)
-            && Gate::allows('complete', $this->trip());
-    }
-
+    /**
+     * The hold door, read from the trip's own transition table rather than from "is it before departure".
+     *
+     * §10.2 lets `planned` and `assigned` go on hold and stops there — a loaded trip has committed its
+     * manifest, and `loaded` has only one edge out. Asking the table instead of the prose keeps the button
+     * and the machine agreeing, which they did not: the old test offered hold on a loaded trip and the
+     * Action refused the click.
+     */
     public function canHold(): bool
     {
         $trip = $this->trip();
 
-        return $trip->status->isPreDeparture() && $trip->status !== TripStatus::OnHold && Gate::allows('hold', $trip);
+        return $trip->canTransitionTo(TripStatus::OnHold) && Gate::allows('hold', $trip);
     }
 
     public function canStop(): bool
     {
         $trip = $this->trip();
 
-        return ! $trip->status->isTerminal() && $trip->status !== TripStatus::Closed && Gate::allows('cancel', $trip);
+        // Two different doors, one control: before the truck leaves this is a cancellation, after it is an
+        // abort — and the abort is a decision about money, so §9.3 gives it to a different seat.
+        return ($trip->canTransitionTo(TripStatus::Cancelled) && Gate::allows('cancel', $trip))
+            || ($trip->canTransitionTo(TripStatus::Aborted) && Gate::allows('abort', $trip));
+    }
+
+    /** What stopping this trip actually does, in the words §10.2 uses for the edge. */
+    public function stopLabel(): string
+    {
+        return $this->trip()->status->isPreDeparture() ? __('Cancel this trip') : __('Abort this trip');
+    }
+
+    /**
+     * Why the stop door is not offered, when a dispatcher would expect one.
+     *
+     * A trip that has been loaded cannot be unwound from this screen and an aborted trip belongs to the
+     * seat holding `trips.complete`. Either way the old markup simply had no button, which reads as a
+     * screen that has forgotten how to cancel — so the reason is printed instead of the silence.
+     */
+    public function stopIsRefused(): bool
+    {
+        $trip = $this->trip();
+
+        if ($trip->status->isTerminal() || $trip->status === TripStatus::Closed) {
+            return false;
+        }
+
+        return ! $this->canStop() && ($trip->canTransitionTo(TripStatus::Cancelled) || $trip->canTransitionTo(TripStatus::Aborted));
+    }
+
+    public function canComplete(): bool
+    {
+        $trip = $this->trip();
+
+        // `CompleteTrip`'s two doors, both of them: the normal one from `delivered`, and a re-run after an
+        // Owner re-opened. `pod_pending` was offered here but never accepted there, so the button on a proof
+        // still waiting for approval was a guaranteed refusal — it is explained instead of offered.
+        return in_array($trip->status, [TripStatus::Delivered, TripStatus::Reopened], true)
+            && Gate::allows('complete', $trip);
+    }
+
+    /** The trip is waiting on a signature, not on the desk: the completion door has a reason. */
+    public function completionIsRefused(): bool
+    {
+        return $this->trip()->status === TripStatus::PodPending && Gate::allows('complete', $this->trip());
     }
 
     public function canClose(): bool
@@ -1272,7 +1413,10 @@ new #[Title('Trip')] class extends Component
         {{-- The gate, printed as the reason instead of as a disabled control. --}}
         @if ($this->canMarkLoaded())
             <div>
-                <x-ui.button wire:click="markLoaded">{{ __('Mark this trip loaded') }}</x-ui.button>
+                <x-ui.button wire:click="markLoaded" wire:loading.attr="disabled" wire:target="markLoaded">
+                    <span wire:loading.remove wire:target="markLoaded">{{ __('Mark this trip loaded') }}</span>
+                    <span wire:loading wire:target="markLoaded">{{ __('Closing the manifest…') }}</span>
+                </x-ui.button>
             </div>
         @elseif ($this->loadingIsRefused())
             <x-ui.alert tone="warning" :title="__('Not yet loadable')">
@@ -1285,7 +1429,7 @@ new #[Title('Trip')] class extends Component
         @endif
 
         @error('load')
-            <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+            <x-ui.alert tone="danger" :title="__('That did not go through')">{{ $message }}</x-ui.alert>
         @enderror
     </section>
 
@@ -1306,10 +1450,13 @@ new #[Title('Trip')] class extends Component
                     <x-ui.input name="departOdometer" wire:model="departOdometer" :label="__('Odometer at departure (km)')" type="number" />
                     <x-ui.input name="departHours" wire:model="departHours" :label="__('Engine hours at departure')" type="number" step="0.1" />
 
-                    @error('depart') <div class="sm:col-span-2"><x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert></div> @enderror
+                    @error('depart') <div class="sm:col-span-2"><x-ui.alert tone="danger" :title="__('That did not go through')">{{ $message }}</x-ui.alert></div> @enderror
 
                     <div>
-                        <x-ui.button type="submit">{{ __('Record the departure') }}</x-ui.button>
+                        <x-ui.button type="submit" wire:loading.attr="disabled" wire:target="depart">
+                            <span wire:loading.remove wire:target="depart">{{ __('Record the departure') }}</span>
+                            <span wire:loading wire:target="depart">{{ __('Sending it…') }}</span>
+                        </x-ui.button>
                     </div>
                 </form>
         @endif
@@ -1317,12 +1464,18 @@ new #[Title('Trip')] class extends Component
         @if ($this->canAdvance())
             <div class="flex flex-wrap items-center gap-2">
                     @foreach ($this->nextEdges() as $edge)
-                        <x-ui.button size="sm" variant="outline" wire:click="advance('{{ $edge['value'] }}')">
+                        <x-ui.button
+                            size="sm"
+                            variant="outline"
+                            wire:click="advance('{{ $edge['value'] }}')"
+                            wire:loading.attr="disabled"
+                            wire:target="advance"
+                        >
                             {{ __('Mark :status', ['status' => $edge['label']]) }}
                         </x-ui.button>
                     @endforeach
 
-                @error('advance') <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert> @enderror
+                @error('advance') <x-ui.alert tone="danger" :title="__('That did not go through')">{{ $message }}</x-ui.alert> @enderror
             </div>
         @endif
 
@@ -1332,35 +1485,66 @@ new #[Title('Trip')] class extends Component
                     <x-ui.input name="endOdometer" wire:model="endOdometer" :label="__('Odometer on arrival (km)')" type="number" />
                     <x-ui.input name="endHours" wire:model="endHours" :label="__('Engine hours at the end')" type="number" step="0.1" />
 
-                    @error('complete') <div class="sm:col-span-2"><x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert></div> @enderror
+                    <p class="text-xs text-fg-ink-muted sm:col-span-2">
+                        {{ __('Take these from the truck’s own book at the yard. They cannot be guessed: the distance the trip ran is worked out of them, and diesel is judged against it.') }}
+                    </p>
+
+                    @error('complete') <div class="sm:col-span-2"><x-ui.alert tone="danger" :title="__('That did not go through')">{{ $message }}</x-ui.alert></div> @enderror
 
                     <div>
-                        <x-ui.button type="submit">{{ __('Complete the trip') }}</x-ui.button>
+                        <x-ui.button type="submit" wire:loading.attr="disabled" wire:target="complete">
+                            <span wire:loading.remove wire:target="complete">{{ __('Complete the trip') }}</span>
+                            <span wire:loading wire:target="complete">{{ __('Completing…') }}</span>
+                        </x-ui.button>
                     </div>
                 </form>
+        @elseif ($this->completionIsRefused())
+            {{-- The door the desk wants is real, but it opens on the driver's signature, not on a button here. --}}
+            <x-ui.alert tone="warning" :title="__('Not completed yet')">
+                <p class="text-sm">
+                    {{ __('This trip is waiting on its proof of delivery. Accept the delivery in the evidence panel below and the completion form appears here.') }}
+                </p>
+            </x-ui.alert>
         @endif
 
         <div class="flex flex-wrap items-center gap-2 border-t border-fg-line pt-4">
             @if ($this->canHold())
-                <x-ui.button size="sm" variant="ghost" x-on:click="$dispatch('open-trip-reason')">{{ __('Put on hold') }}</x-ui.button>
+                <x-ui.button size="sm" variant="ghost" wire:click="openReason('hold')">{{ __('Put on hold') }}</x-ui.button>
             @endif
 
             @if ($this->canStop())
-                <x-ui.button size="sm" variant="ghost" x-on:click="$dispatch('open-trip-reason')">{{ __('Cancel or abort') }}</x-ui.button>
+                <x-ui.button size="sm" variant="ghost" wire:click="openReason('stop')">{{ $this->stopLabel() }}</x-ui.button>
             @endif
 
             @if ($this->canClose())
-                <x-ui.button size="sm" variant="ghost" wire:click="closeTrip">{{ __('Close and freeze the costs') }}</x-ui.button>
+                <x-ui.button
+                    size="sm"
+                    variant="ghost"
+                    wire:click="closeTrip"
+                    wire:confirm="{{ __('Close and freeze this trip? Costs stop being editable, and only an Owner can re-open it.') }}"
+                    wire:loading.attr="disabled"
+                    wire:target="closeTrip"
+                >
+                    <span wire:loading.remove wire:target="closeTrip">{{ __('Close and freeze the costs') }}</span>
+                    <span wire:loading wire:target="closeTrip">{{ __('Freezing…') }}</span>
+                </x-ui.button>
             @endif
 
             @if ($this->canReopen())
-                <x-ui.button size="sm" variant="ghost" x-on:click="$dispatch('open-trip-reason')">{{ __('Re-open') }}</x-ui.button>
+                <x-ui.button size="sm" variant="ghost" wire:click="openReason('reopen')">{{ __('Re-open') }}</x-ui.button>
             @endif
 
-            @error('close') <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert> @enderror
+            {{-- Where a door the trip would allow is not this seat's to open: said, not hidden. --}}
+            @if ($this->stopIsRefused())
+                <p class="text-xs text-fg-ink-muted">
+                    {{ __('Only a seat that holds the money decision can end this trip now — it has left, so ending it is an abort, not a cancellation.') }}
+                </p>
+            @endif
+
+            @error('close') <x-ui.alert tone="danger" :title="__('That did not go through')">{{ $message }}</x-ui.alert> @enderror
         </div>
 
-        @error('reason') <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert> @enderror
+        @error('reason') <x-ui.alert tone="danger" :title="__('That did not go through')">{{ $message }}</x-ui.alert> @enderror
     </section>
 
     {{--
@@ -1445,7 +1629,7 @@ new #[Title('Trip')] class extends Component
             @endif
 
             @error('crossing')
-                <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                <x-ui.alert tone="danger" :title="__('That did not go through')">{{ $message }}</x-ui.alert>
             @enderror
 
             @if ($this->canManageCrossings())
@@ -1533,11 +1717,14 @@ new #[Title('Trip')] class extends Component
                     </p>
 
                     @error('charge')
-                        <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                        <x-ui.alert tone="danger" :title="__('That did not go through')">{{ $message }}</x-ui.alert>
                     @enderror
 
                     <div class="flex items-center justify-between gap-3">
-                        <x-ui.button type="submit">{{ __('Capture and post') }}</x-ui.button>
+                        <x-ui.button type="submit" wire:loading.attr="disabled" wire:target="captureCharge">
+                            <span wire:loading.remove wire:target="captureCharge">{{ __('Capture and post') }}</span>
+                            <span wire:loading wire:target="captureCharge">{{ __('Posting…') }}</span>
+                        </x-ui.button>
                         <x-ui.button type="button" variant="ghost" x-on:click="$dispatch('close-border-charge')">{{ __('Cancel') }}</x-ui.button>
                     </div>
                 </form>
@@ -1630,7 +1817,7 @@ new #[Title('Trip')] class extends Component
                 @endif
 
                 @error('cost')
-                    <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                    <x-ui.alert tone="danger" :title="__('That did not go through')">{{ $message }}</x-ui.alert>
                 @enderror
 
                 @if ($this->costsAreFrozen())
@@ -1726,11 +1913,14 @@ new #[Title('Trip')] class extends Component
                     </p>
 
                     @error('cost')
-                        <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                        <x-ui.alert tone="danger" :title="__('That did not go through')">{{ $message }}</x-ui.alert>
                     @enderror
 
                     <div class="flex items-center justify-between gap-3">
-                        <x-ui.button type="submit">{{ __('Record and post') }}</x-ui.button>
+                        <x-ui.button type="submit" wire:loading.attr="disabled" wire:target="recordCost">
+                            <span wire:loading.remove wire:target="recordCost">{{ __('Record and post') }}</span>
+                            <span wire:loading wire:target="recordCost">{{ __('Posting…') }}</span>
+                        </x-ui.button>
                         <x-ui.button type="button" variant="ghost" x-on:click="$dispatch('close-trip-cost')">{{ __('Cancel') }}</x-ui.button>
                     </div>
                 </form>
@@ -1757,15 +1947,81 @@ new #[Title('Trip')] class extends Component
                     <x-ui.alert tone="warning" :title="__('Copy this now')">
                         <div class="grid gap-1.5">
                             <p>{{ __('Send :driver this link and PIN. Only hashes are stored, so neither can be shown again.', ['driver' => $this->driverLabel()]) }}</p>
-                            <p class="break-all font-mono text-xs">{{ $reveal['url'] }}</p>
+
+                            <div class="flex flex-wrap items-center gap-2">
+                                <p class="break-all font-mono text-xs">{{ $reveal['url'] }}</p>
+
+                                {{-- The link is typed into a WhatsApp message to a driver standing at a gate.
+                                     Selecting a wrapped URL on a phone is the thing this screen can hand over. --}}
+                                <span
+                                    x-data="{ copied: false }"
+                                    x-on:click="navigator.clipboard
+                                        ? navigator.clipboard.writeText(@js($reveal['url'])).then(() => copied = true)
+                                        : window.prompt('Copy the link', @js($reveal['url']))"
+                                    role="button"
+                                    tabindex="0"
+                                    class="cursor-pointer rounded-fg-sm border border-fg-line-strong px-2 py-1 text-xs text-accent"
+                                >
+                                    <span x-text="copied ? 'Copied' : 'Copy link'">Copy link</span>
+                                </span>
+                            </div>
+
                             <p class="font-mono text-sm">{{ __('PIN :pin', ['pin' => $reveal['pin']]) }}</p>
                             <p class="text-xs">{{ __('Opens until :at', ['at' => $reveal['expires_at'] ?? __('—')]) }}</p>
+
+                            {{--
+                                §9.6's link is 48 hex characters, which is not something a driver keys on a
+                                phone at a gate. The code is the same URL the line above prints, and the PIN
+                                is deliberately kept out of it: the kiosk asks for it on every submission,
+                                so a code that carried it would hand anyone who photographed the screen the
+                                right to sign for a load.
+                            --}}
+                            <div class="flex flex-wrap items-start gap-3">
+                                {{--
+                                    The SVG arrives with the pixel size it was drawn at (208), which is wider
+                                    than this box. Left alone it overflows to the right and the column the
+                                    buttons live in paints over it, so the code loses a third of its modules
+                                    to the very button meant to carry the link. Constraining it to the box
+                                    scales the viewBox instead; the box is 10rem so the code stays legible to
+                                    a phone camera held at a gate.
+                                --}}
+                                <div
+                                    class="w-40 shrink-0 rounded-fg-sm border border-fg-line bg-white p-2 [&>svg]:block [&>svg]:h-auto [&>svg]:w-full"
+                                    role="img"
+                                    aria-label="{{ __('QR code of the driver link') }}"
+                                >
+                                    {!! $this->driverQrSvg() !!}
+                                </div>
+
+                                <div class="grid gap-1.5">
+                                    <p class="text-xs">{{ __('Scan this with the phone camera, then type the PIN when the page asks for it.') }}</p>
+
+                                    <div class="flex flex-wrap gap-2">
+                                        <x-ui.button
+                                            size="sm"
+                                            :href="$this->driverShareUrl()"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >{{ __('Send by WhatsApp') }}</x-ui.button>
+
+                                        <x-ui.button
+                                            size="sm"
+                                            variant="ghost"
+                                            :href="route('operations.trip.driver-link.qr', $this->tripId)"
+                                        >{{ __('Save the code') }}</x-ui.button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <p class="text-xs text-fg-ink-muted">{{ __('It stops working the moment the trip closes, and the PIN is asked again on every submission.') }}</p>
                             <div class="pt-1">
                                 <x-ui.button size="sm" variant="ghost" wire:click="dismissDriverReveal">{{ __('I have copied it') }}</x-ui.button>
                             </div>
                         </div>
                     </x-ui.alert>
                 @endif
+
+                @php($liveLinks = collect($this->accessTokens)->filter(static fn ($token): bool => $token->closedBecause() === null)->count())
 
                 <form class="grid gap-3" wire:submit="issueDriverLink">
                     <div class="flex flex-wrap items-center gap-4">
@@ -1778,15 +2034,33 @@ new #[Title('Trip')] class extends Component
                     </div>
 
                     <p class="text-xs text-fg-ink-muted">
-                        {{ __('The link opens on the driver’s phone without a login; the PIN is asked on every submit (§9.6). A scope this build cannot honour is refused here rather than at the border.') }}
+                        {{ __('The link opens on the driver’s phone without a login, and the PIN is asked on every submission. A scope this build cannot honour is refused here rather than at the border.') }}
                     </p>
 
+                    {{-- Issuing a second link does not close the first, and a driver with two links has two
+                         PINs to guess between. Saying so here is cheaper than the phone call at the gate. --}}
+                    @if ($liveLinks > 0)
+                        <x-ui.alert tone="warning" :title="__('A link is already open')">
+                            <p class="text-sm">
+                                {{ __('This trip already has :count link still able to open. Issuing another does not close it — close the old one below if it went to the wrong person.', ['count' => $liveLinks]) }}
+                            </p>
+                        </x-ui.alert>
+                    @endif
+
                     @error('kiosk')
-                        <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                        <x-ui.alert tone="danger" :title="__('That did not go through')">{{ $message }}</x-ui.alert>
                     @enderror
 
                     <div>
-                        <x-ui.button type="submit">{{ __('Issue a driver link') }}</x-ui.button>
+                        <x-ui.button
+                            type="submit"
+                            variant="outline"
+                            wire:loading.attr="disabled"
+                            wire:target="issueDriverLink"
+                        >
+                            <span wire:loading.remove wire:target="issueDriverLink">{{ __('Issue a driver link') }}</span>
+                            <span wire:loading wire:target="issueDriverLink">{{ __('Issuing…') }}</span>
+                        </x-ui.button>
                     </div>
                 </form>
 
@@ -1812,7 +2086,13 @@ new #[Title('Trip')] class extends Component
                                 </x-ui.table.td>
                                 <x-ui.table.td numeric>
                                     @if ($token->closedBecause() === null)
-                                        <x-ui.button size="xs" variant="ghost" wire:click="revokeDriverLink('{{ $token->id }}')">{{ __('Revoke') }}</x-ui.button>
+                                        <x-ui.button
+                                            size="xs"
+                                            variant="ghost"
+                                            wire:click="revokeDriverLink('{{ $token->id }}')"
+                                            wire:confirm="{{ __('Close this link? The driver loses access at once, and the row stays on the trip as evidence.') }}"
+                                            wire:loading.attr="disabled"
+                                        >{{ __('Close the link') }}</x-ui.button>
                                     @endif
                                 </x-ui.table.td>
                             </tr>
@@ -1856,20 +2136,29 @@ new #[Title('Trip')] class extends Component
 
                                 @if ($this->podAwaitingDecision($pod))
                                     <div class="flex flex-wrap items-end gap-2">
-                                        <x-ui.button size="sm" wire:click="approvePod('{{ $pod->id }}')">{{ __('Accept the delivery') }}</x-ui.button>
+                                        <x-ui.button
+                                            size="sm"
+                                            wire:click="approvePod('{{ $pod->id }}')"
+                                            wire:confirm="{{ __('Accepting this delivery builds the billable lines from it. If a figure is wrong, send it back to the driver instead.') }}"
+                                            wire:loading.attr="disabled"
+                                            wire:target="approvePod"
+                                        >
+                                            <span wire:loading.remove wire:target="approvePod">{{ __('Accept the delivery') }}</span>
+                                            <span wire:loading wire:target="approvePod">{{ __('Accepting…') }}</span>
+                                        </x-ui.button>
 
                                         <div class="min-w-64 flex-1">
-                                            <x-ui.input name="podRejectReason" wire:model="podRejectReason" :label="__('Or send it back — what is wrong?')" />
+                                            <x-ui.input name="podRejectReason" wire:model="podRejectReason" :label="__('Or send it back — what is wrong? The driver sees this on their phone.')" />
                                         </div>
 
-                                        <x-ui.button size="sm" variant="outline" wire:click="rejectPod('{{ $pod->id }}')">{{ __('Send back') }}</x-ui.button>
+                                        <x-ui.button size="sm" variant="outline" wire:click="rejectPod('{{ $pod->id }}')" wire:loading.attr="disabled" wire:target="rejectPod">{{ __('Send back') }}</x-ui.button>
                                     </div>
                                 @endif
                             </div>
                         @endforeach
 
                         @error('pod')
-                            <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                            <x-ui.alert tone="danger" :title="__('That did not go through')">{{ $message }}</x-ui.alert>
                         @enderror
                     @endif
                 </div>
@@ -1901,7 +2190,7 @@ new #[Title('Trip')] class extends Component
             </div>
 
             @error('load')
-                <x-ui.alert tone="danger" :title="__('Refused')">{{ $message }}</x-ui.alert>
+                <x-ui.alert tone="danger" :title="__('That did not go through')">{{ $message }}</x-ui.alert>
             @enderror
 
             <div class="flex items-center justify-between gap-3">
@@ -1911,25 +2200,33 @@ new #[Title('Trip')] class extends Component
         </form>
     </x-ui.dialog>
 
-    {{-- The reason form: hold, cancel, abort and re-open all ask for one (§10.2, §4.4). --}}
-    <x-ui.dialog name="trip-reason" :title="__('Say why')">
+    {{-- The reason form: hold, cancel/abort and re-open each ask for one (§10.2, §4.4), and the box now
+         knows which of them it was opened for. --}}
+    <x-ui.dialog name="trip-reason" :title="$this->reasonTitle()">
         <div class="grid gap-4 p-5">
-            <x-ui.input name="reason" wire:model="reason" :label="__('Reason (kept on the trail, §4.4)')" />
+            <p class="text-sm text-fg-ink-secondary">{{ $this->reasonHelper() }}</p>
+
+            <x-ui.input name="reason" wire:model="reason" :label="__('Reason — it goes on the trip’s trail, where the auditors will read it.')" />
+
+            @error('reason')
+                <x-ui.alert tone="danger" :title="__('That did not go through')">{{ $message }}</x-ui.alert>
+            @enderror
 
             <div class="flex flex-wrap items-center gap-2">
-                @if ($this->canHold())
-                    <x-ui.button size="sm" wire:click="hold" x-on:click="$dispatch('close-trip-reason')">{{ __('Hold') }}</x-ui.button>
+                @if ($this->reasonAction() !== '')
+                    <x-ui.button
+                        variant="outline"
+                        size="sm"
+                        wire:click="{{ $this->reasonAction() }}"
+                        wire:loading.attr="disabled"
+                        wire:target="{{ $this->reasonAction() }}"
+                    >
+                        <span wire:loading.remove wire:target="{{ $this->reasonAction() }}">{{ $this->reasonTitle() }}</span>
+                        <span wire:loading wire:target="{{ $this->reasonAction() }}">{{ __('Working…') }}</span>
+                    </x-ui.button>
                 @endif
 
-                @if ($this->canStop())
-                    <x-ui.button size="sm" variant="outline" wire:click="stop" x-on:click="$dispatch('close-trip-reason')">{{ __('Stop the trip') }}</x-ui.button>
-                @endif
-
-                @if ($this->canReopen())
-                    <x-ui.button size="sm" variant="outline" wire:click="reopen" x-on:click="$dispatch('close-trip-reason')">{{ __('Re-open') }}</x-ui.button>
-                @endif
-
-                <x-ui.button size="sm" variant="ghost" x-on:click="$dispatch('close-trip-reason')">{{ __('Cancel') }}</x-ui.button>
+                <x-ui.button size="sm" variant="ghost" x-on:click="$dispatch('close-trip-reason')">{{ __('Leave it as it is') }}</x-ui.button>
             </div>
         </div>
     </x-ui.dialog>
