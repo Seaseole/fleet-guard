@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * §9.6 — the driver's fuel screen, written through the doors the office uses.
+ * The driver's fuel screen, written through the doors the office uses.
  *
  * A driver at a pump has no slip in the register: they paid cash, and the receipt in their hand is
  * the only paperwork. So this Action records that slip (`CreateFuelPurchase`, unposted until the
@@ -32,9 +32,9 @@ use InvalidArgumentException;
  *
  * The kiosk source settles as petty cash (`TripCostPayment::PettyCash`): the driver's own money or
  * their advance left the yard, and the office reconciles it later. Nothing here pre-empts that
- * settlement, and nothing here edits an issue — §10.9's correction remains a reversal.
+ * settlement, and nothing here edits an issue — the correction remains a reversal.
  *
- * **The retry is the normal case** (§9.6). The screen mints a `client_uuid` per page load, and the
+ * **The retry is the normal case**. The screen mints a `client_uuid` per page load, and the
  * same uuid on a second attempt returns the row it already made instead of buying the diesel twice;
  * the purchase and the issue share the key so an interrupted first attempt is completed rather than
  * duplicated.

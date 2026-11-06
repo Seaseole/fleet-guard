@@ -13,7 +13,7 @@ use Carbon\CarbonInterface;
  * Something the engine asks "what needs attention?" — the seam that lets Phase 1 add a source without
  * the alert engine ever naming a module.
  *
- * §13's D2 rule says the Kernel may not import a module. Read as a constraint on the reminder engine
+ * The D2 rule says the Kernel may not import a module. Read as a constraint on the reminder engine
  * that looks like a problem — expiry conditions live in Fleet, Maintenance and Invoicing, none of
  * which exist yet. It is not a problem, it is the design: the engine holds this interface, each module
  * implements it, and the container hands the engine the list. The engine then knows that *something*
@@ -21,7 +21,7 @@ use Carbon\CarbonInterface;
  * dependency is the one the folder contract allows.
  *
  * A source answers for the company in `CurrentCompany`'s context and nothing else. The runner pins that
- * context per company (§8 T4) before calling, which is what makes every read inside a source
+ * context per company (T4) before calling, which is what makes every read inside a source
  * tenant-scoped by the normal `CompanyScope`, and why a source that reached for
  * `withoutGlobalScopes()` would be reporting one company's papers into another's alerts.
  */
@@ -36,7 +36,7 @@ interface ReminderSource
      * The threshold rows a company starts with, before the Owner edits them.
      *
      * Defaults live on the source rather than in a central seeder so that adding a module adds its own
-     * reminders and nothing has to remember to edit a file in another module — the same argument §14.1
+     * reminders and nothing has to remember to edit a file in another module — the same argument
      * makes for thresholds being rows.
      *
      * @return list<Threshold>
@@ -47,7 +47,7 @@ interface ReminderSource
      * Every condition true on this business day, for the buckets the company actually configured.
      *
      * The set is passed in rather than queried per candidate because the two must agree: a source that
-     * invented its own windows would raise alerts no threshold authorised, and §14.1's "not constants"
+     * invented its own windows would raise alerts no threshold authorised, and the "not constants"
      * would be a comment rather than a rule.
      *
      * @return iterable<ReminderCandidate>

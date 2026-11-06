@@ -14,7 +14,7 @@ use InvalidArgumentException;
  * The validated input behind {@see SaveServiceSchedule} (D1).
  *
  * The interval and the "last done at" figure arrive already scaled: kilometres for a `km` schedule,
- * hundredths of an hour for an `hours` one, days for a `date` one (§5.5's scale applied to a physical
+ * hundredths of an hour for an `hours` one, days for a `date` one (the scale applied to a physical
  * quantity). The Action turns that into a next due point; the DTO only refuses a shape that cannot
  * mean anything — a negative interval, a counter schedule with no counter, a condition schedule with
  * one.
@@ -42,7 +42,7 @@ final readonly class ServiceScheduleDto
 
         if ($kind === ServiceScheduleKind::Condition) {
             if ($intervalValue !== null) {
-                throw new InvalidArgumentException('A condition schedule has no interval: it is done when somebody says the condition is there (§4.3).');
+                throw new InvalidArgumentException('A condition schedule has no interval: it is done when somebody says the condition is there.');
             }
 
             return;

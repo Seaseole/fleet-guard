@@ -13,21 +13,21 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /*
- * The live map (§3.2, §14.3, §15.2 slice 2g).
+ * The live map (slice 2g).
  *
- * Two reads, and only two: one row per truck from §14.3's `latest_positions` projection, and one trip's
+ * Two reads, and only two: one row per truck from the `latest_positions` projection, and one trip's
  * track from the history table when a truck is selected. The projection is what keeps this page cheap as
  * `gps_positions` grows past a million rows — the poll never touches the history except for the trip
  * being looked at.
  *
  * The drawing is an inline SVG on a fixed Southern-Africa lat/lng box rather than Leaflet. That is a
- * deliberate Phase 2 line, not an oversight: §15.2 puts the tiled map (Leaflet/OSM, no key) and the
+ * deliberate Phase 2 line, not an oversight: The design puts the tiled map (Leaflet/OSM, no key) and the
  * planned-vs-actual overlay in Phase 7, and the transport here is a `wire:poll` at
- * `fleet.telematics.poll_seconds` because §12.2 defers Reverb. What a schematic still has to be is
+ * `fleet.telematics.poll_seconds` because defers Reverb. What a schematic still has to be is
  * *honest* — every marker is a real stored fix with its own clock on it, and a fix older than
  * `stale_after_minutes` is labelled stale instead of being drawn as though the truck were there now.
  *
- * No money, no margin, no crew details on this screen: `gps.view` is held by seats that §9.3 keeps away
+ * No money, no margin, no crew details on this screen: `gps.view` is held by seats that the design keeps away
  * from those columns, so there is nothing here to gate at the field layer.
  */
 new #[Title('Live map')] class extends Component {
@@ -175,7 +175,7 @@ new #[Title('Live map')] class extends Component {
 }; ?>
 
 <div class="grid gap-6" wire:poll.{{ $this->pollSeconds() }}s>
-    <header class="flex flex-wrap items-end justify-between gap-3">
+    <header class="fg-page-header flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div class="grid gap-1">
             <x-ui.heading size="xl" level="1">{{ __('Live map') }}</x-ui.heading>
             <x-ui.text>
@@ -210,12 +210,12 @@ new #[Title('Live map')] class extends Component {
                 >
                     @foreach ($this->gridLng() as $lng)
                         <line x1="{{ $this->x($lng) }}" y1="0" x2="{{ $this->x($lng) }}" y2="597" class="stroke-fg-line" stroke-width="1" />
-                        <text x="{{ $this->x($lng) + 4 }}" y="14" class="fill-fg-ink-muted text-[11px]">{{ $lng }}°E</text>
+                        <text x="{{ $this->x($lng) + 4 }}" y="14" class="fill-fg-ink-muted text-2xs">{{ $lng }}°E</text>
                     @endforeach
 
                     @foreach ($this->gridLat() as $lat)
                         <line x1="0" y1="{{ $this->y($lat) }}" x2="640" y2="{{ $this->y($lat) }}" class="stroke-fg-line" stroke-width="1" />
-                        <text x="4" y="{{ $this->y($lat) - 4 }}" class="fill-fg-ink-muted text-[11px]">{{ abs($lat) }}°S</text>
+                        <text x="4" y="{{ $this->y($lat) - 4 }}" class="fill-fg-ink-muted text-2xs">{{ abs($lat) }}°S</text>
                     @endforeach
 
                     @if ($this->polyline !== '')
@@ -244,7 +244,7 @@ new #[Title('Live map')] class extends Component {
                             >
                                 <title>{{ $vehicle->truckLabel }} · {{ $vehicle->placeLabel() }} · {{ $vehicle->speedLabel() }} · {{ $this->at($vehicle->fixedAt) }}</title>
                             </circle>
-                            <text x="{{ $cx + 11 }}" y="{{ $cy + 4 }}" class="fill-fg-ink text-[12px]">{{ $vehicle->truckLabel }}</text>
+                            <text x="{{ $cx + 11 }}" y="{{ $cy + 4 }}" class="fill-fg-ink text-xs">{{ $vehicle->truckLabel }}</text>
                         </g>
                     @endforeach
                 </svg>
@@ -272,7 +272,7 @@ new #[Title('Live map')] class extends Component {
 
                             <x-ui.table.td nowrap>
                                 @if ($vehicle->trip !== null)
-                                    <a href="{{ route('operations.trip', $vehicle->trip->id) }}" class="fg-identifier text-sm text-accent">{{ $vehicle->trip->tripNo }}</a>
+                                    <a href="{{ route('operations.trip', $vehicle->trip->id) }}" class="fg-identifier text-sm text-accent-ink underline-offset-4 transition duration-(--t-fast) ease-(--ease-standard) hover:text-accent-hover hover:underline">{{ $vehicle->trip->tripNo }}</a>
                                     <span class="block text-xs text-fg-ink-muted">
                                         {{ $vehicle->trip->origin }} → {{ $vehicle->trip->destination }}
                                     </span>
@@ -317,7 +317,7 @@ new #[Title('Live map')] class extends Component {
                      slot is where Blade's slot stack loses the table's `head` below. --}}
                 <div class="flex flex-wrap items-center gap-2 border-b border-fg-line px-5 py-4">
                     @if ($this->selected?->trip !== null)
-                        <a href="{{ route('operations.trip', $this->selected->trip->id) }}" class="font-mono text-sm text-accent">{{ $this->selected->trip->tripNo }}</a>
+                        <a href="{{ route('operations.trip', $this->selected->trip->id) }}" class="fg-identifier text-sm text-accent-ink underline-offset-4 transition duration-(--t-fast) ease-(--ease-standard) hover:text-accent-hover hover:underline">{{ $this->selected->trip->tripNo }}</a>
                         <x-ui.badge :tone="$this->selected->trip->status->tone()">{{ $this->selected->trip->status->label() }}</x-ui.badge>
                         <span class="text-sm text-fg-ink-muted">{{ $this->selected->truckLabel }}</span>
                     @endif

@@ -10,17 +10,17 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 FUEL_PURCHASE — one slip: what the station charged the fleet, with §5.2's FX block.
+     * FUEL_PURCHASE — one slip: what the station charged the fleet, with the FX block.
      *
      * `amount` is minor units of `currency_code` and `base_amount` is the authoritative base figure,
      * frozen at write time, exactly as `trip_costs` does it. The spec's two "×100 = 2 dp" integer
      * columns are kept as stated — `litres` and `price_per_litre_minor` — because a slip's arithmetic
      * (litres × price) is the first thing an accountant checks, and integer minor units make that
-     * check exact rather than a tolerance. "Exact" means the CHECK reproduces §5.5's rounding rule
+     * check exact rather than a tolerance. "Exact" means the CHECK reproduces the rounding rule
      * to the minor unit, not that the product is itself a whole minor unit — see the constraint at
      * the foot of `up()`.
      *
-     * `posted_to_ledger` is the §6.8 `FuelPurchaseRecorded` seam. Phase 3a records the slip and leaves
+     * `posted_to_ledger` is the `FuelPurchaseRecorded` seam. Phase 3a records the slip and leaves
      * the flag false: the ledger entry (`Dr 5100 Fuel / Cr 3100 Supplier payable`) needs a supplier
      * bill or a pump-and-pay cash line, and supplier bills are Phase 5's. The column is present so the
      * Phase 5 poster has nowhere new to invent, and the verify script asserts the seam stays shut.
@@ -36,7 +36,7 @@ return new class extends Migration
             $table->foreignId('fuel_station_id')->nullable()->constrained('fuel_stations');
             $table->foreignId('fuel_card_id')->nullable()->constrained('fuel_cards');
 
-            // §5.2, applied verbatim.
+            //, Applied verbatim.
             $table->char('currency_code', 3);
             $table->unsignedBigInteger('amount');
             $table->decimal('fx_rate', 19, 8);
@@ -67,7 +67,7 @@ return new class extends Migration
         DB::statement('alter table `fuel_purchases` add constraint `fuel_purchases_currency_upper` check (currency_code = upper(currency_code) and base_currency_code = upper(base_currency_code))');
         DB::statement('alter table `fuel_purchases` add constraint `fuel_purchases_source_allowed` check (fx_rate_source in (\'manual\', \'rbg_daily\', \'bpb\', \'contract\', \'customer_agreed\', \'bank_statement\', \'opening_balance\', \'manual_override\'))');
 
-        // The slip's arithmetic, §5.5's rule stated as integers: `amount = ROUND_HALF_UP(litres ×
+        // The slip's arithmetic, the rule stated as integers: `amount = ROUND_HALF_UP(litres ×
         // price ÷ 100)`. Litres are stored ×100 (two decimals at a pump) and the price is currency
         // minor units, so their product is in *hundredths* of a minor unit and only lands on a
         // whole cent when it happens to be a multiple of 100 — 25.30 L at BWP 19.75 is BWP 499.675,

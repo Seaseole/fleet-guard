@@ -56,7 +56,7 @@ new class extends Component
             <x-ui.icon name="lock-closed" class="size-4" />
             <x-ui.heading level="3">{{ __('2FA recovery codes') }}</x-ui.heading>
         </div>
-        <x-ui.text variant="subtle">
+        <x-ui.text>
             {{ __('Recovery codes let you regain access if you lose your 2FA device. Store them in a secure password manager.') }}
         </x-ui.text>
     </div>
@@ -125,7 +125,7 @@ new class extends Component
                             </div>
                         @endforeach
                     </div>
-                    <x-ui.text variant="subtle" class="text-xs">
+                    <x-ui.text class="text-xs">
                         {{ __('Each recovery code can be used once to access your account and will be removed after use. If you need more, click Regenerate codes above.') }}
                     </x-ui.text>
                 @endif

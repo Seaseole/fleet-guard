@@ -5,7 +5,10 @@ use App\Domain\Accounting\Actions\UpdateBankAccount;
 use App\Domain\Accounting\Data\BankAccountDto;
 use App\Domain\Accounting\Data\BankAccountTypes;
 use App\Domain\Accounting\Models\BankAccount;
+use App\Domain\Kernel\Identity\ConfirmsRecentPassword;
 use App\Domain\Kernel\Identity\FieldGate;
+use App\Domain\Kernel\Ledger\ChartOfAccounts;
+use App\Domain\Kernel\Ledger\Data\AccountType;
 use App\Domain\Kernel\Money\Currency;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -17,17 +20,19 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /*
- * Bank and cash accounts (§3.2 Accounting, §4.2 BANK_ACCOUNT, §9.5 encrypted columns).
+ * Bank and cash accounts (Accounting, BANK_ACCOUNT, encrypted columns).
  *
  * This screen exists in Phase 0 because the definition of done needs a field somebody can be
  * refused: the list is open to anyone with `bank.view`, the full number only renders through the
- * `seeBankDetail` gate, and every other role sees §9.5's masked column. The masking is a stored
+ * `seeBankDetail` gate, and every other role sees the masked column. The masking is a stored
  * column, not a render-time trick, which is why the list still sorts and searches.
  *
  * The account number input is emptied after every save. A form that kept it filled would post the
- * plaintext back on the next edit, and §9.5's promise is that the plaintext lives in one place.
+ * plaintext back on the next edit, and the promise is that the plaintext lives in one place.
  */
-new #[Title('Bank and cash accounts')] class extends Component {
+new #[Title('Bank and cash accounts')] class extends Component
+{
+    use ConfirmsRecentPassword;
     use WithPagination;
 
     #[Url]
@@ -55,6 +60,9 @@ new #[Title('Bank and cash accounts')] class extends Component {
     public bool $active = true;
 
     public string $notes = '';
+
+    /** Chart account id this register row moves money through; '' means not linked. */
+    public string $glAccountId = '';
 
     /** @var array<int, bool> ids whose full number has been revealed this session */
     public array $revealed = [];
@@ -84,12 +92,23 @@ new #[Title('Bank and cash accounts')] class extends Component {
         $this->currencyCode = \App\Domain\Kernel\Tenancy\CurrentCompany::model()->base_currency_code;
     }
 
+    public function openCreate(): void
+    {
+        abort_unless(Gate::allows('bank.manage'), 403);
+
+        $this->clearForm();
+
+        $this->dispatch('open-account-form');
+    }
+
     public function edit(int $accountId): void
     {
         abort_unless(Gate::allows('bank.manage'), 403);
 
         /** @var BankAccount $account */
         $account = BankAccount::query()->findOrFail($accountId);
+
+        $this->clearForm();
 
         $this->editingId = $account->id;
         $this->name = $account->name;
@@ -100,20 +119,32 @@ new #[Title('Bank and cash accounts')] class extends Component {
         $this->openedOn = (string) $account->opened_on?->format('Y-m-d');
         $this->active = $account->active;
         $this->notes = (string) $account->notes;
+        $this->glAccountId = (string) ($account->gl_account_id ?? '');
 
-        // Never populated from the stored ciphertext: §9.5's masked form is what a list shows, and a
+        // Never populated from the stored ciphertext: The masked form is what a list shows, and a
         // form field that round-trips `••••4521` would store the mask as the number.
         $this->accountNumber = '';
+
+        $this->dispatch('open-account-form');
     }
 
     public function clearForm(): void
     {
-        $this->reset(['editingId', 'name', 'institution', 'branch', 'accountNumber', 'openedOn', 'notes', 'active', 'type']);
+        $this->reset(['editingId', 'name', 'institution', 'branch', 'accountNumber', 'openedOn', 'notes', 'active', 'type', 'glAccountId']);
+
+        $this->currencyCode = \App\Domain\Kernel\Tenancy\CurrentCompany::model()->base_currency_code;
+        $this->type = 'bank';
+
+        $this->resetValidation();
     }
 
     public function save(CreateBankAccount $create, UpdateBankAccount $update): void
     {
         abort_unless(Gate::allows('bank.manage'), 403);
+
+        if (! $this->confirmRecentPassword()) {
+            return;
+        }
 
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:120'],
@@ -124,6 +155,7 @@ new #[Title('Bank and cash accounts')] class extends Component {
             'accountNumber' => ['nullable', 'string', 'min:4', 'max:40', 'regex:/^[0-9A-Za-z\\- ]+$/'],
             'openedOn' => ['nullable', 'date'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            'glAccountId' => ['nullable', 'numeric', 'exists:gl_accounts,id'],
         ]);
 
         $dto = BankAccountDto::fromArray([
@@ -136,6 +168,7 @@ new #[Title('Bank and cash accounts')] class extends Component {
             'opened_on' => $validated['openedOn'] ?? null,
             'active' => $this->active,
             'notes' => $validated['notes'] ?? null,
+            'gl_account_id' => $validated['glAccountId'] ?? null,
         ]);
 
         if ($this->editingId === null) {
@@ -150,6 +183,7 @@ new #[Title('Bank and cash accounts')] class extends Component {
         }
 
         $this->clearForm();
+        $this->dispatch('close-account-form');
         unset($this->accounts);
 
         $this->dispatch('toast', message: __('Account saved.'), kind: 'success');
@@ -160,8 +194,12 @@ new #[Title('Bank and cash accounts')] class extends Component {
         // The gate is checked here and again inside the model. Two checks for one field looks
         // redundant until the reason is remembered: this one refuses the action, the one in
         // HasMaskedSecret refuses the value, and the second is what protects a report that forgot
-        // to ask (§9.4: "an export is an authorised read, not a side door").
+        // to ask ("an export is an authorised read, not a side door").
         abort_unless(Gate::allows(FieldGate::SeeBankDetail->value), 403);
+
+        if (! $this->confirmRecentPassword()) {
+            return;
+        }
 
         $this->revealed[$accountId] = true;
     }
@@ -191,6 +229,26 @@ new #[Title('Bank and cash accounts')] class extends Component {
         return Currency::query()->where('is_active', true)->orderBy('code')->get();
     }
 
+    /**
+     * The chart accounts a register row may be linked to: postable assets, in code order.
+     * The link is what makes the row *cash* for the cash-flow statement, so the choice
+     * list is the chart's own door (D3), not a table query — and headers stay out because a
+     * header groups accounts and never holds money.
+     *
+     * @return Collection<int, array{code: string, name: string}> keyed by gl account id
+     */
+    #[Computed]
+    public function ledgerAccounts(): Collection
+    {
+        $choices = collect(app(ChartOfAccounts::class)->byCode())
+            ->filter(fn ($account): bool => $account->isPostable && $account->isActive && $account->type === AccountType::Asset)
+            ->keyBy('id')
+            ->map(fn ($account): array => ['code' => $account->code, 'name' => $account->name])
+            ->sortKeys();
+
+        return $choices;
+    }
+
     public function showAccountNumber(): bool
     {
         return BankAccountTypes::from($this->type)->takesAccountNumber();
@@ -198,14 +256,24 @@ new #[Title('Bank and cash accounts')] class extends Component {
 }; ?>
 
     <div class="grid gap-6">
-        <header class="grid gap-1">
+        <header class="fg-page-header grid gap-1.5">
             <x-ui.heading size="xl" level="1">{{ __('Bank and cash accounts') }}</x-ui.heading>
             <x-ui.text>
-                {{ __('Account numbers are stored encrypted and shown masked (§9.5). The full number is a field gate, not a column.') }}
+                {{ __('Account numbers are stored encrypted and shown masked. The full number is a field gate, not a column.') }}
             </x-ui.text>
         </header>
 
         <x-ui.card :title="__('Accounts')">
+            @can('bank.manage')
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <x-ui.text size="sm" color="muted">
+                        {{ __('Open the account before the journal can move money through it. The number is encrypted; lists carry only its last four digits.') }}
+                    </x-ui.text>
+
+                    <x-ui.button size="sm" variant="outline" wire:click="openCreate">{{ __('Open an account') }}</x-ui.button>
+                </div>
+            @endcan
+
             <div class="mb-4 grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]">
                 <x-ui.input wire:model.live.debounce.400ms="search" name="search" :label="__('Search')" :hint="__('Name, institution or branch')" />
 
@@ -228,9 +296,10 @@ new #[Title('Bank and cash accounts')] class extends Component {
                     <tr>
                         <x-ui.table.th>{{ __('Account') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Institution') }}</x-ui.table.th>
-                        <x-ui.table.th>{{ __('Number') }}</x-ui.table.th>
+                        <x-ui.table.th hideBelow="lg">{{ __('Number') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Currency') }}</x-ui.table.th>
-                        <x-ui.table.th>{{ __('Type') }}</x-ui.table.th>
+                        <x-ui.table.th hideBelow="lg">{{ __('Type') }}</x-ui.table.th>
+                        <x-ui.table.th hideBelow="lg">{{ __('Ledger') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                     </tr>
@@ -245,11 +314,11 @@ new #[Title('Bank and cash accounts')] class extends Component {
                                     <span class="text-fg-ink-muted">· {{ $account->branch }}</span>
                                 @endif
                             </x-ui.table.td>
-                            <x-ui.table.td identifier>
+                            <x-ui.table.td identifier hideBelow="lg">
                                 @if ($account->number_masked === null)
                                     <x-ui.text size="xs" color="muted">{{ __('not recorded') }}</x-ui.text>
                                 @elseif (isset($revealed[$account->id]))
-                                    <x-ui.gated gate="seeBankDetail" :masked="$account->maskedNumber()" :label="__('the full bank account number')">
+                                    <x-ui.gated :can="auth()->user()->can('seeBankDetail')" :masked="$account->maskedNumber()" :label="__('the full bank account number')">
                                         {{ $account->revealedNumber() }}
                                     </x-ui.gated>
                                 @else
@@ -265,7 +334,15 @@ new #[Title('Bank and cash accounts')] class extends Component {
                                 @endif
                             </x-ui.table.td>
                             <x-ui.table.td>{{ $account->currency_code }}</x-ui.table.td>
-                            <x-ui.table.td>{{ \App\Domain\Accounting\Data\BankAccountTypes::from($account->type)->name }}</x-ui.table.td>
+                            <x-ui.table.td hideBelow="lg">{{ \App\Domain\Accounting\Data\BankAccountTypes::from($account->type)->name }}</x-ui.table.td>
+                            <x-ui.table.td identifier hideBelow="lg">
+                                @php($link = $account->gl_account_id === null ? null : $this->ledgerAccounts->get($account->gl_account_id))
+                                @if ($link === null)
+                                    <x-ui.text size="xs" color="muted">{{ __('not linked') }}</x-ui.text>
+                                @else
+                                    {{ $link['code'] }} — {{ $link['name'] }}
+                                @endif
+                            </x-ui.table.td>
                             <x-ui.table.td>
                                 @if ($account->active)
                                     <x-ui.badge tone="success" icon="check">{{ __('active') }}</x-ui.badge>
@@ -281,7 +358,7 @@ new #[Title('Bank and cash accounts')] class extends Component {
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7">
+                            <td colspan="8">
                                 <x-ui.empty-state
                                     icon="banknotes"
                                     :title="$this->hasFilters() ? __('No accounts match these filters') : __('No accounts yet')"
@@ -309,12 +386,15 @@ new #[Title('Bank and cash accounts')] class extends Component {
             @endif
         </x-ui.card>
 
+        {{-- The account form opens over the register. Closing it without saving discards the draft,
+             and an edit of one row never inherits another row's leftovers. --}}
         @can('bank.manage')
-            <x-ui.card
-                :title="$editingId === null ? __('Open an account') : __('Edit account')"
-                :description="__('The number is encrypted with the column key; the masked form is what every list and export shows.')"
-            >
-                <form class="grid gap-4" wire:submit="save">
+            <x-ui.dialog name="account-form" maxWidth="2xl" :title="$editingId === null ? __('Open an account') : __('Edit account')" x-on:dialog-closed="$wire.call('clearForm')">
+                <form class="grid gap-4 p-5" wire:submit="save">
+                    <x-ui.text size="sm" color="muted">
+                        {{ __('The number is encrypted with the column key; the masked form is what every list and export shows.') }}
+                    </x-ui.text>
+
                     <div class="grid gap-4 sm:grid-cols-2">
                         <x-ui.input wire:model="name" name="name" :label="__('Account name')" required />
                         <x-ui.input wire:model="institution" name="institution" :label="__('Institution')" required />
@@ -341,6 +421,19 @@ new #[Title('Bank and cash accounts')] class extends Component {
                         </div>
 
                         <x-ui.input wire:model="openedOn" name="openedOn" type="date" :label="__('Opened (optional)')" />
+
+                        <div class="grid gap-1.5">
+                            <label for="glAccountId" class="text-xs font-medium text-fg-ink-secondary">{{ __('Ledger account') }}</label>
+
+                            <x-ui.select name="glAccountId" id="glAccountId" wire:model="glAccountId">
+                                <option value="">{{ __('Not linked — the ledger cannot move money through this account yet') }}</option>
+                                @foreach ($this->ledgerAccounts as $id => $option)
+                                    <option value="{{ $id }}">{{ $option['code'] }} — {{ $option['name'] }}</option>
+                                @endforeach
+                            </x-ui.select>
+
+                            <p class="text-xs text-fg-ink-muted">{{ __('Linked rows are the cash the cash-flow statement reads. Once the ledger account has posted movement the link cannot be moved — close the account and open a new one.') }}</p>
+                        </div>
                     </div>
 
                     @if ($this->showAccountNumber())
@@ -363,11 +456,9 @@ new #[Title('Bank and cash accounts')] class extends Component {
                     <div class="flex items-center gap-3">
                         <x-ui.button variant="primary" type="submit">{{ $editingId === null ? __('Save account') : __('Update account') }}</x-ui.button>
 
-                        @if ($editingId !== null)
-                            <x-ui.button variant="ghost" type="button" wire:click="clearForm">{{ __('Cancel') }}</x-ui.button>
-                        @endif
+                        <x-ui.button variant="ghost" type="button" x-on:click="$dispatch('close-account-form')">{{ __('Cancel') }}</x-ui.button>
                     </div>
                 </form>
-            </x-ui.card>
+            </x-ui.dialog>
         @endcan
     </div>

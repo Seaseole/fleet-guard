@@ -10,9 +10,9 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.2 / §6.8 — money going out to a supplier: `PaymentRecorded`'s mirror image.
+     * / Money going out to a supplier: `PaymentRecorded`'s mirror image.
      *
-     * The receipt's rule holds here too (§20.33's decision 1): **the payment is made, then it is
+     * The receipt's rule holds here too (the decision 1): **the payment is made, then it is
      * applied.** `RecordSupplierPayment` posts `Dr 2110 Accounts payable / Cr 1120 Bank` — a real
      * reduction of the liability, never a direct hit on one invoice's row — and application walks
      * the supplier's open bills in `bill_on` order through `supplier_payment_allocations`. Money
@@ -22,7 +22,7 @@ return new class extends Migration
      * The number is operational (`PAY-{SEQ:5}`, continuous, allocated at creation): a payment is our
      * bank fact, not a fiscal document the counterparty numbers.
      *
-     * Base currency only in this slice (§20.32's decision 5): the FX slice carries a ZAR payment's
+     * Base currency only in this slice (the decision 5): the FX slice carries a ZAR payment's
      * rate and its realised gain/loss pair (`7510`/`7511`), and inventing one here would be a ledger
      * entry that disagrees with the bank statement.
      */
@@ -40,7 +40,7 @@ return new class extends Migration
             $table->string('method', 12);
             $table->string('reference', 80)->nullable();
 
-            // §5.2 verbatim.
+            // Verbatim.
             $table->char('currency_code', 3);
             $table->unsignedBigInteger('amount');
             $table->decimal('fx_rate', 19, 8);

@@ -9,7 +9,7 @@ use App\Domain\Fleet\Models\Trailer;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Edits a trailer's master details (§4.3, D1). Status moves through {@see ChangeTrailerStatus}.
+ * Edits a trailer's master details (D1). Status moves through {@see ChangeTrailerStatus}.
  */
 final class UpdateTrailer
 {

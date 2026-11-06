@@ -10,17 +10,17 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 DRIVER — the employee as a driver, with the two papers that decide whether they may be
-     * dispatched: the licence and the PDP permit.
+     * DRIVER — the employee as a driver, with the two papers that decide whether they may be
+     * dispatched: the licence and the PRDP permit.
      *
      * Both expiry dates live **here**, on the driver row, and not on the scan of the card. A scan
-     * is evidence of what was on file; these columns are the fact dispatch reads, so §10.2's
+     * is evidence of what was on file; these columns are the fact dispatch reads, so the
      * "planned → assigned checks licence and permit on the trip's start date" is one column read
      * rather than a walk through documents to find the newest one that happens to carry an expiry.
-     * The scan still attaches as a §4.4 document — with no expiry of its own, so the register cannot
+     * The scan still attaches as a document — with no expiry of its own, so the register cannot
      * report the same lapse twice under two different dates.
      *
-     * `status` is §10.1's state column: transitions are `active|standby|suspended|left`, and the
+     * `status` is the state column: transitions are `active|standby|suspended|left`, and the
      * reason for suspension or leaving is mandatory in the Action and lands in `operational_events`.
      */
     public function up(): void

@@ -25,7 +25,7 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 
 /*
- * §9.6 — the driver's fuel screen. One page, no login, one trip, the same write door the office uses.
+ * The driver's fuel screen. One page, no login, one trip, the same write door the office uses.
  *
  * The fields are what the slip in the driver's hand actually says — the station, the litres, the price
  * per litre — plus the tank the diesel went into and the odometer the truck is showing. The price is
@@ -162,7 +162,7 @@ new #[Layout('layouts::auth')] #[Title('Fuel on the road')] class extends Compon
         $this->dispatch('toast', message: __('Fuel recorded and posted.'), kind: 'success');
     }
 
-    /** The trip this link is bound to — the only trip this page can speak about (§9.6). */
+    /** The trip this link is bound to — the only trip this page can speak about. */
     public function tripFor(): ?Trip
     {
         return $this->token()?->trip;
@@ -191,7 +191,7 @@ new #[Layout('layouts::auth')] #[Title('Fuel on the road')] class extends Compon
         return Truck::query()->whereKey($trip->truck_id)->first()?->fuel_type->label() ?? __('—');
     }
 
-    /** §10.2: a closed, cancelled or aborted trip has costs that are final rather than editable. */
+    /** A closed, cancelled or aborted trip has costs that are final rather than editable. */
     public function costsAreFrozen(): bool
     {
         $trip = $this->tripFor();
@@ -210,7 +210,7 @@ new #[Layout('layouts::auth')] #[Title('Fuel on the road')] class extends Compon
             && $this->tripFor() !== null
             && $this->tripFor()?->truck_id !== null
             && ! $this->costsAreFrozen()
-            && $this->tanks() !== [];
+            && $this->tanks !== [];
     }
 
     /** The page's own door — asked in the view, so a `pod`-only link is not offered a form it cannot use. */
@@ -286,7 +286,7 @@ new #[Layout('layouts::auth')] #[Title('Fuel on the road')] class extends Compon
         return number_format($litresX100 / 100, 2, '.', '');
     }
 
-    /** "19.75" → 1975, without ever building a float (§20.4). */
+    /** "19.75" → 1975, without ever building a float. */
     private function scaledHundredths(string $input): int
     {
         $text = trim(str_replace([' ', ','], ['', '.'], $input));
@@ -333,12 +333,18 @@ new #[Layout('layouts::auth')] #[Title('Fuel on the road')] class extends Compon
 <div class="mx-auto grid w-full max-w-xl gap-5">
     @php($trip = $this->tripFor())
 
-    <header class="grid gap-1">
+    <header class="grid gap-2">
         <x-ui.heading size="lg" level="1">{{ __('Fuel on the road') }}</x-ui.heading>
 
         @if ($trip !== null)
-            <p class="text-sm text-fg-ink-secondary">
-                {{ __('Trip :trip · :truck', ['trip' => $trip->trip_no, 'truck' => $this->truckLabel()]) }}
+            {{-- The identity strip DESIGN-SYSTEM.md §6 demands: a shared phone must always know whose trip
+                 the slip is landing on, so the trip and the plate are the loudest line on the screen,
+                 set on the sunk surface rather than as muted header prose. --}}
+            <p class="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-fg-md bg-fg-surface-sunk px-4 py-3">
+                <span class="text-sm text-fg-ink-secondary">{{ __('Recording for') }}</span>
+                <span class="fg-identifier text-base font-medium text-fg-ink">{{ $trip->trip_no }}</span>
+                <span class="text-fg-ink-muted" aria-hidden="true">·</span>
+                <span class="fg-identifier text-base font-medium text-fg-ink">{{ $this->truckLabel() }}</span>
             </p>
         @endif
     </header>
@@ -379,14 +385,14 @@ new #[Layout('layouts::auth')] #[Title('Fuel on the road')] class extends Compon
         @else
             <x-ui.card :title="__('Record what the pump gave you')">
                 <form class="grid gap-4" wire:submit="save">
-                    <x-ui.select name="tankId" id="kiosk-fuel-tank" wire:model="tankId" :label="__('Tank')">
+                    <x-ui.select name="tankId" id="kiosk-fuel-tank" wire:model="tankId" :label="__('Tank')" :widget="false">
                         <option value="">{{ __('Choose a tank') }}</option>
                         @foreach ($this->tanks as $tank)
                             <option value="{{ $tank->id }}">{{ $tank->kind->label() }} · {{ $tank->capacity_litres }} L</option>
                         @endforeach
                     </x-ui.select>
 
-                    <x-ui.select name="stationId" id="kiosk-fuel-station" wire:model="stationId" :label="__('Station')">
+                    <x-ui.select name="stationId" id="kiosk-fuel-station" wire:model="stationId" :label="__('Station')" :widget="false">
                         <option value="">{{ __('Not listed') }}</option>
                         @foreach ($this->stations as $station)
                             <option value="{{ $station->id }}">{{ $station->label() }}</option>
@@ -410,8 +416,19 @@ new #[Layout('layouts::auth')] #[Title('Fuel on the road')] class extends Compon
 
                     <x-ui.input name="odometer" wire:model="odometer" numeric :label="__('Odometer reading')" :hint="__('The figure on the dashboard now.')" required />
 
-                    <x-ui.input name="invoiceNo" wire:model="invoiceNo" :label="__('Receipt number (optional)')" />
-                    <x-ui.input name="note" wire:model="note" :label="__('Note (optional)')" />
+                    {{-- Progressive disclosure (§6: three fields per screen is the rule, and a cracked
+                         screen with one bar of signal is not where optional prose gets typed): the slip's
+                         must-haves stay visible; the two optional strings fold away until asked for. --}}
+                    <details class="grid gap-3">
+                        <summary class="cursor-pointer py-1 text-base text-fg-ink-secondary">
+                            {{ __('Receipt number and note (optional)') }}
+                        </summary>
+
+                        <div class="grid gap-3 pt-1">
+                            <x-ui.input name="invoiceNo" wire:model="invoiceNo" :label="__('Receipt number')" />
+                            <x-ui.input name="note" wire:model="note" :label="__('Note')" />
+                        </div>
+                    </details>
 
                     <x-ui.input name="pin" wire:model="pin" :label="__('6-digit PIN from the dispatcher')" type="text" inputmode="numeric" autocomplete="one-time-code" required />
 

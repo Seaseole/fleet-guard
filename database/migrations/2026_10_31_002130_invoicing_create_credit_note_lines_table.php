@@ -10,19 +10,19 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §10.5 — the line a credit is for, and the invoice line it corrects.
+     * The line a credit is for, and the invoice line it corrects.
      *
      * `invoice_line_id` is set when the credit names a billed line (the usual case: one tonnage line was
      * priced wrong), and nullable when it does not (a detention charge that should never have been raised,
      * which the customer disputes as a whole). Naming the line matters for the same reason an invoice line
-     * names its trip: §6.1's revenue accounts require dimensions, so a credit that debits `4100 Haulage
+     * names its trip: The revenue accounts require dimensions, so a credit that debits `4100 Haulage
      * revenue` has to be able to say which truck and which leg it is taking back.
      *
      * The dimensions are **copied from the invoice line at write time**, not read from it at report time.
      * A credit raised in March against an invoice corrected in June must still debit the truck and trip the
      * revenue was originally credited to, or the profitability report for that leg silently gains money back.
      *
-     * VAT mirrors the invoice line's rate, and the tax figures are stored for §5.5's reason: a return
+     * VAT mirrors the invoice line's rate, and the tax figures are stored for the reason: a return
      * recomputed from live rates is a return that no longer matches the one that was filed.
      */
     public function up(): void

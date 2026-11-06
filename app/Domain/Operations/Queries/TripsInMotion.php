@@ -11,7 +11,7 @@ use App\Domain\Operations\TripStatus;
 use Illuminate\Support\Carbon;
 
 /**
- * Operations' read door for "which trips are on the road" (§13 D5).
+ * Operations' read door for "which trips are on the road" (D5).
  *
  * Telematics owns positions, not trips, and the live map has to name the trip a fix belongs to. This
  * is the same seam `FleetDirectory` set: the owning module answers with a DTO in the caller's tenant
@@ -38,14 +38,14 @@ final class TripsInMotion
     /** @return list<TripInMotion> */
     public function active(): array
     {
-        return Trip::query()
+        return array_values(Trip::query()
             ->with('route')
             ->whereIn('status', self::ON_THE_ROAD)
             ->orderBy('departed_at')
             ->orderBy('trip_no')
             ->get()
             ->map(fn (Trip $trip): TripInMotion => $this->dto($trip))
-            ->all();
+            ->all());
     }
 
     /** The trip a fix should be filed under when the provider says only which truck it came from. */

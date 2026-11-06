@@ -10,14 +10,14 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * The billing claim: `ready → billed`, taken under a row lock (§4.1, §10.3).
+ * The billing claim: `ready → billed`, taken under a row lock.
  *
- * This is Operations' half of §15 phase 4's first door. Invoicing may not write `chargeables` (§13 D5), so
+ * This is Operations' half of phase 4's first door. Invoicing may not write `chargeables` (D5), so
  * issuing an invoice asks this Action to claim the rows it is about to bill — which is also the only place
  * the claim can be **raced safely**. Two issuers on the same trip both reach here; the first takes the
  * `FOR UPDATE` lock and marks the rows, the second blocks, wakes to `billed` and is refused. Its invoice is
  * rolled back with it, and because the number was allocated in the same transaction the sequence is
- * un-burned — §7.4's gap-free promise survives a lost race rather than being repaired afterwards.
+ * un-burned — the gap-free promise survives a lost race rather than being repaired afterwards.
  *
  * `billed` is set here and nowhere else: `BuildChargeablesFromPod` stops at `ready` deliberately, and a
  * chargeable that claimed itself billed before an invoice existed would be a delivery nobody could chase.
@@ -33,7 +33,7 @@ final class MarkTripChargesBilled
         if (DB::transactionLevel() === 0) {
             throw new InvalidArgumentException(
                 'Charges are claimed inside the invoice transaction: outside one, a lock releases before the '
-                .'invoice commits and two issuers can both believe they own the same delivery (§7.4).',
+                .'invoice commits and two issuers can both believe they own the same delivery.',
             );
         }
 
@@ -52,7 +52,7 @@ final class MarkTripChargesBilled
         if ($rows->count() !== count($ids)) {
             throw new InvalidArgumentException(sprintf(
                 'Those charges are not all on trip %s in this company, so the invoice would bill something it '
-                .'cannot name. Re-read the trip before issuing (§10.3).',
+                .'cannot name. Re-read the trip before issuing.',
                 $tripId,
             ));
         }
@@ -61,7 +61,7 @@ final class MarkTripChargesBilled
             if ($row->status !== ChargeableStatus::Ready) {
                 throw new InvalidArgumentException(sprintf(
                     'The charge for %s is already %s, so it has been billed or withdrawn. A second invoice would '
-                    .'bill the delivery twice (§10.4).',
+                    .'bill the delivery twice.',
                     $row->description ?? $row->type->label(),
                     $row->status->label(),
                 ));

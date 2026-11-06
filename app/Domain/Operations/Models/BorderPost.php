@@ -12,7 +12,7 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.4 BORDER_POST — a gate a trip crosses at, e.g. Kazungula (BW).
+ * BORDER_POST — a gate a trip crosses at, e.g. Kazungula (BW).
  *
  * It is master data, not a trip fact: the name, country and opening hours are the same for every
  * truck that uses it, and copying them onto each crossing would let two trips disagree about the

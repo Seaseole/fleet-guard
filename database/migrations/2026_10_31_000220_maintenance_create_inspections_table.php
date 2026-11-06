@@ -10,10 +10,10 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 INSPECTION — a safety check that happened, with the checklist, the defects and the
-     * photographs that make it evidence (§15.2 phase 3, slice 3f).
+     * INSPECTION — a safety check that happened, with the checklist, the defects and the
+     * photographs that make it evidence (phase 3, slice 3f).
      *
-     * §10.6's `completed → inspected` is the second pair of eyes on one work order; this table is
+     * The `completed → inspected` is the second pair of eyes on one work order; this table is
      * the standing inspection register — pre-trip, periodic and tachograph checks — and the two share
      * the word but not the row. An inspection is not a work order and must not become one: most pass,
      * and a register that only remembers the failures cannot show that the fleet is being checked.

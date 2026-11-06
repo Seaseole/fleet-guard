@@ -19,17 +19,18 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /*
- * The supplier register (§3.2, §4.2): who bills the fleet.
+ * The supplier register: who bills the fleet.
  *
  * Its own screen rather than a tab on the accounting journal because `suppliers.view` is held by
- * the Workshop Manager and the Stores Clerk, who do not hold `accounting.view` (§9.3). The category
- * is §4.2's bill vocabulary, so Phase 5 can default a bill's expense account from the supplier
+ * the Workshop Manager and the Stores Clerk, who do not hold `accounting.view`. The category
+ * is the bill vocabulary, so Phase 5 can default a bill's expense account from the supplier
  * instead of asking the clerk every time.
  *
- * Nothing here is gated: §9.4 names five gates and supplier terms are not one of them. Writing is
+ * Nothing here is gated: The design names five gates and supplier terms are not one of them. Writing is
  * `suppliers.manage` — the Owner and the Accountant.
  */
-new #[Title('Suppliers')] class extends Component {
+new #[Title('Suppliers')] class extends Component
+{
     use WithPagination;
 
     #[Url]
@@ -81,6 +82,13 @@ new #[Title('Suppliers')] class extends Component {
         return $this->search !== '' || $this->statusFilter !== '' || $this->categoryFilter !== '';
     }
 
+    public function openCreate(): void
+    {
+        $this->clearForm();
+
+        $this->dispatch('open-supplier-form');
+    }
+
     public function edit(int $id): void
     {
         $supplier = Supplier::query()->findOrFail($id);
@@ -99,6 +107,8 @@ new #[Title('Suppliers')] class extends Component {
         $this->vatNumber = (string) $supplier->vat_number;
         $this->paymentTerms = $supplier->payment_terms;
         $this->active = $supplier->active;
+
+        $this->dispatch('open-supplier-form');
     }
 
     public function clearForm(): void
@@ -165,6 +175,7 @@ new #[Title('Suppliers')] class extends Component {
         }
 
         $this->clearForm();
+        $this->dispatch('close-supplier-form');
         unset($this->suppliers);
 
         $this->dispatch('toast', message: __('Saved.'), kind: 'success');
@@ -223,7 +234,7 @@ new #[Title('Suppliers')] class extends Component {
 }; ?>
 
 <div class="grid gap-6">
-    <header class="grid gap-1">
+    <header class="fg-page-header grid gap-1.5">
         <x-ui.heading size="xl" level="1">{{ __('Suppliers') }}</x-ui.heading>
         <x-ui.text>
             {{ __('Fuel stations, parts shops, garages and insurers the fleet buys from. The category is what most bills from a supplier will be, so the expense lands on the right account by default.') }}
@@ -231,6 +242,16 @@ new #[Title('Suppliers')] class extends Component {
     </header>
 
     <x-ui.card :title="__('Supplier register')">
+        @can('suppliers.manage')
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <x-ui.text size="sm" color="muted">
+                    {{ __('Every bill and expense names one of these. The category decides which account the spend lands on by default.') }}
+                </x-ui.text>
+
+                <x-ui.button size="sm" variant="outline" wire:click="openCreate">{{ __('Add a supplier') }}</x-ui.button>
+            </div>
+        @endcan
+
         <div class="mb-4 grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
             <x-ui.input wire:model.live.debounce.400ms="search" name="search" :label="__('Search')" :hint="__('Name, code, contact or email')" />
 
@@ -345,10 +366,13 @@ new #[Title('Suppliers')] class extends Component {
         @endif
     </x-ui.card>
 
+    {{-- The supplier form lives in a dialog now: the register keeps the whole page and the
+         add/edit work happens over it. The server opens it with open-supplier-form — both the
+         Add button and a row's Edit call — and any close clears the draft. --}}
     @can('suppliers.manage')
-        <x-ui.card :title="$editingId === null ? __('Add a supplier') : __('Edit supplier')">
-            <form class="grid gap-4" wire:submit="save">
-                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <x-ui.dialog name="supplier-form" maxWidth="2xl" :title="$editingId === null ? __('Add a supplier') : __('Edit supplier')" x-on:dialog-closed="$wire.call('clearForm')">
+            <form class="grid gap-4 p-5" wire:submit="save">
+                <div class="grid gap-4 sm:grid-cols-2">
                     <x-ui.input wire:model="name" name="name" :label="__('Name')" required />
                     <x-ui.input wire:model="code" name="code" :label="__('Code (optional)')" :hint="__('A stable reference for bills and imports.')" />
 
@@ -389,11 +413,9 @@ new #[Title('Suppliers')] class extends Component {
                 <div class="flex items-center gap-3">
                     <x-ui.button type="submit">{{ $editingId === null ? __('Save') : __('Update') }}</x-ui.button>
 
-                    @if ($editingId !== null)
-                        <x-ui.button variant="ghost" type="button" wire:click="clearForm">{{ __('Cancel') }}</x-ui.button>
-                    @endif
+                    <x-ui.button variant="ghost" type="button" x-on:click="$dispatch('close-supplier-form')">{{ __('Cancel') }}</x-ui.button>
                 </div>
             </form>
-        </x-ui.card>
+        </x-ui.dialog>
     @endcan
 </div>

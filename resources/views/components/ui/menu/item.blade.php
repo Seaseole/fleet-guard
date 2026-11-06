@@ -16,7 +16,7 @@
         @if($href) href="{{ $href }}" @elseif($tag === 'button') type="{{ $type }}" @endif
         role="menuitem"
         {{ $attributes->except(['role'])->class([
-            'flex w-full items-center gap-2.5 rounded-fg-sm px-2 py-1.5 text-start text-sm transition duration-(--t-fast)',
+            'flex w-full touch:min-h-11 items-center gap-2.5 rounded-fg-sm px-2 py-1.5 text-start text-sm transition duration-(--t-fast)',
             'text-fg-ink hover:bg-fg-surface-sunk' => $tone === null,
             'text-danger hover:bg-danger-soft' => $tone === 'danger',
         ]) }}
@@ -28,7 +28,7 @@
         <span class="flex-1 truncate">{{ $slot }}</span>
 
         @if($checked ?? false)
-            <x-ui.icon name="check" class="text-accent" />
+            <x-ui.icon name="check" class="text-accent-ink" />
         @endif
     </{{ $tag }}>
 </li>

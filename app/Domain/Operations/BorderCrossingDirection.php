@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Operations;
 
 /**
- * Which way the truck went through the gate (§4.4 `direction`).
+ * Which way the truck went through the gate (`direction`).
  *
  * One value per crossing rather than a boolean: a corridor trip enters one country and exits it, and
  * the pair is what lets Phase 6 count days inside a country without reading the route.

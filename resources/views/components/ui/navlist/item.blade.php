@@ -1,7 +1,7 @@
 @props(['href' => null, 'icon' => null, 'current' => false, 'trailing' => null, 'collapsibleLabel' => false, 'chevron' => false])
 
 @php
-    $link = 'group flex h-8 items-center gap-2 rounded-fg-md px-2 text-sm transition duration-(--t-fast) ease-(--ease-standard)';
+    $link = 'group relative flex h-10 touch:h-11 items-center gap-2 rounded-fg-md px-2 text-sm transition duration-(--t-fast) ease-(--ease-standard)';
 @endphp
 
 <a
@@ -10,10 +10,15 @@
     @if($collapsibleLabel) :class="collapsed ? 'justify-center px-0' : ''" @endif
     {{ $attributes->class([
         $link,
-        'bg-accent-soft text-accent font-medium' => $current,
+        'bg-accent-soft text-accent-ink font-medium' => $current,
         'text-fg-ink-secondary hover:bg-fg-surface-sunk hover:text-fg-ink' => ! $current,
     ]) }}
 >
+    {{-- The 2 px accent bar DESIGN-SYSTEM.md §7 documents beside the soft wash: location is carried
+         by shape as well as tint, so the active item reads even where the wash is hard to see. --}}
+    @if($current)
+        <span aria-hidden="true" class="absolute inset-y-1 start-0 w-0.5 rounded-full bg-accent"></span>
+    @endif
     @if($icon)
         <x-ui.icon :name="$icon" />
     @endif

@@ -18,7 +18,7 @@
 {{--
     Theme bootstrap, replacing the starter kit's @fluxAppearance.
 
-    Two layers, resolved in this order (§20.37): a **personal** choice stored by this browser, and the
+    Two layers, resolved in this order: a **personal** choice stored by this browser, and the
     **company default** the Owner sets in Application settings, handed over as `data-theme-default` on
     the root element and also rendered as the initial `dark` class. A fresh device therefore opens in the
     company's theme with nothing to configure; a seat that flips it keeps that flip across every page of
@@ -37,6 +37,11 @@
 
         const apply = (mode) => {
             document.documentElement.classList.toggle('dark', resolve(mode));
+
+            // Charts read their colours out of these custom properties, and a canvas is not a CSS consumer — it
+            // has to be told. Every theme path funnels through here, so one dispatch covers a personal choice, a
+            // company default, the OS scheme and a `wire:navigate` re-apply.
+            document.dispatchEvent(new CustomEvent('fg:theme'));
         };
 
         const companyDefault = () => document.documentElement.dataset.themeDefault || 'system';
@@ -59,6 +64,15 @@
         };
 
         apply(window.FleetGuardTheme.effective());
+
+        // `wire:navigate` keeps the page alive and morphs the shell, which replaces this element's class
+        // with the one the *next* document was rendered with — a server answer that knows neither the
+        // personal choice nor the device's own scheme. Without this hook the theme holds until the first
+        // SPA navigation and then quietly reverts, which is exactly what the seat reports as "it doesn't
+        // stay". Livewire's own event is the seam: it fires after the swap has settled.
+        document.addEventListener('livewire:navigated', () => {
+            apply(window.FleetGuardTheme.effective());
+        });
 
         // Only a `system` layer follows the device: a seat that chose Light stays Light when the
         // sunset flips the OS to dark, and a company that chose Dark stays Dark in the yard.

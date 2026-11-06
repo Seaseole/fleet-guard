@@ -10,17 +10,17 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * SUPPLIER — the party that bills the fleet (§4.2 `SUPPLIER ||--o{ BILL`).
+     * SUPPLIER — the party that bills the fleet (`SUPPLIER ||--o{ BILL`).
      *
-     * The sketch in §4.2 shows the relationship but not the columns, so the shape is taken from
+     * The sketch in shows the relationship but not the columns, so the shape is taken from
      * what a bill actually needs: a name to print, a category that decides which expense account
-     * the bill lands on (§4.2 `BILL.category`), and the contact a buyer calls when a delivery is
-     * short. `category` is one of the six values §4.2 already defines for a bill — using the same
+     * the bill lands on (`BILL.category`), and the contact a buyer calls when a delivery is
+     * short. `category` is one of the six values already defines for a bill — using the same
      * vocabulary here is what lets Phase 5 default the bill's category from the supplier instead
      * of asking every time.
      *
      * Bank details are deliberately **not** here. Paying a supplier is a Phase 5 concern with its
-     * own §9.4 gate (`seeBankDetail`) and its own encryption trio (§9.5); a plaintext account
+     * own gate (`seeBankDetail`) and its own encryption trio; a plaintext account
      * number sitting on a master-data row until then would be the wrong half of that design.
      */
     public function up(): void

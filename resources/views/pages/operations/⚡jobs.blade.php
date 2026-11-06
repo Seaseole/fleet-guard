@@ -29,10 +29,10 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /*
- * The jobs board (§3.2, §10.3) — the commercial register where freight work is opened, priced,
+ * The jobs board — the commercial register where freight work is opened, priced,
  * accepted and finally closed.
  *
- * Two rules shape this screen more than its columns. The first is §10.3's split: the state a person
+ * Two rules shape this screen more than its columns. The first is the split: the state a person
  * sets is stored, and the four that describe the job's *children* are answered from them. So a row
  * prints "2 trips · all trips completed" as badges computed on render — never a column that can be
  * right about one trip and wrong about the next.
@@ -42,9 +42,9 @@ use Livewire\WithPagination;
  * rather than hidden behind a disabled button, because the reason ("there is nothing to accept yet")
  * is the next thing the desk has to do.
  *
- * Money on this screen is the job's own quote, and it is printed for anyone §9.3 lets read the register.
+ * Money on this screen is the job's own quote, and it is printed for anyone lets read the register.
  * That is a deliberate split from the route rate card, which hides its amount behind `seeCustomerTerms`:
- * the Dispatcher *writes* the quote (C / C in §9.3's row), and a price hidden from the person typing it
+ * the Dispatcher *writes* the quote (C / C in the row), and a price hidden from the person typing it
  * would have to be quoted blind. What stays hidden from that seat is the rate **versus** cost —
  * `jobs.rate_cost.view`, which is the margin, and which is a trip number the moment Phase 2's costs land.
  */
@@ -286,7 +286,7 @@ new #[Title('Jobs')] class extends Component {
         ]);
 
         // Editing is only ever a correction of an enquiry: once a job is priced, its terms are an offer
-        // and §10.3 changes them by re-quoting, not by rewriting the row.
+        // and changes them by re-quoting, not by rewriting the row.
         $existing = $this->editingId === null ? null : Job::query()->findOrFail($this->editingId);
 
         if ($existing !== null && $existing->status !== JobStatus::Enquiry) {
@@ -352,7 +352,7 @@ new #[Title('Jobs')] class extends Component {
         $validated = $this->validate([
             'quoteRateType' => ['required', 'string', Rule::in(RouteRateType::values())],
             'quoteAmount' => ['required', 'string'],
-            'quoteCurrency' => ['required', 'string', 'size:3', Rule::in(array_keys($this->currencies()))],
+            'quoteCurrency' => ['required', 'string', 'size:3', Rule::in(array_keys($this->currencies))],
             'quoteRate' => ['nullable', 'string'],
             'quoteRateDate' => ['nullable', 'date'],
             // The quote carries the dates it was priced for, so the form that sets the price answers for
@@ -400,7 +400,7 @@ new #[Title('Jobs')] class extends Component {
     }
 
     /**
-     * The three hand-set ends of §10.3, through one method.
+     * The three hand-set ends of, through one method.
      *
      * They share a control because they share a shape — a named job, an optional reason, an Action that
      * refuses — and because `accept` is the one decision with no reason attached, the validation is the
@@ -526,7 +526,7 @@ new #[Title('Jobs')] class extends Component {
             ->all();
     }
 
-    /** §10.3's derived badges for one row, from the trips already loaded on the relation. */
+    /** The derived badges for one row, from the trips already loaded on the relation. */
     public function progress(Job $job): JobProgress
     {
         return new JobProgress($job, $job->trips);
@@ -539,7 +539,7 @@ new #[Title('Jobs')] class extends Component {
         return Currency::active();
     }
 
-    /** A foreign quote needs the rate it was converted at (§5.3); a base one does not. */
+    /** A foreign quote needs the rate it was converted at; a base one does not. */
     public function quoteNeedsRate(): bool
     {
         return $this->quoteCurrency !== '' && $this->quoteCurrency !== $this->companyCurrency();
@@ -578,7 +578,7 @@ new #[Title('Jobs')] class extends Component {
 }; ?>
 
 <div class="grid gap-6">
-    <header class="flex flex-wrap items-end justify-between gap-3">
+    <header class="fg-page-header flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div class="grid gap-1">
             <x-ui.heading size="xl" level="1">{{ __('Jobs') }}</x-ui.heading>
             <x-ui.text>
@@ -630,23 +630,23 @@ new #[Title('Jobs')] class extends Component {
         @endif
     </div>
 
-    <x-ui.table :caption="__('The freight job register — every job, its corridor, and the state it has reached')">
-        <x-slot name="head">
-            <x-ui.table.th sortable :direction="$this->sortDirection('job_no')" wire:click="sortBy('job_no')">
-                {{ __('Job') }}
-            </x-ui.table.th>
-            <x-ui.table.th>{{ __('Customer · corridor') }}</x-ui.table.th>
-            <x-ui.table.th sortable :direction="$this->sortDirection('load_on')" wire:click="sortBy('load_on')">
-                {{ __('Load on') }}
-            </x-ui.table.th>
-            <x-ui.table.th sortable :direction="$this->sortDirection('status')" wire:click="sortBy('status')">
-                {{ __('Status') }}
-            </x-ui.table.th>
-            <x-ui.table.th numeric sortable :direction="$this->sortDirection('quote')" wire:click="sortBy('quote')">
-                {{ __('Quoted') }}
-            </x-ui.table.th>
-            <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
-        </x-slot>
+        <x-ui.table :caption="__('The freight job register — every job, its corridor, and the state it has reached')">
+            <x-slot name="head">
+                <x-ui.table.th sortable :direction="$this->sortDirection('job_no')" wire:click="sortBy('job_no')">
+                    {{ __('Job') }}
+                </x-ui.table.th>
+                <x-ui.table.th>{{ __('Customer · corridor') }}</x-ui.table.th>
+                <x-ui.table.th sortable :direction="$this->sortDirection('load_on')" wire:click="sortBy('load_on')">
+                    {{ __('Load on') }}
+                </x-ui.table.th>
+                <x-ui.table.th sortable :direction="$this->sortDirection('status')" wire:click="sortBy('status')">
+                    {{ __('Status') }}
+                </x-ui.table.th>
+                <x-ui.table.th numeric sortable :direction="$this->sortDirection('quote')" wire:click="sortBy('quote')">
+                    {{ __('Quoted') }}
+                </x-ui.table.th>
+                <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
+            </x-slot>
 
         @forelse ($this->jobs as $job)
             @php($badges = $this->progress($job)->badges())
@@ -680,7 +680,7 @@ new #[Title('Jobs')] class extends Component {
                     @if ($badges !== [])
                         <span class="mt-1 flex flex-wrap gap-1">
                             @foreach ($badges as $badge)
-                                {{-- §10.3: these are read from the job's trips on every render, never stored. --}}
+                                {{-- these are read from the job's trips on every render, never stored. --}}
                                 <x-ui.badge :tone="$badge['tone']" size="xs">{{ __($badge['label']) }}</x-ui.badge>
                             @endforeach
                         </span>
@@ -688,7 +688,7 @@ new #[Title('Jobs')] class extends Component {
                 </x-ui.table.td>
 
                 <x-ui.table.td numeric nowrap>
-                    {{-- §9.3 gives this column to whoever may read the register: the Dispatcher *writes* it,
+                    {{-- the design gives this column to whoever may read the register: the Dispatcher *writes* it,
                          and a job whose own price is hidden from the person quoting it would have to be typed
                          blind. What stays hidden from that seat is the rate *versus* cost — `jobs.rate_cost.view`,
                          which is the margin, and is a trip number rather than a job one. --}}
@@ -730,7 +730,7 @@ new #[Title('Jobs')] class extends Component {
                         <x-ui.button size="sm" variant="ghost" wire:click="openDecision('{{ $job->id }}', 'close')">{{ __('Close') }}</x-ui.button>
                     @endcan
 
-                    {{-- A row with no buttons is a row a seat cannot read the reason for; §9.3's seats are
+                    {{-- A row with no buttons is a row a seat cannot read the reason for; The seats are
                          allowed to open this register, so the silence was the only answer they got. --}}
                     @if ($job->status->isTerminal())
                         <span class="text-xs text-fg-ink-muted">{{ __('Finished — nothing to do here') }}</span>
@@ -826,7 +826,7 @@ new #[Title('Jobs')] class extends Component {
         </form>
     </x-ui.dialog>
 
-    {{-- The quote: §5's money, with the conversion rate the books will read back. --}}
+    {{-- The quote: The money, with the conversion rate the books will read back. --}}
     <x-ui.dialog name="job-quote" :title="__('Quote this job')" x-on:dialog-closed="$wire.call('clearQuoteForm')">
         <form wire:submit="saveQuote" class="grid gap-4 p-5">
             <p class="text-sm text-fg-ink-secondary">
@@ -884,7 +884,7 @@ new #[Title('Jobs')] class extends Component {
         </form>
     </x-ui.dialog>
 
-    {{-- Accept / decline / close: the three states a person sets, with the reason §10.2 insists on. --}}
+    {{-- Accept / decline / close: the three states a person sets, with the reason insists on. --}}
     <x-ui.dialog name="job-decision" :title="$this->decisionTitle()" x-on:dialog-closed="$wire.call('clearDecisionForm')">
         <form wire:submit="commitDecision" class="grid gap-4 p-5">
             @if ($this->decisionWantsReason())

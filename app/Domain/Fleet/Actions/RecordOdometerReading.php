@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Records a measurement and moves the truck's projection forward (§4.3, D1).
+ * Records a measurement and moves the truck's projection forward (D1).
  *
  * Two rules make the timeline honest:
  *

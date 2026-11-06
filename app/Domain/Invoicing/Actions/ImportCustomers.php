@@ -16,7 +16,7 @@ use App\Domain\Kernel\Cutover\Support\ImportValues;
 use InvalidArgumentException;
 
 /**
- * §15.2 Phase 1 — the customer master file.
+ * Phase 1 — the customer master file.
  *
  * A row is matched by code when it carries one, otherwise by name; both keys are unique per company,
  * which is why validation preloads them. The check is deliberately done here rather than left to the

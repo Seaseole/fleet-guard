@@ -5,8 +5,8 @@
     framework's — is what the 25 `->links()` call sites render. It overrides the package view because the
     package's own copy sits in vendor/ and is outside the Tailwind scan declared in resources/css/app.css:
     its classes reached the markup with no matching CSS, which is why the control arrived visually unstyled.
-    It was also cold-grey on a warm-canvas app (§2.1) and marked the current page with a one-shade difference
-    that read as a disabled button rather than as "you are here" (§3, action first).
+    It was also cold-grey on a warm-canvas app and marked the current page with a one-shade difference
+    that read as a disabled button rather than as "you are here" (action first).
 
     The Livewire contract that must survive: wire:click carrying the paginator's page name (cutover, fuel and
     maintenance each hold two paginators on one screen), the per-page wire:key, and scroll-into-view.
@@ -23,7 +23,8 @@
         : '';
 
     // One shape for every control in the bar, so a disabled step and an available one hold the same box.
-    $step = 'inline-flex size-8 shrink-0 items-center justify-center rounded-fg-md border border-fg-line-strong text-sm text-fg-ink-secondary transition duration-(--t-fast) ease-(--ease-standard) hover:bg-fg-surface-sunk hover:text-fg-ink disabled:pointer-events-none disabled:opacity-45';
+    // Mobile: 44px (size-11) touch target; Desktop: 32px (size-8)
+    $step = 'inline-flex size-11 shrink-0 sm:size-8 items-center justify-center rounded-fg-md border border-fg-line-strong text-sm text-fg-ink-secondary transition duration-(--t-fast) ease-(--ease-standard) hover:bg-fg-surface-sunk hover:text-fg-ink disabled:pointer-events-none disabled:opacity-45';
 @endphp
 
 @if ($paginator->hasPages())
@@ -69,7 +70,7 @@
                             @if ($page == $paginator->currentPage())
                                 <span
                                     aria-current="page"
-                                    class="inline-flex size-8 shrink-0 items-center justify-center rounded-fg-md border border-accent bg-accent-soft fg-numeric text-sm font-medium text-fg-ink"
+                                    class="inline-flex size-11 shrink-0 sm:size-8 items-center justify-center rounded-fg-md border border-accent bg-accent-soft fg-numeric text-sm font-medium text-fg-ink"
                                 >{{ $page }}</span>
                             @else
                                 <button
@@ -78,7 +79,7 @@
                                     x-on:click="{{ $scrollIntoViewJsSnippet }}"
                                     wire:loading.attr="disabled"
                                     aria-label="{{ __('Go to page :page', ['page' => $page]) }}"
-                                    class="inline-flex size-8 shrink-0 items-center justify-center rounded-fg-md border border-transparent text-sm fg-numeric text-fg-ink-secondary transition duration-(--t-fast) ease-(--ease-standard) hover:bg-fg-surface-sunk hover:text-fg-ink"
+                                    class="inline-flex size-11 shrink-0 sm:size-8 items-center justify-center rounded-fg-md border border-transparent text-sm fg-numeric text-fg-ink-secondary transition duration-(--t-fast) ease-(--ease-standard) hover:bg-fg-surface-sunk hover:text-fg-ink"
                                 >{{ $page }}</button>
                             @endif
                         </span>

@@ -16,7 +16,7 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.3 TRAILER — assigned beside a truck, not owned by one.
+ * TRAILER — assigned beside a truck, not owned by one.
  *
  * The same state words as a truck because the dispatcher asks the same question of both, and the
  * same reason rule on disposal. `odometer_km` is kept because some trailers carry hubodometers;

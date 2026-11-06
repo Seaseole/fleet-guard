@@ -8,10 +8,12 @@
         'danger' => ['class' => 'border-danger/30 bg-danger-soft text-danger', 'icon' => 'x-circle'],
     ];
 
+    // A danger alert reports a failure the reader must not miss, so it interrupts; everything else is status.
+    $isDanger = $tone === 'danger';
     $tone = $tones[$tone] ?? $tones['info'];
 @endphp
 
-<div role="status" {{ $attributes->class(['flex items-start gap-3 rounded-fg-md border px-4 py-3 text-sm', $tone['class']]) }}>
+<div role="{{ $isDanger ? 'alert' : 'status' }}" {{ $attributes->class(['flex items-start gap-3 rounded-fg-md border px-4 py-3 text-sm', $tone['class']]) }}>
     <x-ui.icon :name="$tone['icon']" class="mt-0.5" />
 
     <div class="grid gap-0.5">

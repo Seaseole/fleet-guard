@@ -9,7 +9,7 @@ use App\Domain\Invoicing\Models\Customer;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Adds a customer to the books (§4.1, D1).
+ * Adds a customer to the books (D1).
  *
  * There is no secret to stage here, so the Action is the thin write it looks like: the DTO has
  * already refused a malformed term and the page has checked the two per-company unique keys. What

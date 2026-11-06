@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Domain\Maintenance;
 
 /**
- * The parts catalogue's typing vocabulary (§4.3 PART `category`).
+ * The parts catalogue's typing vocabulary (PART `category`).
  *
- * §4.3 leaves the column's values open, which is right for a store that buys whatever the trucks
+ * The design leaves the column's values open, which is right for a store that buys whatever the trucks
  * need — but a free-text category would make "brakes", "Brake" and "brake pads" three filters.
  * These are the broad shelves a heavy-vehicle store is actually organised into; a new shelf is a
  * migration to the CHECK, deliberately, so the vocabulary cannot drift silently.

@@ -18,20 +18,20 @@ use Carbon\CarbonInterface;
 use Illuminate\Support\LazyCollection;
 
 /**
- * §14.1's `doc_expiry` source — the nightly derivation §10.8 describes, as an emitter rather than an
+ * The `doc_expiry` source — the nightly derivation the design describes, as an emitter rather than an
  * editor of truth.
  *
- * §10.8 is explicit that `expired` is *not* a transition, and {@see Validity} already derives the answer
+ * The design is explicit that `expired` is *not* a transition, and {@see Validity} already derives the answer
  * from `expires_on` in one place. So this class asks that enum the question and turns the answer into a
  * candidate. It writes nothing to `documents`: a job that flipped a column to say "expired" would put a
- * second definition of expiry in the app, which is the exact failure §10.8's derivation sentence exists
+ * second definition of expiry in the app, which is the exact failure the derivation sentence exists
  * to prevent, and it would make the register disagree with the screen above it.
  *
- * **One alert per paper per expiry date, escalated as the bands tighten.** §14.1's cooldown key is
+ * **One alert per paper per expiry date, escalated as the bands tighten.** The cooldown key is
  * written as `type + subject + bucket`, and the literal reading puts the threshold band in the bucket —
  * which gives a licence that lapses without anyone acting on it four open rows (`60d`, `30d`, `14d`,
  * `7d`) plus a fifth once it is actually expired. The register would then be a list of the same problem
- * at four ages, and "how many things need me" — the first question §DESIGN-SYSTEM says the screen
+ * at four ages, and "how many things need me" — the first question the design says the screen
  * answers — would be wrong by construction. The bucket here is therefore the *condition instance*
  * (`2026-12-01`), and the band is carried on the row: one paper, one row, and every threshold crossing
  * still goes out as a fresh delivery. Renew the licence and the date changes, which is a new instance and
@@ -57,7 +57,7 @@ final class DocumentExpirySource implements ReminderSource
     }
 
     /**
-     * §14.1's 60/30/14/7 ladder, one row per expiring document kind, addressed to the role that moves
+     * The 60/30/14/7 ladder, one row per expiring document kind, addressed to the role that moves
      * the paper.
      *
      * @return list<Threshold>
@@ -94,8 +94,8 @@ final class DocumentExpirySource implements ReminderSource
         $widest = $this->widestConfiguredBand($thresholds);
 
         // One bounded query, then the band matching happens in PHP: the horizon is a *company business
-        // day* (§2), and pushing that comparison into SQL would compare a stored date against a
-        // differently-zoned "today" — the same two-hours-early error §20.7 records for a licence read
+        // day*, and pushing that comparison into SQL would compare a stored date against a
+        // differently-zoned "today" — the same two-hours-early error the design records for a licence read
         // as expired from 22:00 UTC.
         /** @var Document $document */
         foreach ($this->expiringDocuments($widest, $businessToday) as $document) {
@@ -204,12 +204,12 @@ final class DocumentExpirySource implements ReminderSource
     {
         // The workshop papers are the Workshop Manager's; a contract is the Owner's to chase. Everything
         // that travels with a truck belongs to whoever dispatches it. All editable by the Owner, because
-        // these are rows (§14.1) and not constants.
+        // these are rows and not constants.
         return match ($type) {
             DocumentType::WorkOrder, DocumentType::Maintenance => ['workshop_manager'],
             DocumentType::Contract => ['owner'],
-            // A licence or permit expiry blocks a dispatch (§10.2), so the person who books the
-            // truck hears about it alongside the Operations Manager — §14.1's own worked example.
+            // A licence or permit expiry blocks a dispatch, so the person who books the
+            // truck hears about it alongside the Operations Manager — the design's own worked example.
             DocumentType::Licence, DocumentType::Permit => ['operations_manager', 'dispatcher'],
             default => ['operations_manager'],
         };

@@ -12,7 +12,7 @@ use Egough\LaravelSettings\Support\Caster;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The one door to company-held settings (§14.2, T4).
+ * The one door to company-held settings (T4).
  *
  * The package's `SettingsRepository` contract is implemented here over `companies.settings`
  * rather than its own global table: a setting without a company is the tenant-less store T4

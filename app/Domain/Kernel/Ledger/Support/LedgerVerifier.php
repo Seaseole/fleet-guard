@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Recomputes the ledger from its own lines and reports every place the header row disagrees
- * (§6.3 layer 2's "trusted but verified", §6.3 layer 5's operational control).
+ * (layer 2's "trusted but verified", layer 5's operational control).
  *
  * This exists because the denormalised `total_debit`/`total_credit`/`line_count` are what reports
  * read, and a CHECK constraint cannot aggregate across rows. Drift is therefore possible in a way
@@ -47,7 +47,7 @@ final class LedgerVerifier
             SQL);
 
         foreach ($rows as $row) {
-            // Each finding names the company it belongs to, because §14.6 turns it into an alert row
+            // Each finding names the company it belongs to, because the design turns it into an alert row
             // whose company_id is NOT NULL: drift in one tenant must never be reported to another.
             $label = ['entry' => (string) $row->id, 'entry_no' => (string) $row->entry_no, 'company' => (int) $row->company_id];
 
@@ -115,7 +115,7 @@ final class LedgerVerifier
 
         // 4. Orphans: a line whose entry is not there cannot be reached by the browser, so it is
         //    invisible money. The FK makes this near-impossible and the check costs one query.
-        //    Grouped by company rather than counted across the table, because §14.6 turns each row of
+        //    Grouped by company rather than counted across the table, because the design turns each row of
         //    this into an alert with a tenant on it.
         $orphanRows = DB::table('gl_journal_lines')
             ->leftJoin('gl_journal_entries', 'gl_journal_entries.id', '=', 'gl_journal_lines.entry_id')
@@ -137,7 +137,7 @@ final class LedgerVerifier
         // 5. Immutability is only real if nobody forgot to put the hatch back.
         //
         // This one finding has no `company`, deliberately: `gl_ledger_barrier` is a single global row, so
-        // there is no tenant to attribute it to, and §14.6's engine reports what it cannot attribute
+        // there is no tenant to attribute it to, and the engine reports what it cannot attribute
         // instead of inventing one. Filing it under company 1 would hide a deployment-wide fact inside one
         // company's register.
         if (DB::table('gl_ledger_barrier')->where('id', 1)->exists()) {
@@ -148,7 +148,7 @@ final class LedgerVerifier
             ];
         }
 
-        // Every finding leaves this method with the same keys and the same types, because §14.6 reads
+        // Every finding leaves this method with the same keys and the same types, because the design reads
         // `company` off them to decide whose alert to raise. The drift rows are built as
         // `$label + ['finding' => …]` and the two hand-built rows are not, so without this the returned
         // arrays differ in exactly the field the alert engine cannot afford to guess — and the barrier row

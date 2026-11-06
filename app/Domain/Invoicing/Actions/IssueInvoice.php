@@ -34,37 +34,37 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
- * §15 phase 4's first door: a delivered trip becomes a fiscal document, numbered and posted (§7.4, §6.8).
+ * Phase 4's first door: a delivered trip becomes a fiscal document, numbered and posted.
  *
  * One Action, one transaction, five things that must not happen separately:
  *
  * 1. **The charges are claimed** through Operations' own door, so a delivery cannot be billed twice and a
  *    lost race rolls back cleanly — see {@see MarkTripChargesBilled}.
- * 2. **The number is allocated at issue**, inside this transaction (§7.4): `INV-{PERIOD}-{SEQ:7}` comes
+ * 2. **The number is allocated at issue**, inside this transaction: `INV-{PERIOD}-{SEQ:7}` comes
  *    from the row-locked sequence, gaps mean a missing fiscal document rather than a slow month, and a
- *    rolled-back issue un-burns its value. The invoice is created already `issued` because §7.4 has no
+ *    rolled-back issue un-burns its value. The invoice is created already `issued` because the design has no
  *    draft that spends a number — `invoices_number_only_when_issued` would refuse one.
- * 3. **VAT is computed per line and rounded once** (§5.5), from the rate effective on the issue date, so a
+ * 3. **VAT is computed per line and rounded once**, from the rate effective on the issue date, so a
  *    December invoice printed in March still carries December's percentage.
- * 4. **The ledger is posted through its only door** (§6.3): Dr `1150` for the gross, Cr each line's own
+ * 4. **The ledger is posted through its only door**: Dr `1150` for the gross, Cr each line's own
  *    revenue account for the net, Cr `2125 Output VAT` for the tax. Revenue is credited at *line* level
- *    because `4100` requires truck, trip **and** customer (§6.1), which is why a consolidated invoice could
- *    never post one lump sum (§4.2).
- * 5. **The trip's projection is refreshed** (§6.6), because this is the first posting that puts revenue on
- *    it — §20.17 left `revenue_base` honestly at zero until an invoice existed.
+ *    because `4100` requires truck, trip **and** customer, which is why a consolidated invoice could
+ *    never post one lump sum.
+ * 5. **The trip's projection is refreshed**, because this is the first posting that puts revenue on
+ *    it — left `revenue_base` honestly at zero until an invoice existed.
  *
- * **Currency boundary of this slice.** The invoice is issued in the company's own base currency. A job
- * quoted in ZAR is refused with a sentence that names the gap rather than converted here, because the rate
- * an invoice is issued at is §5.2's decision and deriving one from a chargeable's frozen base figure would
- * invent a rate the contract never agreed. Foreign-currency issuance is the FX slice, and it is the only
- * reason the FX block on `invoices` is unused here.
+ * **Currency, since.** The invoice is issued in the currency the job was quoted in. The
+ * rate on its block is not invented — it is *derived* from the two figures the chargeables
+ * already froze, and marked `contract` because that is where it came from. What the
+ * books carry is the sum of the frozen bases, never a re-computation, so the corridor can bill
+ * in ZAR and the trial balance still ties.
  */
 final class IssueInvoice
 {
-    /** The AR control account every issued invoice debits (§6.8). */
+    /** The AR control account every issued invoice debits. */
     private const RECEIVABLE_ACCOUNT = '1150';
 
-    /** The output-VAT account sales credit (§6.8; `2120` stays the purchase side Phase 3 already used). */
+    /** The output-VAT account sales credit (; `2120` stays the purchase side Phase 3 already used). */
     private const OUTPUT_VAT_ACCOUNT = '2125';
 
     public function __construct(
@@ -80,7 +80,7 @@ final class IssueInvoice
     public function __invoke(string $tripId, ?int $actorId = null): Invoice
     {
         if (! Gate::allows('invoices.issue')) {
-            throw new InvalidArgumentException('Issuing an invoice needs the invoices.issue ability (§9.3).');
+            throw new InvalidArgumentException('Issuing an invoice needs the invoices.issue ability.');
         }
 
         // The idempotency key is the trip, not a caller-supplied uuid: issuing the same trip twice is a
@@ -101,7 +101,7 @@ final class IssueInvoice
         if ($bill->charges === []) {
             throw new InvalidArgumentException(sprintf(
                 'Trip %s has no charges ready to bill. A delivery earns its chargeable when the office approves the '
-                .'proof, and an invoice for nothing is not a zero-value invoice (§10.4).',
+                .'proof, and an invoice for nothing is not a zero-value invoice.',
                 $bill->tripNo,
             ));
         }
@@ -118,7 +118,7 @@ final class IssueInvoice
         if (! PaymentTerms::isValid($terms)) {
             throw new InvalidArgumentException(sprintf(
                 'Customer %s has payment terms "%s", which are not a term the ageing axis can read. Set cash or '
-                .'net_<days> before issuing (§4.1).',
+                .'net_<days> before issuing.',
                 $customer->name,
                 $customer->payment_terms,
             ));
@@ -126,17 +126,11 @@ final class IssueInvoice
 
         $baseCurrency = CurrentCompany::model()->base_currency_code;
 
-        if ($bill->currencyCode !== $baseCurrency) {
-            throw new InvalidArgumentException(sprintf(
-                'Trip %s was quoted in %s and this invoice can only be issued in %s. Foreign-currency issuance '
-                .'arrives with §5.2\'s FX slice — an invoice rate invented here would be a rate nobody agreed.',
-                $bill->tripNo,
-                $bill->currencyCode,
-                $baseCurrency,
-            ));
-        }
+        // The discipline, not a refusal: a ZAR bill bills in ZAR. What the invoice will carry
+        // in the books is the sum of the chargeables' *own* frozen base amounts — the
+        // rate below is derived from those two facts, never imposed on them.
 
-        $this->assertBaseMatchesTheCharge($bill->charges, $bill->tripNo);
+        $this->assertBaseMatchesTheCharge($bill->charges, $bill->tripNo, $bill->currencyCode, $baseCurrency);
 
         $issuedOn = Carbon::now()->startOfDay();
         $dueOn = PaymentTerms::dueOn($terms, $issuedOn);
@@ -144,7 +138,7 @@ final class IssueInvoice
         $rate = TaxRate::effectiveOn($issuedOn)
             ?? throw new InvalidArgumentException(
                 'No VAT rate applies on '.$issuedOn->toDateString().'. Seed the tax_rates register (TaxRateSeeder '
-                .'provides §17 Q4\'s 12% default) before issuing a tax invoice — an invoice with no rate would '
+                .'provides Q4\'s 12% default) before issuing a tax invoice — an invoice with no rate would '
                 .'silently report zero VAT.',
             );
 
@@ -153,17 +147,49 @@ final class IssueInvoice
         $outputVat = $accounts[self::OUTPUT_VAT_ACCOUNT] ?? null;
 
         if ($receivable === null) {
-            throw new InvalidArgumentException('Account 1150 Accounts receivable is not in this company\'s chart, so the invoice cannot be posted (§6.2).');
+            throw new InvalidArgumentException('Account 1150 Accounts receivable is not in this company\'s chart, so the invoice cannot be posted.');
         }
 
         if ($outputVat === null) {
-            throw new InvalidArgumentException('Account 2125 Output VAT is not in this company\'s chart, so the invoice cannot be posted (§6.8).');
+            throw new InvalidArgumentException('Account 2125 Output VAT is not in this company\'s chart, so the invoice cannot be posted.');
         }
 
         $lines = $this->buildLines($bill->charges, $rate, $accounts);
         $netMinor = array_sum(array_column($lines, 'amount'));
         $taxMinor = array_sum(array_column($lines, 'tax_amount'));
         $grossMinor = $netMinor + $taxMinor;
+        $baseNetMinor = array_sum(array_column($lines, 'base_amount'));
+        $baseTaxMinor = array_sum(array_column($lines, 'tax_base'));
+        $grossBaseMinor = $baseNetMinor + $baseTaxMinor;
+
+        // On a foreign document: the rate is *derived* from the two frozen totals — the
+        // lines' base amounts were frozen when the chargeables were priced, and the design forbids
+        // recomputing any of them from a rate read today. The derived rate is informational
+        // (8 dp HALF_UP, Money's own implied-rate helper); `contract` names where it came from:
+        // the agreed quote, not the bulletin.
+        $documentCurrency = $bill->currencyCode;
+        $isForeign = $documentCurrency !== $baseCurrency;
+
+        // `invoices_rate_positive` is a NOT NULL CHECK, and the implied-rate helper divides by the
+        // foreign total, so a foreign bill with nothing to bill has no rate to freeze. Refusing it
+        // names the two real remedies instead of leaving a 0.00000001 in the ledger's path.
+        if ($isForeign && ($grossMinor <= 0 || $grossBaseMinor <= 0)) {
+            throw new InvalidArgumentException(sprintf(
+                'Trip %s bills in %s but its frozen gross is %s minor units against a base gross of %s %s — a '
+                .'foreign invoice with no amount has no rate to freeze. Credit the chargeables or bill the '
+                .'trip in %s.',
+                $bill->tripNo,
+                $documentCurrency,
+                $grossMinor,
+                $grossBaseMinor,
+                $baseCurrency,
+                $baseCurrency,
+            ));
+        }
+
+        $fxRate = $isForeign
+            ? Money::ofMinor($grossMinor, $documentCurrency)->rateToBaseImpliedBy(Money::ofMinor($grossBaseMinor, $baseCurrency))
+            : '1';
 
         $description = sprintf(
             'Trip %s · %s · %d line%s',
@@ -176,12 +202,13 @@ final class IssueInvoice
         return DB::transaction(function () use (
             $tripId, $actorId, $bill, $customer, $terms, $dueOn, $issuedOn, $rate, $lines, $accounts,
             $netMinor, $taxMinor, $grossMinor, $receivable, $outputVat, $baseCurrency, $description,
+            $documentCurrency, $fxRate, $isForeign, $baseNetMinor, $baseTaxMinor, $grossBaseMinor,
         ): Invoice {
             // 1. Claim first: the contested resource is the delivery, so the refusal (if any) happens
             //    before a fiscal number is spent or a journal entry is written.
             ($this->claimCharges)($bill->tripId, array_map(static fn (array $line): string => $line['chargeable_id'], $lines));
 
-            // 2. §7.4 — the number this document will carry, allocated under the sequence row lock.
+            // 2. The number this document will carry, allocated under the sequence row lock.
             $number = $this->numbers->allocate('invoice', $issuedOn, $actorId);
 
             $invoice = Invoice::create([
@@ -194,19 +221,20 @@ final class IssueInvoice
                 'issue_date' => $issuedOn->toDateString(),
                 'due_on' => $dueOn->toDateString(),
                 'terms_snapshot' => $terms,
-                // Base currency throughout in this slice, so §5.2's block is the identity: rate 1 and the
-                // base amount equal to the document amount.
-                'currency_code' => $baseCurrency,
+                // Verbatim. A base bill is the identity block shipped; a foreign one
+                // carries its currency's totals beside the frozen base totals, the derived rate
+                // marked `contract` because it came from the quote, not a rate feed.
+                'currency_code' => $documentCurrency,
                 'amount' => $netMinor,
-                'fx_rate' => '1',
-                'fx_rate_source' => FxRateSource::Manual->value,
+                'fx_rate' => $fxRate,
+                'fx_rate_source' => $isForeign ? FxRateSource::Contract->value : FxRateSource::Manual->value,
                 'fx_rate_date' => $issuedOn->toDateString(),
                 'base_currency_code' => $baseCurrency,
-                'base_amount' => $netMinor,
+                'base_amount' => $baseNetMinor,
                 'tax_amount' => $taxMinor,
-                'tax_base' => $taxMinor,
+                'tax_base' => $baseTaxMinor,
                 'balance_amount' => $grossMinor,
-                'balance_base' => $grossMinor,
+                'balance_base' => $grossBaseMinor,
                 'source_uuid' => $this->sourceUuid($tripId),
                 'issued_by' => $actorId,
                 'issued_at' => Carbon::now(),
@@ -225,7 +253,7 @@ final class IssueInvoice
                     'revenue_account_code' => $line['line_kind']->accountCode(),
                     'quantity_x100' => 100,
                     'unit_price_minor' => $line['amount'],
-                    'currency_code' => $baseCurrency,
+                    'currency_code' => $documentCurrency,
                     'amount' => $line['amount'],
                     'base_amount' => $line['base_amount'],
                     'tax_rate_id' => $rate->id,
@@ -254,7 +282,7 @@ final class IssueInvoice
                 actorId: $actorId,
             );
 
-            // 5. Revenue is now on the ledger, so the trip's projection can finally carry it (§20.17).
+            // 5. Revenue is now on the ledger, so the trip's projection can finally carry it.
             ($this->refreshRollup)($bill->tripId);
 
             return $invoice->refresh()->load('lines');
@@ -262,7 +290,7 @@ final class IssueInvoice
     }
 
     /**
-     * One line per chargeable, with its VAT rounded at line level (§5.5).
+     * One line per chargeable, with its VAT rounded at line level.
      *
      * The line's "quantity" is 100 — one unit at the chargeable's own price — because a chargeable is
      * already the agreed amount for a delivered quantity; splitting it into tonnes here would invent a
@@ -280,13 +308,13 @@ final class IssueInvoice
         foreach (array_values($charges) as $index => $charge) {
             $kind = InvoiceLineKind::tryFrom($charge->type->value)
                 ?? throw new InvalidArgumentException(sprintf(
-                    'Chargeable type "%s" has no invoice line kind (§4.1), so it cannot be billed.',
+                    'Chargeable type "%s" has no invoice line kind, so it cannot be billed.',
                     $charge->type->value,
                 ));
 
             if (! isset($accounts[$kind->accountCode()])) {
                 throw new InvalidArgumentException(sprintf(
-                    'Account %s is not in this company\'s chart, so a %s line cannot be posted (§6.8).',
+                    'Account %s is not in this company\'s chart, so a %s line cannot be posted.',
                     $kind->accountCode(),
                     $kind->label(),
                 ));
@@ -316,11 +344,11 @@ final class IssueInvoice
     }
 
     /**
-     * §6.8's `InvoiceIssued`, one entry: the receivable gross, the revenue net per line, the VAT once.
+     * The `InvoiceIssued`, one entry: the receivable gross, the revenue net per line, the VAT once.
      *
      * Every line carries `invoice_id` so the AR ageing and the invoice's own journal are a query on the
-     * ledger (§6.2), and the revenue lines carry the leg's dimensions because `4100` cannot be posted
-     * without truck, trip and customer (§6.1). The VAT line carries the customer because output VAT is
+     * ledger, and the revenue lines carry the leg's dimensions because `4100` cannot be posted
+     * without truck, trip and customer. The VAT line carries the customer because output VAT is
      * somebody's, even though the account requires no dimension.
      *
      * @param  list<array{chargeable_id: string, line_kind: InvoiceLineKind, description: string, amount: int, base_amount: int, tax_amount: int, tax_base: int, position: int}>  $lines
@@ -345,7 +373,10 @@ final class IssueInvoice
             new LineDto(
                 accountId: $receivable->id,
                 side: Side::Debit,
-                base: Money::ofMinor($invoice->balance_amount, $baseCurrency),
+                // balance_base, not balance_amount: the receivable the books carry is the frozen
+                // base figure even when the document speaks ZAR (the ledger never learns
+                // a currency it did not freeze at write time).
+                base: Money::ofMinor($invoice->balance_base, $baseCurrency),
                 note: $invoice->reference(),
                 dimensions: array_filter([
                     'customer_id' => $customerId,
@@ -367,7 +398,7 @@ final class IssueInvoice
             $account = $accounts[$line['line_kind']->accountCode()] ?? null;
 
             if ($account === null) {
-                throw new InvalidArgumentException(sprintf('Account %s vanished from the chart between validation and posting (§6.8).', $line['line_kind']->accountCode()));
+                throw new InvalidArgumentException(sprintf('Account %s vanished from the chart between validation and posting.', $line['line_kind']->accountCode()));
             }
 
             $ledgerLines[] = new LineDto(
@@ -419,7 +450,7 @@ final class IssueInvoice
         if (count($customers) !== 1) {
             throw new InvalidArgumentException(sprintf(
                 'Trip %s carries charges for %d customers. One invoice is addressed to one party; a consolidated '
-                .'billing run groups by customer (§10.4).',
+                .'billing run groups by customer.',
                 $tripNo,
                 count($customers),
             ));
@@ -432,7 +463,7 @@ final class IssueInvoice
         foreach ($charges as $charge) {
             if ($charge->currencyCode !== $currency) {
                 throw new InvalidArgumentException(sprintf(
-                    'Trip %s carries charges in both %s and %s. One document states one currency (§5.2).',
+                    'Trip %s carries charges in both %s and %s. One document states one currency.',
                     $tripNo,
                     $currency,
                     $charge->currencyCode,
@@ -445,7 +476,7 @@ final class IssueInvoice
     {
         if ($truckId <= 0) {
             throw new InvalidArgumentException(sprintf(
-                'Trip %s has no truck, so its freight line cannot name the leg account 4100 requires (§6.1). '
+                'Trip %s has no truck, so its freight line cannot name the leg account 4100 requires. '
                 .'Plan and dispatch the trip first.',
                 $tripNo,
             ));
@@ -453,19 +484,33 @@ final class IssueInvoice
     }
 
     /**
-     * When the document and the base currency are the same, the chargeable's two figures must agree —
-     * a chargeable whose `base_amount` differs from its `amount` in its own currency would make the
-     * invoice's FX block a lie (§5.2), so it is refused rather than posted.
+     * The identity check that made the base-only slice safe, widened for rather than
+     * dropped: in base currency, amount and base must still match exactly (rate 1 is a fact,
+     * and a chargeable that broke it was written by a defect — billing one would make the
+     * invoice's FX block a lie). In a foreign currency the pair is allowed to differ —
+     * that difference *is* the conversion — but each chargeable's own figures must be
+     * internally sane: positive quoted amount, positive booked base, no sign games.
      *
      * @param  list<BillableCharge>  $charges
      */
-    private function assertBaseMatchesTheCharge(array $charges, string $tripNo): void
+    private function assertBaseMatchesTheCharge(array $charges, string $tripNo, string $documentCurrency, string $baseCurrency): void
     {
         foreach ($charges as $charge) {
-            if ($charge->baseAmountMinor !== $charge->amountMinor) {
+            if ($charge->amountMinor <= 0 || $charge->baseAmountMinor <= 0) {
+                throw new InvalidArgumentException(sprintf(
+                    'The charge "%s" on trip %s carries a non-positive figure (%d %s / %d base); nothing sane can be billed from it.',
+                    $charge->description,
+                    $tripNo,
+                    $charge->amountMinor,
+                    $charge->currencyCode,
+                    $charge->baseAmountMinor,
+                ));
+            }
+
+            if ($documentCurrency === $baseCurrency && $charge->baseAmountMinor !== $charge->amountMinor) {
                 throw new InvalidArgumentException(sprintf(
                     'The charge "%s" on trip %s says %d %s but %d in base currency. In one currency those are the '
-                    .'same number, so the chargeable is inconsistent and cannot be billed (§5.3).',
+                    .'same number, so the chargeable is inconsistent and cannot be billed.',
                     $charge->description,
                     $tripNo,
                     $charge->amountMinor,

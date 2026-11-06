@@ -9,12 +9,12 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Laravel's `DatabaseNotification` schema, verbatim (§14.1's delivery records).
+     * Laravel's `DatabaseNotification` schema, verbatim (the delivery records).
      *
      * This table is why the bell can exist at all. `App\Models\User` has used the `Notifiable` trait
      * since slice 5, and the framework's `database` channel writes straight into `notifications` — a
      * table the skeleton never created and nothing noticed, because no code had sent a database
-     * notification yet. Adding it here is not new design: it is the half of §14.1's "notifications are
+     * notification yet. Adding it here is not new design: it is the half of the "notifications are
      * a delivery of an alert" that had no destination.
      *
      * The bell reads *this* table rather than `alerts` because "unread" is a property of a person and
@@ -23,7 +23,7 @@ return new class extends Migration
      * one `read_at` column on the alert could only ever belong to one of them.
      *
      * The `morphs('notifiable')` index is widened to lead with the columns the bell actually filters
-     * on: an unread count runs on every page render (§DESIGN-SYSTEM's topbar), so it must be an index
+     * on: an unread count runs on every page render (the topbar), so it must be an index
      * seek rather than a scan of every delivery the company has ever made.
      */
     public function up(): void

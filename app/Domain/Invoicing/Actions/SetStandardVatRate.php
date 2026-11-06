@@ -17,7 +17,7 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
- * §17 Q4 / §20.37 — the company's standard VAT rate, changed where an Owner can reach it.
+ * Q4 / the company's standard VAT rate, changed where an Owner can reach it.
  *
  * The Application-settings field is a front door onto this Action, not onto the settings blob: the
  * register is the only place a VAT rate may live, because a rate is a **dated window** — an invoice
@@ -42,7 +42,7 @@ use InvalidArgumentException;
  */
 final class SetStandardVatRate
 {
-    /** The scale §5.5 keeps percentages at: 12.00% is 120 000. */
+    /** The scale the design keeps percentages at: 12.00% is 120 000. */
     private const RATE_SCALE = 10_000;
 
     public function __construct(
@@ -52,12 +52,12 @@ final class SetStandardVatRate
     public function execute(float $percent, ?int $actorId = null): TaxRate
     {
         if (! Gate::allows('settings.manage')) {
-            throw new InvalidArgumentException('Changing the company\'s standard VAT rate needs the settings.manage ability (§9.3).');
+            throw new InvalidArgumentException('Changing the company\'s standard VAT rate needs the settings.manage ability.');
         }
 
         if ($percent <= 0 || $percent > 100) {
             throw new InvalidArgumentException(sprintf(
-                'A standard rate must be more than zero and at most 100 per cent; "%s" is neither. A line that carries no VAT is a zero-rated kind, not a 0%% rate — the register\'s own CHECK says so (§17 Q4).',
+                'A standard rate must be more than zero and at most 100 per cent; "%s" is neither. A line that carries no VAT is a zero-rated kind, not a 0%% rate — the register\'s own CHECK says so (Q4).',
                 rtrim(rtrim(number_format($percent, 4, '.', ''), '0'), '.'),
             ));
         }
@@ -106,7 +106,7 @@ final class SetStandardVatRate
             }
 
             // Answer 3: close what is open — but only windows that actually started before today, so
-            // `ends_on > starts_on` (§4.2's half-open rule) cannot be violated.
+            // `ends_on > starts_on` (the half-open rule) cannot be violated.
             foreach ($open as $row) {
                 if ($row->starts_on->lessThan($today)) {
                     $row->forceFill(['ends_on' => $today->toDateString(), 'is_default' => false])->save();
@@ -120,7 +120,7 @@ final class SetStandardVatRate
 
             // Force-filled, not mass-assigned: `company_id` is deliberately outside the model's
             // fillable list (a screen must not choose which company a fiscal row belongs to), and the
-            // key is set outside it too — §20.32's defect was a ULID primary key lost exactly that way.
+            // key is set outside it too — the defect was a ULID primary key lost exactly that way.
             $rate = new TaxRate;
             $rate->id = (string) Str::ulid();
             $rate->forceFill([

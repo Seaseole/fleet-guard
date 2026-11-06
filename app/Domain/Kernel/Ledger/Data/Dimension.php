@@ -7,10 +7,10 @@ namespace App\Domain\Kernel\Ledger\Data;
 use App\Domain\Kernel\Ledger\Exceptions\UnknownDimension;
 
 /**
- * The `gl_accounts.allowed_dimension_mask` bit flags (§6.1) and the column each one reads.
+ * The `gl_accounts.allowed_dimension_mask` bit flags and the column each one reads.
  *
  * SEMANTICS, stated because the column name is ambiguous: a bit set on an account means a line
- * posted to that account MUST carry the dimension. §6.1 gives the reason — "this account must
+ * posted to that account MUST carry the dimension. The design gives the reason — "this account must
  * carry a truck" catches the class of posting bug where a fuel line loses its truck and quietly
  * lands in overheads. A mask that merely declared what is *permitted* would not catch that: the
  * line would post, the truck would be null, and the overhead would absorb the cost.
@@ -27,7 +27,7 @@ enum Dimension: int
     case Driver = 8;
     case CostCentre = 16;
 
-    /** The `gl_journal_lines` column that carries this dimension (§6.2 typed columns). */
+    /** The `gl_journal_lines` column that carries this dimension (typed columns). */
     public function column(): string
     {
         return match ($this) {

@@ -17,10 +17,10 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Str;
 
 /**
- * §16's rule that a delivery earns what the job promised: turn the approved proof into a chargeable.
+ * The rule that a delivery earns what the job promised: turn the approved proof into a chargeable.
  *
  * The input is the **job's quote**, not the trip's loads. The customer agreed a price on the job
- * (§4.1), and a POD that arrives with 32.4 tonnes where the job estimated 32 does not renegotiate
+ *, and a POD that arrives with 32.4 tonnes where the job estimated 32 does not renegotiate
  * the agreement — it says what the agreed basis (per tonne, per trip) is applied to.
  *
  * `source_uuid` is `pod:{id}`, which is the idempotency key: approval retried, a raced click, or a
@@ -101,7 +101,7 @@ final class BuildChargeablesFromPod
 
         // The quote's amount is a rate per tonne, so the charge is rate × delivered quantity. The
         // quantity column is 2 dp, which is the same scale the multiply is rounded at (HALF_UP,
-        // §5.5); parsing it as a string keeps brick from receiving a float's binary noise.
+        // ); Parsing it as a string keeps brick from receiving a float's binary noise.
         $scale = (string) number_format($quantity, 2, '.', '');
 
         return [

@@ -9,9 +9,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
- * §4.4 REMINDER_THRESHOLD — one bucket for one family, and the roles it notifies.
+ * REMINDER_THRESHOLD — one bucket for one family, and the roles it notifies.
  *
- * The column is `family`, not §4.4's `type`, for the reason written on the migration: `alerts.type`
+ * The column is `family`, not the `type`, for the reason written on the migration: `alerts.type`
  * answers *what kind of alert* (`doc_expiry`) and this row answers *what kind of paper* (`licence`).
  * One name for both is how a reviewer joins `doc_expiry` to a threshold row named `doc_expiry` that
  * nothing wrote, and reads the empty result as "reminders are configured".

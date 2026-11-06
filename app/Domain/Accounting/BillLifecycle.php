@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace App\Domain\Accounting;
 
 /**
- * §10.9 — the supplier bill's lifecycle, and the only bill axis that is stored.
+ * The supplier bill's lifecycle, and the only bill axis that is stored.
  *
  * `partially_paid` and `paid` are deliberately not cases here: settlement is derived from the
- * payment rows the way an invoice's settlement is (§10.4), and a stored `paid` would let the
+ * payment rows the way an invoice's settlement is, and a stored `paid` would let the
  * payment slice mutate lifecycle state — which is where gap-free numbering and audit semantics
  * quietly die.
  *
  * A bill is numbered at creation (`BILL-`, continuous, like `WO-`): it is the *supplier's* fiscal
- * document, not ours, so our own reference needs "never reused" rather than §7.4's
+ * document, not ours, so our own reference needs "never reused" rather than the
  * "gap-free at issue". `draft` is therefore not a state without a number, unlike an invoice's.
  */
 enum BillLifecycle: string

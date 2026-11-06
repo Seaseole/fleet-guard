@@ -10,10 +10,10 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * §20.36 — the stores' own stamp: the supplier paper behind a shelf receipt has arrived (or was released).
+ * The stores' own stamp: the supplier paper behind a shelf receipt has arrived (or was released).
  *
  * The mirror of Fuel's `MarkDeliveryBilled`: the receipt posted `Dr 1190 / Cr 2110` at the movement
- * (§20.29), so the bill documents it through this door and never re-expenses it. Accounting asks with
+ *, so the bill documents it through this door and never re-expenses it. Accounting asks with
  * two strings; Maintenance locks its own row and answers. An issue or a count has no supplier paper of
  * its own, so only receipts pass.
  */
@@ -37,7 +37,7 @@ final class MarkStockReceiptBilled
 
             if ($movement->kind !== StockMovementKind::Receipt) {
                 throw new InvalidArgumentException(sprintf(
-                    'Movement %s is a %s, not a receipt — only a receipt has supplier paper behind it; an issue consumed stock the shelf already funded (§20.29).',
+                    'Movement %s is a %s, not a receipt — only a receipt has supplier paper behind it; an issue consumed stock the shelf already funded.',
                     $movement->id,
                     mb_strtolower($movement->kind->label()),
                 ));

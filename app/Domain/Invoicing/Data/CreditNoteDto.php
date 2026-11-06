@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Domain\Invoicing\Data;
 
 /**
- * What a credit note says: why the invoice was wrong, and how much of which billed lines comes off (§10.5).
+ * What a credit note says: why the invoice was wrong, and how much of which billed lines comes off.
  *
- * `lines` is keyed by **invoice line id** rather than expressed as one total, because §6.1's revenue accounts
+ * `lines` is keyed by **invoice line id** rather than expressed as one total, because the revenue accounts
  * require dimensions and a credit has to take the money back from the account and the leg it was credited to.
  * A single lump credit would post to `4900` and leave the freight leg still reading revenue it no longer has.
  *

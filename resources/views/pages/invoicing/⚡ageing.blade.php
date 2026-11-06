@@ -6,16 +6,20 @@ use App\Domain\Invoicing\Data\AgeingRow;
 use App\Domain\Invoicing\Queries\AgeingReport;
 use App\Domain\Kernel\Money\Money;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
+use App\Domain\Reporting\Series\AgeingBuckets;
+use App\Domain\Reporting\Series\ChartWindow;
+use App\Domain\Reporting\Series\Series;
 use Carbon\Carbon;
+use Carbon\CarbonImmutable;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
 /*
- * Receivables ageing (§10.4, §10.6): the AR figure split by how late it is.
+ * Receivables ageing: the AR figure split by how late it is.
  *
  * The buckets are computed from `due_on` against the company's today when this page renders — never read
- * from a stored column, because a stored bucket is wrong every midnight (§10.4). The page therefore has no
+ * from a stored column, because a stored bucket is wrong every midnight. The page therefore has no
  * write path at all: chasing a customer is an email or a phone call, and the statement link hands them the
  * document that shows what they owe.
  *
@@ -47,6 +51,17 @@ new #[Title('Ageing')] class extends Component {
         return AgeingReport::totals($this->rows);
     }
 
+    /**
+     * The bucket ladder drawn — the same door the dashboard's ageing bar reads, so the register,
+     * the picture and the home screen answer with one definition of "over 90 days"
+     * (docs/REDESIGN-CONCEPT.md §3, the reading room).
+     */
+    #[Computed]
+    public function figure(): Series
+    {
+        return app(AgeingBuckets::class)(ChartWindow::trailing(CarbonImmutable::now(CurrentCompany::timezone())));
+    }
+
     public function money(int $minor): string
     {
         $currency = CurrentCompany::model()->base_currency_code;
@@ -56,7 +71,7 @@ new #[Title('Ageing')] class extends Component {
 }; ?>
 
 <div class="grid gap-6">
-    <header class="flex flex-wrap items-start justify-between gap-4">
+    <header class="fg-page-header flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div class="grid gap-1">
             <x-ui.heading size="xl" level="1">{{ __('Ageing') }}</x-ui.heading>
             <x-ui.text>
@@ -71,18 +86,24 @@ new #[Title('Ageing')] class extends Component {
         <x-ui.button variant="outline" :href="route('invoicing.index')" wire:navigate>{{ __('Invoice register') }}</x-ui.button>
     </header>
 
-    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+    {{-- Bento, not six equal tiles (docs/REDESIGN-CONCEPT.md §3): the book's whole is the anchor and
+         the five buckets are its parts — the row should say that in its geometry. --}}
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
         @foreach ([
             ['label' => __('Not yet due'), 'minor' => $this->totals['current']],
             ['label' => __('1–30 days'), 'minor' => $this->totals['d1_30']],
             ['label' => __('31–60 days'), 'minor' => $this->totals['d31_60']],
             ['label' => __('61–90 days'), 'minor' => $this->totals['d61_90']],
             ['label' => __('Over 90 days'), 'minor' => $this->totals['d90_plus']],
-            ['label' => __('Total AR'), 'minor' => $this->totals['total']],
         ] as $bucket)
             <x-ui.metric-card :label="$bucket['label']" :value="$this->money($bucket['minor'])" />
         @endforeach
+
+        <x-ui.metric-card :label="__('Total AR')" :value="$this->money($this->totals['total'])" class="sm:col-span-2 lg:col-span-2" />
     </div>
+
+    {{-- The ladder as bars, above the per-customer rows that explain it. --}}
+    <x-patterns.chart :series="$this->figure" />
 
     <x-ui.card :title="__('By customer')" :description="__('A statement is built for the window below. Outstanding on the statement is everything still owed today, not only what this window invoiced.')">
         <div class="mb-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">

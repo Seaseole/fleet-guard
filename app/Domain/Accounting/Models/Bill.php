@@ -17,18 +17,18 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.2 BILL — the supplier's own document for work the fleet had done for it.
+ * BILL — the supplier's own document for work the fleet had done for it.
  *
- * `status` carries only the lifecycle (§10.9); settlement is **derived** from the supplier payment
- * rows the way §10.4 keeps an invoice's axes apart ({@see self::settlementState()}). `amount` is
+ * `status` carries only the lifecycle; settlement is **derived** from the supplier payment
+ * rows the way the design keeps an invoice's axes apart ({@see self::settlementState()}). `amount` is
  * **gross** — net plus VAT, what the supplier asks for — and the net/tax split lives on the lines,
- * because VAT is computed per line and stored, never re-derived at report time (§5.5).
+ * because VAT is computed per line and stored, never re-derived at report time.
  *
  * `balance_amount` is a projection of `supplier_payment_allocations`, carried so AP ageing and the
- * payable total are a query rather than a walk over every payment (§10.4's rule, copied sideways).
+ * payable total are a query rather than a walk over every payment (the rule, copied sideways).
  *
  * A bill is either free lines that post their own expense, or one linked obligation of Phase 3's that
- * posts nothing (§20.36) — `linked_source` says which, and the schema's CHECK says a bill cannot be both.
+ * posts nothing — `linked_source` says which, and the schema's CHECK says a bill cannot be both.
  *
  * `supplier_id` is Accounting's own row: this is the module that owns suppliers, so the relation is
  * intra-module, unlike the invoice's customer.
@@ -131,8 +131,8 @@ final class Bill extends Model implements AuditableContract
     }
 
     /**
-     * §10.4 axis two, copied to the payable side: derived from the allocation rows' projection,
-     * stored nowhere. `paid` on the status column would be a second truth (§20.36's migration note).
+     * Axis two, copied to the payable side: derived from the allocation rows' projection,
+     * stored nowhere. `paid` on the status column would be a second truth (the migration note).
      */
     public function settlementState(): SettlementState
     {
@@ -143,14 +143,14 @@ final class Bill extends Model implements AuditableContract
         return SettlementState::fromBalance($this->balance_amount, $this->amount);
     }
 
-    /** Any standing application — the answer that decides whether a void may proceed (§20.33's rule 1). */
+    /** Any standing application — the answer that decides whether a void may proceed (the rule 1). */
     public function hasPayments(): bool
     {
         return $this->paymentAllocations()->where('reversed', false)->exists();
     }
 
     /**
-     * §10.4's third axis on the payable side: a live bill whose due date has passed still owes money.
+     * The third axis on the payable side: a live bill whose due date has passed still owes money.
      *
      * Computed against the company's today and stored nowhere — a saved bucket is wrong every midnight,
      * which is exactly why an invoice's ageing is a question rather than a column.

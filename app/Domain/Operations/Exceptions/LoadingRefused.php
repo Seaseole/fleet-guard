@@ -7,7 +7,7 @@ namespace App\Domain\Operations\Exceptions;
 use RuntimeException;
 
 /**
- * §10.2's `assigned → loaded` refusals.
+ * The `assigned → loaded` refusals.
  *
  * Each message carries the number a dispatcher acts on — the limit, the total, and which load pushed
  * it over — because "overloaded" without the arithmetic is a message that gets argued with at the
@@ -31,7 +31,7 @@ final class LoadingRefused extends RuntimeException
     public static function noLoads(string $tripNo): self
     {
         return new self(sprintf(
-            'Trip %s carries no loads. A truck that leaves empty is dispatched from `assigned`, not marked loaded (§10.2).',
+            'Trip %s carries no loads. A truck that leaves empty is dispatched from `assigned`, not marked loaded.',
             $tripNo,
         ));
     }
@@ -62,7 +62,7 @@ final class LoadingRefused extends RuntimeException
     public static function missingWaybill(string $commodity, float $tonnes): self
     {
         return new self(sprintf(
-            'The load "%s" (%s t) has no waybill document attached. §10.2 requires the paper before a trip is marked loaded — this is what a POD is later reconciled against.',
+            'The load "%s" (%s t) has no waybill document attached. The design requires the paper before a trip is marked loaded — this is what a POD is later reconciled against.',
             $commodity,
             self::tonnage($tonnes),
         ));
@@ -71,7 +71,7 @@ final class LoadingRefused extends RuntimeException
     public static function waybillVoided(string $commodity, string $title): self
     {
         return new self(sprintf(
-            'The waybill named for the load "%s" ("%s") is voided. Voided paper is evidence of a decision, not authority to move freight (§10.8).',
+            'The waybill named for the load "%s" ("%s") is voided. Voided paper is evidence of a decision, not authority to move freight.',
             $commodity,
             $title,
         ));

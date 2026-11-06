@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * A physical count of a part, and the variance posted where a variance belongs (§15.2 phase 3).
+ * A physical count of a part, and the variance posted where a variance belongs.
  *
  * Reconciliation is the point of keeping a stock value at all: the units on the shelf are counted,
  * the book says what should be there, and the difference is a fact to record — not an error to hide
@@ -49,7 +49,7 @@ final class CountPartStock
         ?int $actorId = null,
     ): StockMovement {
         if (! Gate::allows('parts.count')) {
-            throw new InvalidArgumentException('Counting the stores shelf is the workshop’s count (§9.3).');
+            throw new InvalidArgumentException('Counting the stores shelf is the workshop’s count.');
         }
 
         if ($countedQuantityX100 < 0) {
@@ -113,8 +113,8 @@ final class CountPartStock
         ?int $actorId,
     ): void {
         $accounts = $this->chart->byCode();
-        $stock = $accounts['1190'] ?? throw new InvalidArgumentException('Account 1190 Parts stock is not in this company\'s chart. Seed the chart first (§6.2).');
-        $variance = $accounts['5315'] ?? throw new InvalidArgumentException('Account 5315 Parts stock variance is not in this company\'s chart. Seed the chart first (§6.2).');
+        $stock = $accounts['1190']?? throw new InvalidArgumentException('Account 1190 Parts stock is not in this company\'s chart. Seed the chart first.');
+        $variance = $accounts['5315']?? throw new InvalidArgumentException('Account 5315 Parts stock variance is not in this company\'s chart. Seed the chart first.');
 
         $amount = Money::ofMinor(abs($value), $base);
         $short = $value < 0;

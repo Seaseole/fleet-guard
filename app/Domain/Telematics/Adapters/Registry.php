@@ -8,7 +8,7 @@ use App\Domain\Telematics\Contracts\GpsProvider;
 use InvalidArgumentException;
 
 /**
- * The adapter map in `fleet.telematics.adapters`, resolved (§16 R6).
+ * The adapter map in `fleet.telematics.adapters`, resolved (R6).
  *
  * Config rather than a `match` because Phase 7 adds providers without editing this file, and a class
  * string in config is still resolved through the container, so an adapter can take dependencies.
@@ -23,7 +23,7 @@ final class Registry
 
         if (! is_string($class) || ! class_exists($class)) {
             throw new InvalidArgumentException(sprintf(
-                'No GPS adapter is registered for "%s". Add it to fleet.telematics.adapters (§16 R6).',
+                'No GPS adapter is registered for "%s". Add it to fleet.telematics.adapters (R6).',
                 $adapter,
             ));
         }

@@ -9,12 +9,12 @@ use Carbon\CarbonImmutable;
 use DateTimeInterface;
 
 /**
- * The complete input to one posting (§6.3 layer 1: the only write path is
+ * The complete input to one posting (layer 1: the only write path is
  * `LedgerService::post(PostingDto)`).
  *
  * `postedOn` is the business date that resolves the period (ADR-0001 #6) and `sourceEventId` is
  * the replay guard — a queued job that runs twice must not post twice. The entry's currency and
- * rate are here, not on the lines, because §6.1 puts the FX block on the entry: one document, one
+ * rate are here, not on the lines, because the design puts the FX block on the entry: one document, one
  * input currency, one rate.
  */
 final class PostingDto

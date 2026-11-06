@@ -39,13 +39,14 @@ new #[Title('Queue health')] class extends Component {
 }; ?>
 
 <section class="space-y-6" wire:poll.30s>
-    <div class="flex flex-wrap items-start justify-between gap-4">
-        <div class="space-y-1">
-            <x-ui.heading level="1">{{ __('Queue health') }}</x-ui.heading>
-            <x-ui.text>{{ __('Deployment-wide background work. Refreshes every 30 seconds.') }}</x-ui.text>
-        </div>
-        <x-ui.button variant="outline" wire:click="$refresh">{{ __('Refresh') }}</x-ui.button>
-    </div>
+    <x-layout.page-header
+        :title="__('Queue health')"
+        :description="__('Deployment-wide background work. Refreshes every 30 seconds.')"
+    >
+        <x-slot:action>
+            <x-ui.button variant="outline" wire:click="$refresh">{{ __('Refresh') }}</x-ui.button>
+        </x-slot:action>
+    </x-layout.page-header>
 
     <div class="grid gap-4 md:grid-cols-2">
         @foreach ($this->queues as $queue)

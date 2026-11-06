@@ -9,7 +9,7 @@ use App\Domain\People\Models\Employee;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Edits an employee's master details (§4.3, D1).
+ * Edits an employee's master details (D1).
  *
  * A blank national-ID field means "leave what is on file", not "erase it" — otherwise every
  * ordinary edit of a phone number would silently drop the only stored identity record. Clearing

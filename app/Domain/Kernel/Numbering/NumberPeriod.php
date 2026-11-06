@@ -10,8 +10,8 @@ use DateTimeInterface;
 use Illuminate\Support\Carbon;
 
 /**
- * Resolves `period_key` from the scope's restart policy (§7.4's ⚠ note: the policy is a setting,
- * not a migration, because §17 Q2/Q3 are still open with the accountant).
+ * Resolves `period_key` from the scope's restart policy (the ⚠ note: the policy is a setting,
+ * not a migration, because Q2/Q3 are still open with the accountant).
  *
  *   continuous     → ''          one unbroken run, used for trips, jobs, work orders
  *   calendar_year  → '2026'
@@ -71,7 +71,7 @@ final class NumberPeriod
     public static function fiscalYearStart(): array
     {
         // NOT NULL with a migration default, so there is no "company hasn't chosen yet" state
-        // to handle — the default IS the choice until the accountant changes it (§17 Q3).
+        // to handle — the default IS the choice until the accountant changes it (Q3).
         $startsOn = CurrentCompany::model()->fiscal_year_starts_on;
 
         return [(int) $startsOn->format('n'), (int) $startsOn->format('j')];

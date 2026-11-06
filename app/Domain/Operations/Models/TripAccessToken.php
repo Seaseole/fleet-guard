@@ -15,14 +15,14 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.1 TRIP_ACCESS_TOKEN — the secret a driver's phone carries instead of an account (§9.6, ADR-0006).
+ * TRIP_ACCESS_TOKEN — the secret a driver's phone carries instead of an account.
  *
  * Two columns are the whole security story and both are hidden from serialisation: `token_hash` and
  * `pin_hash`. Nothing in this codebase can print them back, which is the point — a support query, an
- * audit export or a leaked read of this table yields hashes, and §9.6's "a token cannot read another
+ * audit export or a leaked read of this table yields hashes, and the "a token cannot read another
  * trip" is then the only thing left to attack.
  *
- * There is no `driver()` relation. §13 D5 keeps Operations from importing People's models, so the
+ * There is no `driver()` relation. D5 keeps Operations from importing People's models, so the
  * kiosk asks {@see DriverDirectory} for a name and this row keeps the id.
  *
  * @property string $id
@@ -77,6 +77,7 @@ final class TripAccessToken extends Model implements AuditableContract
         ];
     }
 
+    /** @return BelongsTo<Trip, $this> */
     public function trip(): BelongsTo
     {
         return $this->belongsTo(Trip::class, 'trip_id');
@@ -94,7 +95,7 @@ final class TripAccessToken extends Model implements AuditableContract
     }
 
     /**
-     * The PIN as §9.6 prints it: six digits the driver may type, bound to the link it came with.
+     * The PIN as prints it: six digits the driver may type, bound to the link it came with.
      *
      * Binding matters — an unbound PIN hash would let a PIN lifted from one trip's note be tried against
      * every other token in the company. Constant-time comparison, because this is the check an attacker

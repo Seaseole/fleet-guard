@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
- * An accounting month (§6.5 GL_PERIOD). A row rather than a date calculation so that "2026-10 is
+ * An accounting month (GL_PERIOD). A row rather than a date calculation so that "2026-10 is
  * locked" is data an auditor can read, and so the lock trigger is a single-row lookup.
  *
  * The three statuses mean different things and are not a flag: `open` accepts postings, `closed`

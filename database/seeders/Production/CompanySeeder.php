@@ -26,7 +26,7 @@ final class CompanySeeder extends Seeder
                 'country_code' => 'BW',
                 'fiscal_year_starts_on' => '2000-01-01',
                 'settings' => [
-                    // §17 Q3/Q4: restart policy and VAT mechanics are unresolved, so the
+                    // Q3/Q4: restart policy and VAT mechanics are unresolved, so the
                     // defaults are declared here where one edit changes them everywhere.
                     'numbering' => [
                         'invoice' => ['prefix' => 'INV-', 'pad' => 5, 'restart' => 'financial_year'],

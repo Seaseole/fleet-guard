@@ -10,13 +10,13 @@ use App\Domain\Operations\Models\Job;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The customer went elsewhere, or the fleet could not take the work (§10.3's `→ declined`).
+ * The customer went elsewhere, or the fleet could not take the work (the `→ declined`).
  *
- * Declining is only reachable from `enquiry` or `quoted` — §10.3 puts both exits before acceptance,
+ * Declining is only reachable from `enquiry` or `quoted` — the design puts both exits before acceptance,
  * because a declined *accepted* job is a cancelled one, and the difference matters to anyone reading
  * the board later: one was never won, the other was won and then not run.
  *
- * The reason is mandatory at the machine itself (§10.1), which is why this Action takes it as a
+ * The reason is mandatory at the machine itself, which is why this Action takes it as a
  * positional argument rather than an optional one.
  */
 final class DeclineJob

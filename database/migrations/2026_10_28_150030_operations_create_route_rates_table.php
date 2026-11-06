@@ -11,16 +11,16 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.1 ROUTE_RATE — the price card: what one customer pays for one route on one basis, with a
+     * ROUTE_RATE — the price card: what one customer pays for one route on one basis, with a
      * window it is valid for.
      *
      * Three structural choices:
      *
-     * - **A rate is per customer.** §4.1 makes `customer_id` a required FK, and that is the honest
+     * - **A rate is per customer.** The design makes `customer_id` a required FK, and that is the honest
      *   model for a 21-truck hauler: there is no published tariff, there is "what we agreed with
      *   X". A single "standard" rate would need a nullable customer and then every resolver would
      *   carry a branch for the case nobody actually has.
-     * - **The basis is explicit** (`per_tonne | per_trip | per_km`). §4.1's JOB carries its own
+     * - **The basis is explicit** (`per_tonne | per_trip | per_km`). The JOB carries its own
      *   `rate_type`, so a job can be priced per trip even where the card says per tonne — but the
      *   card itself must say what one number means, or `150 000` is unreadable a year later.
      * - **The window is data, not history rewriting.** A new price closes the old window (valid_to)

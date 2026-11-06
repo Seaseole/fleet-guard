@@ -17,11 +17,11 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Invites a staff account (§9.1: "The Owner invites by email with a role"). Registration is off in
+ * Invites a staff account ("The Owner invites by email with a role"). Registration is off in
  * `config/fortify.php`, so this Action, not a public form, is the only door into `users`.
  *
  * The token is returned once and stored only as a hash. Everything else about the invitation — who
- * asked for it, which role it grants, when it stops working — is on the row, because §9.5's audit
+ * asked for it, which role it grants, when it stops working — is on the row, because the audit
  * trail has to be able to answer "who made this person an Accountant" after the link is gone.
  */
 final class InviteUser
@@ -39,7 +39,7 @@ final class InviteUser
 
         $email = mb_strtolower(trim($email));
 
-        // §9.1's "the Owner invites by email", bounded: five invites to one address in an hour is a
+        // The "the Owner invites by email", bounded: five invites to one address in an hour is a
         // person clicking a button that already worked, and the sixth is the one that says so instead of
         // putting another link in front of someone who has not opened the first five.
         $limit = (array) config('fleet.identity.invite_throttle');
@@ -82,14 +82,14 @@ final class InviteUser
 
             // Set, never filled: `token_hash` is deliberately outside $fillable so no request can
             // plant one, and the plaintext token stays out of the database entirely — the same rule
-            // §9.6 applies to kiosk tokens.
+            // The design applies to kiosk tokens.
             $invitation->setAttribute('token_hash', hash('sha256', $token));
             $invitation->save();
 
             return ['invitation' => $invitation, 'token' => $token];
         });
 
-        // Outside the transaction, deliberately: ADR-0002 §5's "no I/O inside the numbering
+        // Outside the transaction, deliberately: ADR-0002 the "no I/O inside the numbering
         // transaction" is a general rule, and an invitation email that escaped a rolled-back
         // transaction would be a live link to a row that does not exist.
         Mail::to($created['invitation']->email)->queue(

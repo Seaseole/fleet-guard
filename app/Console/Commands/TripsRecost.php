@@ -12,7 +12,7 @@ use App\Domain\Operations\TripCostBucket;
 use Illuminate\Console\Command;
 
 /**
- * §6.6's proof that a trip's stored money still describes its ledger lines.
+ * The proof that a trip's stored money still describes its ledger lines.
  *
  * The rollup is written inside the posting transaction, so drift can only come from a path that
  * posted without asking `RecordTripCost` (a data fix, a Phase 3 fuel issue wired the wrong way, an

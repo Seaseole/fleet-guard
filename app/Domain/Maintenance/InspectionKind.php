@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Maintenance;
 
 /**
- * §4.3 INSPECTION `kind` — when the check happens, and therefore what it looks at.
+ * INSPECTION `kind` — when the check happens, and therefore what it looks at.
  *
  * The checklist is the enum's, not the form's: a pre-trip walk-around, a periodic workshop check and
  * a tachograph check ask different questions, and a register whose item list lived in a Blade file

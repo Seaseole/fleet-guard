@@ -11,15 +11,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * §4.2 BILL_LINE — one line of a supplier bill, and the leg of the fleet its cost belongs to.
+ * BILL_LINE — one line of a supplier bill, and the leg of the fleet its cost belongs to.
  *
  * The line carries `truck_id`/`trip_id` because the expense accounts their categories map to demand
- * them (§6.1's masks: 5100 truck+trip, 5310/5300 truck). A line that could not name its leg would
+ * them (the masks: 5100 truck+trip, 5310/5300 truck). A line that could not name its leg would
  * post `PostingRejected::dimensionRequired` — which is the guard doing its job, not a nuisance: fuel
  * that loses its truck lands in overheads and per-trip margin stops being true.
  *
  * `expense_account_code` is copied at write time from {@see BillCategory::accountCode()}, the same
- * statement-of-intent decision `invoice_lines.revenue_account_code` records (§20.32).
+ * statement-of-intent decision `invoice_lines.revenue_account_code` records.
  *
  * @property string $id
  * @property int $company_id

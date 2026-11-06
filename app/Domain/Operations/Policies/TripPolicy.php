@@ -9,18 +9,18 @@ use App\Domain\Operations\TripStatus;
 use App\Models\User;
 
 /**
- * Who may move a trip (§9.3 "Trips", §10.2's "Who" column).
+ * Who may move a trip ("Trips", the "Who" column).
  *
- * Each method is one edge of §10.2's diagram, because the diagram is where the design says who is
+ * Each method is one edge of the diagram, because the diagram is where the design says who is
  * allowed to make each claim. Two of them are load-bearing beyond the matrix:
  *
  * - `close` is the Accountant's and Owner's act — it freezes a period's costs, so it cannot ride on
  *   `trips.complete`, which a dispatcher holds;
- * - `reopen` is ⚑ re-auth in the middleware stack and Owner-only in §10.2, and the ability name is
+ * - `reopen` is ⚑ re-auth in the middleware stack and Owner-only in, and the ability name is
  *   already in `PermissionCatalogue::REAUTH`, so granting it wider would silently widen the re-auth
  *   promise too.
  *
- * The kiosk principal is not a `User`, so it never reaches this policy: §9.6's token guard asks
+ * The kiosk principal is not a `User`, so it never reaches this policy: The token guard asks
  * {@see Trip::mayBeCompletedByKiosk()} and the scope on the token instead. That is also why nothing
  * here trusts a trip's own status — a driver must not be able to mark their own delivery approved
  * even if the state machine would let the move happen.
@@ -57,7 +57,7 @@ final class TripPolicy
             && $user->can('trips.plan');
     }
 
-    /** §10.2's `planned → assigned`, the transition that carries the licence and papers checks. */
+    /** The `planned → assigned`, the transition that carries the licence and papers checks. */
     public function dispatch(User $user, Trip $trip): bool
     {
         return $trip->company_id === $user->company_id
@@ -106,7 +106,7 @@ final class TripPolicy
             && $user->can('trips.reopen');
     }
 
-    /** §9.3: POD approval belongs to whoever holds `pod.approve` — accounts or dispatch, never a driver. */
+    /** POD approval belongs to whoever holds `pod.approve` — accounts or dispatch, never a driver. */
     public function approvePod(User $user, Trip $trip): bool
     {
         return $trip->company_id === $user->company_id

@@ -12,10 +12,10 @@ use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * §10.7 / §14.4's delivery: the invoice PDF, emailed to the customer.
+ * / 'S delivery: the invoice PDF, emailed to the customer.
  *
  * Everything the mail says and everything it attaches is **captured before the job is queued**. A worker
- * runs with no company context (§20.8's defect: a queued notification re-reading a company-scoped model
+ * runs with no company context (the defect: a queued notification re-reading a company-scoped model
  * threw `ModelNotFoundException`), so a mailable holding the `Invoice` model would either fail in the queue
  * or, worse, render a document from whichever tenant the worker happened to be pinned to. The bytes are the
  * document the clerk saw; a payment allocated after the mail queued cannot silently change what the customer

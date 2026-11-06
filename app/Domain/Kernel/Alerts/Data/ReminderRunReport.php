@@ -9,7 +9,7 @@ namespace App\Domain\Kernel\Alerts\Data;
  *
  * `unalerted` is the reason this class exists. A run that raised eleven alerts and told nobody looks
  * identical, in a log line, to a run that raised eleven and emailed the Operations Manager — and the
- * second is the one §14.1 promises. The command therefore exits 1 when this list is not empty: "a
+ * second is the one the design promises. The command therefore exits 1 when this list is not empty: "a
  * reminder nobody receives is a defect, not a quiet success", which is slice 7's *silence is loud* rule
  * applied to the reminder path instead of to the ledger.
  */

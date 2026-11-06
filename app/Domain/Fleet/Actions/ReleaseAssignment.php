@@ -11,7 +11,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Ends an assignment by writing `to_at` (§4.3, D1).
+ * Ends an assignment by writing `to_at` (D1).
  *
  * Nothing is deleted and nothing is overwritten: the row remains the record of who had the truck
  * between two moments. Releasing an already-closed assignment is refused rather than silently

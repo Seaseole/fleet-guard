@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §6.6's write-time projection on TRIP — the cost buckets `trip_costs` and the ledger feed.
+     * The write-time projection on TRIP — the cost buckets `trip_costs` and the ledger feed.
      *
      * These columns are not a cache: `TripCostRollup` writes them **inside** the same transaction that
      * posts the journal entry, and `trips:recost` recomputes them from `gl_journal_lines` to prove the

@@ -8,10 +8,10 @@ use App\Domain\Fleet\Models\OdometerReading;
 use App\Models\User;
 
 /**
- * Who may record a reading (§9.3 `fleet.odometer.record`).
+ * Who may record a reading (`fleet.odometer.record`).
  *
  * Readings are never edited or deleted: a wrong number is corrected by a new reading marked
- * `disputed` against it, which is the same append-only rule §10.1 applies to state.
+ * `disputed` against it, which is the same append-only rule the design applies to state.
  */
 final class OdometerReadingPolicy
 {

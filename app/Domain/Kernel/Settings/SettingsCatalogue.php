@@ -21,9 +21,9 @@ use InvalidArgumentException;
  * **Two stores.** `store` says where a field's truth lives. Almost all of them are the company
  * settings blob, which `UpdateCompanySettings` owns. One does not: `tax.standard_rate_pct` is a
  * front door onto the `tax_rates` register, whose rows carry dated windows so a document keeps the
- * rate it was issued under (§17 Q4). Writing a second copy into the blob would put two answers to
+ * rate it was issued under (Q4). Writing a second copy into the blob would put two answers to
  * "what was the VAT on this date?" in one application, so the field is read from and written to the
- * register through Invoicing's doors — and the Kernel cannot import a module (§3.1 D2), so the page
+ * register through Invoicing's doors — and the Kernel cannot import a module (D2), so the page
  * that renders both wires them, while this file only declares the shape.
  */
 final class SettingsCatalogue
@@ -34,7 +34,7 @@ final class SettingsCatalogue
     public static function fields(): array
     {
         return [
-            // §20.37 — the theme every device in this company opens in. A seat may still override it
+            // The theme every device in this company opens in. A seat may still override it
             // for its own browser; that choice is client-side because it must apply before first paint.
             'appearance.theme' => [
                 'group' => 'Appearance',
@@ -43,7 +43,7 @@ final class SettingsCatalogue
                 'type' => 'choice',
                 'options' => ['light', 'dark', 'system'],
             ],
-            // §20.37 — a front door onto the dated rate register, not a blob value: an invoice issued
+            // A front door onto the dated rate register, not a blob value: an invoice issued
             // under the old percentage must keep printing and posting the old one.
             'tax.standard_rate_pct' => [
                 'group' => 'Tax',
@@ -258,7 +258,7 @@ final class SettingsCatalogue
 
     /**
      * Turn a validated form value into what the blob stores. Money is the one that is not a
-     * cast: a major-unit amount becomes integer minor units at the screen boundary (§5.1), and
+     * cast: a major-unit amount becomes integer minor units at the screen boundary, and
      * `Money::ofMajor()` refuses sub-minor precision rather than rounding it.
      */
     public static function normalise(string $key, mixed $value): mixed

@@ -11,7 +11,6 @@ use App\Domain\Invoicing\Actions\IssueInvoice;
 use App\Domain\Invoicing\Data\CustomerDto;
 use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Kernel\Identity\RoleKey;
-use App\Domain\Kernel\Ledger\Models\JournalEntry;
 use App\Domain\Kernel\Ledger\Models\LedgerBarrier;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Operations\Actions\AcceptJob;
@@ -44,7 +43,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /*
- * §15 phase 4's first acceptance test: **two concurrent issuers get distinct sequential numbers**.
+ * Phase 4's first acceptance test: **two concurrent issuers get distinct sequential numbers**.
  *
  * `verify-invoicing.php` proves one issuer consumes one value and a rollback un-burns it; that is not a
  * concurrency proof. This file holds the invoice sequence row **on a second connection** for the same MySQL

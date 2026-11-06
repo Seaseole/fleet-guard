@@ -68,13 +68,13 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
- * Phase 2 slice 2a verification — the job and trip spine (DESIGN.md §4.1, §10.2, §10.3, §7).
+ * Phase 2 slice 2a verification — the job and trip spine.
  *
- * Not the test suite (`tests/` is local-only, §14.6). This is the runnable proof of the sentence the
+ * Not the test suite (`tests/` is local-only). This is the runnable proof of the sentence the
  * phase's definition of done turns on: **dispatch refuses an expired licence** — and of the machinery
- * that makes that sentence mean something: §10.2's sixteen states with their gate conditions, §10.3's
+ * that makes that sentence mean something: The sixteen states with their gate conditions, the
  * split between the states a person sets and the four that are answered from the job's children, and
- * §7's numbering, which allocates `TRP-`/`JOB-` inside the creating transaction so a failed insert
+ * The numbering, which allocates `TRP-`/`JOB-` inside the creating transaction so a failed insert
  * cannot burn a reference.
  *
  * It writes to the development database on the live MySQL 9.1 instance (docs/DEV-DATABASE.md) inside
@@ -94,7 +94,7 @@ CurrentCompany::force(1);
 /*
  * Pre-clean: a run that died halfway would otherwise leave a fixture truck with an open assignment
  * behind, and the next run's dispatch refusal would be attributed to the gate when the truth is a
- * stale row (§20.8's lesson, applied here from the start).
+ * stale row (the lesson, applied here from the start).
  */
 $fixtureRegPrefixes = ['%OPX'];
 
@@ -215,11 +215,14 @@ function checkAccepts(string $table, array $row, string $what): void
 }
 
 $stamp = now();
-$owner = User::query()->findOrFail(1);
+// The Owner seat is the account the deployment names, not row 1: on a development database row 1
+// may have been re-seated, and a harness that signs in the wrong seat fails at the first gated
+// write before it tests anything. `FLEET_OWNER_EMAIL` is the documented override.
+$owner = User::query()->where('email', config('fleet.identity.owner_email'))->firstOrFail();
 Auth::login($owner);
-CurrentCompany::force(1);
+CurrentCompany::force((int) $owner->company_id);
 
-// Where the two operational counters stood when this run started. §7.4 says a reference is never
+// Where the two operational counters stood when this run started. The design says a reference is never
 // reused, so the honest end-of-run proof is that each counter advanced by exactly the number of rows
 // this run allocated — not that it was rewound to look tidy.
 $sequenceStart = [];
@@ -233,7 +236,7 @@ foreach (['job', 'trip'] as $scope) {
 $created = ['truck_ids' => [], 'trailer_ids' => [], 'employee_ids' => [], 'driver_ids' => [], 'job_ids' => [], 'trip_ids' => [], 'document_ids' => []];
 
 /* ------------------------------------------------------------------------- */
-echo "== §4.1 the engine holds what the two new tables claim (live MySQL 9.1) ==\n";
+echo "== the engine holds what the two new tables claim (live MySQL 9.1) ==\n";
 
 foreach ([
     'freight_jobs' => ['freight_jobs_company_job_no_unique', 'freight_jobs_status_allowed', 'freight_jobs_quote_is_a_pair', 'freight_jobs_base_agrees_with_quote', 'freight_jobs_dates_ordered', 'freight_jobs_rate_type_allowed'],
@@ -252,18 +255,18 @@ foreach ([
 $tripsDdl = (string) ((array) DB::select('show create table trips')[0])['Create Table'];
 check(
     str_contains(strtolower($tripsDdl), 'references `freight_jobs`'),
-    'trips.job_id is a real foreign key onto freight_jobs — the ULID key is type-matched (§2)'
+    'trips.job_id is a real foreign key onto freight_jobs — the ULID key is type-matched'
 );
 
 // The collision that named the table: Laravel's database queue driver owns `jobs`, and a business
 // table called `jobs` in the same schema would be the queue's, not ours.
 $queueJobsCols = DB::select('show columns from `jobs`');
-check(count($queueJobsCols) > 0 && ! str_contains((string) $queueJobsCols[0]->Field ?? '', 'job_no'), 'the queue\'s `jobs` table is untouched — the commercial register is `freight_jobs` (§4.1\'s note)');
+check(count($queueJobsCols) > 0 &&! str_contains((string) $queueJobsCols[0]->Field?? '', 'job_no'), 'the queue\'s `jobs` table is untouched — the commercial register is `freight_jobs` (the note)');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.3 the job machine, and the four states it refuses to store ==\n";
+echo "\n== the job machine, and the four states it refuses to store ==\n";
 
-check(JobStatus::Enquiry->mayRunTrips() === false, 'an enquiry cannot run a trip (§4.1: trips execute an accepted job)');
+check(JobStatus::Enquiry->mayRunTrips() === false, 'an enquiry cannot run a trip (trips execute an accepted job)');
 check(JobStatus::Accepted->mayRunTrips() && JobStatus::InExecution->mayRunTrips(), 'accepted and in_execution may');
 check(JobStatus::Declined->isTerminal() && JobStatus::Cancelled->isTerminal() && JobStatus::Closed->isTerminal(), 'declined, cancelled and closed are final');
 check(! JobStatus::Quoted->isTerminal(), 'a quoted job is still alive — declining it is a decision, not an undo');
@@ -271,7 +274,7 @@ check(! JobStatus::Quoted->isTerminal(), 'a quoted job is still alive — declin
 /** @var list<string> $storable */
 $storable = JobStatus::values();
 foreach (['all_trips_completed', 'ready_to_invoice', 'invoiced', 'settled'] as $derived) {
-    check(! in_array($derived, $storable, true), "the derived badge '{$derived}' is not a storable state (§10.3: never set by hand)");
+    check(! in_array($derived, $storable, true), "the derived badge '{$derived}' is not a storable state (never set by hand)");
 }
 
 $customer = (app(CreateCustomer::class))(new CustomerDto(name: 'OPX Verify Customer', code: 'OPX-CUST', paymentTerms: 'net_30'));
@@ -299,17 +302,17 @@ $job = $createJob(new JobDto(
 $created['job_ids'][] = $job->id;
 
 check($job->status === JobStatus::Enquiry, 'a new job starts as an enquiry');
-check(preg_match('/\AJOB-\d{5}\z/', $job->job_no) === 1, '...and carries its allocated reference ('.$job->job_no.', §7.1)');
+check(preg_match('/\AJOB-\d{5}\z/', $job->job_no) === 1, '...and carries its allocated reference ('.$job->job_no.')');
 
 /*
- * §9.5 — the row a job writes has to leave an audit behind, and the trail's key column has to be
+ * The row a job writes has to leave an audit behind, and the trail's key column has to be
  * able to hold it. `audits.auditable_id` shipped as `morphs('auditable')`'s BIGINT while a job is
  * keyed by a ULID, so the audit insert died with `1265 Data truncated for column 'auditable_id'`
  * **inside the creating transaction** and took the job down with it. The console does not audit
  * (`audit.console` false), which is exactly why every harness stayed green while the browser could
  * not create a job: this block turns auditing on for one write and puts it back.
  */
-check(Schema::getColumnType('audits', 'auditable_id') === 'char', 'audits.auditable_id is a ULID column, not a BIGINT (§9.5 char26)');
+check(Schema::getColumnType('audits', 'auditable_id') === 'char', 'audits.auditable_id is a ULID column, not a BIGINT (char26)');
 
 config(['audit.console' => true]);
 
@@ -321,7 +324,7 @@ try {
 
 $jobAudits = DB::table('audits')->where('auditable_type', Job::class)->where('auditable_id', $job->id)->get();
 
-check($jobAudits->count() === 1, 'a ULID-keyed write leaves exactly one audit row (§9.5)');
+check($jobAudits->count() === 1, 'a ULID-keyed write leaves exactly one audit row');
 check($jobAudits->isNotEmpty() && (string) $jobAudits->first()->auditable_id === $job->id, '...keyed by the whole ULID, not truncated to an integer');
 check($jobAudits->isNotEmpty() && str_contains((string) $jobAudits->first()->new_values, 'OPX audit probe'), '...and carrying the value that changed');
 
@@ -329,7 +332,7 @@ $job->forceFill(['notes' => 'OPX fixture job'])->save();
 
 $second = $createJob(new JobDto(customerId: $customer->id, routeId: $route->id, notes: 'OPX fixture job two'), 1);
 $created['job_ids'][] = $second->id;
-check((int) substr($second->job_no, 4) === (int) substr($job->job_no, 4) + 1, '...the next job got the next number — allocation is per company and gap-free (§7.4)');
+check((int) substr($second->job_no, 4) === (int) substr($job->job_no, 4) + 1, '...the next job got the next number — allocation is per company and gap-free');
 
 refuses('accepting an unpriced job is refused', fn () => (app(AcceptJob::class))($job, 1), InvalidArgumentException::class);
 check($job->fresh()->status === JobStatus::Enquiry, '...and the refusal left the job where it was');
@@ -337,7 +340,7 @@ check($job->fresh()->status === JobStatus::Enquiry, '...and the refusal left the
 refuses('a job cannot be declined without saying why', fn () => (app(DeclineJob::class))($second, '', 1), IllegalTransition::class);
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §5 the quote: what the customer sees, and what the books are allowed to read ==\n";
+echo "\n== the quote: what the customer sees, and what the books are allowed to read ==\n";
 
 $quote = app(QuoteJob::class);
 
@@ -352,11 +355,11 @@ $job = $quote($job, new JobQuoteDto(
     requiredDeliveryOn: Carbon::now()->addDays(9)->toDateString(),
 ), 1);
 
-check($job->status === JobStatus::Quoted, 'quoting moves enquiry → quoted (§10.3)');
-check($job->quoted_amount === 12_000_000 && $job->base_amount === 12_000_000, 'a base-currency quote converts to itself — minor units, no float (§5.1)');
+check($job->status === JobStatus::Quoted, 'quoting moves enquiry → quoted');
+check($job->quoted_amount === 12_000_000 && $job->base_amount === 12_000_000, 'a base-currency quote converts to itself — minor units, no float');
 
-// A ZAR quote with a stated rate: §5.3's invariant is base = round(amount × rate), and the job stores
-// only the three columns §4.1 gives it, so the rate itself must not be needed to re-read the figure.
+// A ZAR quote with a stated rate: The invariant is base = round(amount × rate), and the job stores
+// only the three columns the design gives it, so the rate itself must not be needed to re-read the figure.
 $zar = $quote($second, new JobQuoteDto(
     rateType: RouteRateType::PerTonne,
     amountMajor: '1000.00',
@@ -365,9 +368,9 @@ $zar = $quote($second, new JobQuoteDto(
     rateDate: Carbon::now()->toDateString(),
 ), 1);
 
-check($zar->currency_code === 'ZAR' && $zar->quoted_amount === 100_000, 'the foreign amount is stored in its own currency (§4.1)');
-check($zar->base_amount === 54_000, '...with base_amount = round(amount × rate) frozen at write time (§5.3): '.$zar->base_amount);
-check(! str_contains(strtolower((string) ((array) DB::select('show create table freight_jobs')[0])['Create Table']), 'fx_rate'), 'freight_jobs carries no FX block — §5.2 lists the block for the documents that post, and a job only offers');
+check($zar->currency_code === 'ZAR' && $zar->quoted_amount === 100_000, 'the foreign amount is stored in its own currency');
+check($zar->base_amount === 54_000, '...with base_amount = round(amount × rate) frozen at write time: '.$zar->base_amount);
+check(! str_contains(strtolower((string) ((array) DB::select('show create table freight_jobs')[0])['Create Table']), 'fx_rate'), 'freight_jobs carries no FX block — the design lists the block for the documents that post, and a job only offers');
 
 refuses('a foreign quote with no rate and no stored rate is refused', function () use ($quote, $route, $customer): void {
     /** @var Job $third */
@@ -382,7 +385,7 @@ refuses('a foreign quote with no rate and no stored rate is refused', function (
 refuses('a zero quote is refused rather than accepted as free work', fn () => $quote($job, new JobQuoteDto(rateType: RouteRateType::PerTrip, amountMajor: '0', currencyCode: $baseCurrency), 1), InvalidArgumentException::class);
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.2 the trip spine, walked in order ==\n";
+echo "\n== the trip spine, walked in order ==\n";
 
 $createTruck = app(CreateTruck::class);
 $truck = $createTruck(new TruckDto(registrationNo: 'B 970 OPX', fleetNo: 'T-OPX1', vin: 'VINOPX000000000000001', make: 'Probe', model: 'Trip', odometerKm: 200_000));
@@ -413,10 +416,10 @@ check($job->status === JobStatus::Accepted, 'accepting the quote works once a pr
 /** @var Trip $trip */
 $trip = (app(CreateTrip::class))($job, 1);
 $created['trip_ids'][] = $trip->id;
-check($trip->status === TripStatus::Draft, 'the trip opens as a draft (§10.2)');
-check($job->fresh()->status === JobStatus::InExecution, '...and the job moved accepted → in_execution with its first trip (§10.3)');
-check(preg_match('/\ATRP-\d{5}\z/', $trip->trip_no) === 1, 'the trip carries its allocated reference ('.$trip->trip_no.', §7.1\'s TRP-{SEQ:5})');
-check($trip->route_id === $route->id, '...and inherited the corridor from the job, copied not joined (§4.1)');
+check($trip->status === TripStatus::Draft, 'the trip opens as a draft');
+check($job->fresh()->status === JobStatus::InExecution, '...and the job moved accepted → in_execution with its first trip');
+check(preg_match('/\ATRP-\d{5}\z/', $trip->trip_no) === 1, 'the trip carries its allocated reference ('.$trip->trip_no.', the TRP-{SEQ:5})');
+check($trip->route_id === $route->id, '...and inherited the corridor from the job, copied not joined');
 
 check($trip->truck_id === null && $trip->driver_id === null, 'a draft names no truck and no driver — the column pair is nullable only here');
 checkRefuses('trips', ['id' => (string) Str::ulid(), 'company_id' => 1, 'trip_no' => 'TRP-99999', 'job_id' => $job->id, 'route_id' => $route->id, 'status' => 'planned', 'truck_id' => null, 'driver_id' => null, 'created_at' => $stamp, 'updated_at' => $stamp], 'a planned trip with no truck and no driver is refused by trips_plan_is_named');
@@ -433,7 +436,7 @@ $trip = $plan($trip, new TripDto(
 ), 1);
 
 check($trip->status === TripStatus::Planned, 'draft → planned names the equipment, the crew and the date');
-check($trip->truck_id === $truck->id && $trip->driver_id === $driver->id && $trip->trailer_id === $trailer->id, '...all three are stored as ids (§10.2: no cross-module relations, D5)');
+check($trip->truck_id === $truck->id && $trip->driver_id === $driver->id && $trip->trailer_id === $trailer->id, '...all three are stored as ids (no cross-module relations, D5)');
 
 echo "\n== DoD: dispatch refuses an expired licence ==\n";
 
@@ -451,25 +454,25 @@ check(
 );
 check(
     (bool) array_filter($findings, static fn (string $f): bool => str_contains($f, $trip->planned_departure_at->toDateString())),
-    '...and tests against the trip\'s start date, not today (§10.2)'
+    '...and tests against the trip\'s start date, not today'
 );
 
 refuses('DispatchTrip refuses the lapsed licence', fn () => (app(DispatchTrip::class))($trip, 1), DispatchRefused::class);
 check($trip->fresh()->status === TripStatus::Planned, '...and the trip stayed planned');
-check(DB::table('vehicle_assignments')->where('trip_id', $trip->id)->count() === 0, '...and no vehicle was reserved — a refusal writes nothing (§11.2: subscribers fire after both halves succeed)');
+check(DB::table('vehicle_assignments')->where('trip_id', $trip->id)->count() === 0, '...and no vehicle was reserved — a refusal writes nothing (subscribers fire after both halves succeed)');
 check($truck->fresh()->status === FleetStatus::Available, '...and the truck was not put on a trip');
 
 // A paper that lapses *after* the trip's start date is also a refusal — the check is as-of, not now.
 $driver->forceFill(['licence_expires_on' => Carbon::now()->addDay()->toDateString()])->save();
 $trip->forceFill(['planned_departure_at' => Carbon::now()->addDays(10)->startOfDay()])->save();
 $trip->refresh();
-check(! $gate->mayDispatch($trip), 'a licence valid tomorrow but expiring before the trip leaves still refuses (§10.2 as-of date)');
+check(! $gate->mayDispatch($trip), 'a licence valid tomorrow but expiring before the trip leaves still refuses (as-of date)');
 
 $trip->forceFill(['planned_departure_at' => Carbon::now()->addDays(3)->startOfDay()])->save();
 $driver->forceFill(['licence_expires_on' => Carbon::now()->addMonths(8)->toDateString()])->save();
 $trip->refresh();
 
-// A filed document whose own expiry has lapsed: §10.2 asks about insurance as well as the licence.
+// A filed document whose own expiry has lapsed: The design asks about insurance as well as the licence.
 $expiredInsurance = Document::forceCreate([
     'type' => DocumentType::Insurance->value,
     'title' => 'OPX expired certificate',
@@ -486,7 +489,7 @@ check(count($findings) === 1 && str_contains($findings[0], 'insurance'), 'the la
 refuses('and dispatch refuses on the filed paper, not just the driver row', fn () => (app(DispatchTrip::class))($trip, 1), DispatchRefused::class);
 
 $expiredInsurance->forceFill(['lifecycle' => Lifecycle::Superseded->value])->save();
-check($gate->mayDispatch($trip), '...and superseding the expired certificate clears it — a superseded scan is evidence of what was filed, not a claim about today (§10.8)');
+check($gate->mayDispatch($trip), '...and superseding the expired certificate clears it — a superseded scan is evidence of what was filed, not a claim about today');
 
 echo "\n";
 /** @var Trip $trip */
@@ -494,13 +497,13 @@ $trip = (app(DispatchTrip::class))($trip, 1);
 check($trip->status === TripStatus::Assigned, 'with valid papers the same dispatch succeeds');
 
 $assignment = DB::table('vehicle_assignments')->where('trip_id', $trip->id)->first();
-check($assignment !== null, 'the reservation Fleet holds names the trip it was held for (§11.2 ReserveVehicle)');
-check($truck->fresh()->status === FleetStatus::Available, 'assignment does NOT put the truck on trip — that is departure (§10.1, Phase 1\'s stated seam)');
+check($assignment!== null, 'the reservation Fleet holds names the trip it was held for (ReserveVehicle)');
+check($truck->fresh()->status === FleetStatus::Available, 'assignment does NOT put the truck on trip — that is departure (Phase 1\'s stated seam)');
 
 refuses('dispatching the same trip twice is refused by the machine', fn () => (app(DispatchTrip::class))($trip, 1), InvalidArgumentException::class);
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.2 the loading schedule: the weaker of two limits, and the paper per load ==\n";
+echo "\n== the loading schedule: the weaker of two limits, and the paper per load ==\n";
 
 foreach (['loads_tonnes_positive', 'loads_commodity_not_blank', 'loads_cubic_not_negative', 'loads_trip_company_fk', 'loads_waybill_document_fk'] as $name) {
     $loadsDdl = (string) ((array) DB::select('show create table loads')[0])['Create Table'];
@@ -561,7 +564,7 @@ check(
 $findings = $gate->findings($loadTrip);
 
 // 30.5 t is inside the truck's 34 t and over the trailer's 28 t. A board that measured only the
-// tractor would dispatch this overload to a weighbridge, which is the whole reason §10.2 words the
+// tractor would dispatch this overload to a weighbridge, which is the whole reason words the
 // rule as "truck **and** trailer".
 check(
     count($findings) === 3 && str_contains($findings[0], 'Trailer') && str_contains($findings[0], '28 t'),
@@ -677,10 +680,10 @@ $storedLoad = DB::table('loads')->where('id', $loadA->id)->first();
 check((float) $storedLoad->tonnes_10_2 === 20.0, 'the load row survived the transition: the schedule is the record, not a draft');
 checkRefuses('loads', ['company_id' => 1, 'trip_id' => $loadTrip->id, 'commodity' => 'x', 'tonnes_10_2' => 0, 'created_at' => $stamp, 'updated_at' => $stamp], 'a zero-tonnage load row is refused by the engine as well as the DTO');
 checkRefuses('loads', ['company_id' => 1, 'trip_id' => $loadTrip->id, 'commodity' => '   ', 'tonnes_10_2' => 5, 'created_at' => $stamp, 'updated_at' => $stamp], 'a blank commodity is refused by the engine');
-checkRefuses('loads', ['company_id' => 2, 'trip_id' => $loadTrip->id, 'commodity' => 'probe', 'tonnes_10_2' => 5, 'created_at' => $stamp, 'updated_at' => $stamp], 'a load in company 2 on company 1\'s trip is refused by the composite key (§8)');
+checkRefuses('loads', ['company_id' => 2, 'trip_id' => $loadTrip->id, 'commodity' => 'probe', 'tonnes_10_2' => 5, 'created_at' => $stamp, 'updated_at' => $stamp], 'a load in company 2 on company 1\'s trip is refused by the composite key');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.2 departure, and the odometer that makes every later number mean something ==\n";
+echo "\n== departure, and the odometer that makes every later number mean something ==\n";
 
 $depart = app(DepartTrip::class);
 
@@ -690,10 +693,10 @@ check(DB::table('odometer_readings')->where('trip_id', $trip->id)->count() === 0
 
 $trip = $depart($trip, 205_000, 1_500.0, 1);
 
-check($trip->status === TripStatus::Departed && $trip->departed_at !== null, 'a forward reading departs the trip (§10.2 loaded/assigned → departed)');
+check($trip->status === TripStatus::Departed && $trip->departed_at!== null, 'a forward reading departs the trip (loaded/assigned → departed)');
 check((int) $trip->odometer_start_km === 205_000, '...the opening odometer is the trip\'s own fact');
-check((int) $truck->fresh()->odometer_km === 205_000, '...and the truck\'s projection moved through Fleet\'s Action, not a direct write (§3.1 D5)');
-check($truck->fresh()->status === FleetStatus::OnTrip, '...and the truck is now on trip — the state Phase 1 deliberately left for this moment (§10.1)');
+check((int) $truck->fresh()->odometer_km === 205_000, '...and the truck\'s projection moved through Fleet\'s Action, not a direct write (D5)');
+check($truck->fresh()->status === FleetStatus::OnTrip, '...and the truck is now on trip — the state Phase 1 deliberately left for this moment');
 check(
     DB::table('odometer_readings')->where('trip_id', $trip->id)->where('source', 'trip_departure')->exists(),
     'the reading is attributable to the trip and sourced as a departure'
@@ -705,24 +708,24 @@ refuses('the general door refuses an edge that has its own Action', fn () => $ad
 
 $trip = $advance($trip, TripStatus::InTransit, 1);
 $trip = $advance($trip, TripStatus::AtBorder, 1);
-check($trip->status === TripStatus::AtBorder, 'a cross-border trip can sit at the border (§10.2 in_transit → at_border)');
+check($trip->status === TripStatus::AtBorder, 'a cross-border trip can sit at the border (in_transit → at_border)');
 $trip = $advance($trip, TripStatus::InTransit, 1);
 $trip = $advance($trip, TripStatus::Arrived, 1);
-check($trip->status === TripStatus::Arrived && $trip->arrived_at !== null, '...crossed, back on the road, and arrived — with the arrival stamped (§4.1\'s report columns)');
+check($trip->status === TripStatus::Arrived && $trip->arrived_at!== null, '...crossed, back on the road, and arrived — with the arrival stamped (the report columns)');
 
 $trip = $advance($trip, TripStatus::PodPending, 1);
 $trip = $advance($trip, TripStatus::Delivered, 1);
-check($trip->status === TripStatus::Delivered, 'the office, not the token, decides the delivery was made (§10.2)');
+check($trip->status === TripStatus::Delivered, 'the office, not the token, decides the delivery was made');
 
-echo "\n== §10.2 completion, closing, and what a re-open is allowed to undo ==\n";
+echo "\n== completion, closing, and what a re-open is allowed to undo ==\n";
 
 $complete = app(CompleteTrip::class);
 refuses('a closing reading below the opening one is refused', fn () => $complete($trip, 204_000, null, 1), InvalidArgumentException::class);
 
 $trip = $complete($trip, 210_000, 1_620.0, 1);
 check($trip->status === TripStatus::Completed, 'a plausible closing reading completes the trip');
-check((int) $trip->distance_km_10_2 === 5_000, '...and the distance is the span the fuel variance will be measured against (§6.6): '.$trip->distance_km_10_2.' km');
-check($truck->fresh()->status === FleetStatus::Available, '...and the truck came home through Fleet (§10.1 on_trip → available)');
+check((int) $trip->distance_km_10_2 === 5_000, '...and the distance is the span the fuel variance will be measured against: '.$trip->distance_km_10_2.' km');
+check($truck->fresh()->status === FleetStatus::Available, '...and the truck came home through Fleet (on_trip → available)');
 check(
     DB::table('vehicle_assignments')->where('trip_id', $trip->id)->whereNull('to_at')->count() === 0,
     '...and the reservation closed with it — an open assignment would strand the truck on the board forever, unable to be dispatched again'
@@ -731,21 +734,21 @@ check(
 $close = app(CloseTrip::class);
 $before = Gate::allows('close', $trip);
 $trip = $close($trip, 1);
-check($trip->status === TripStatus::Closed && $trip->costs_frozen, 'closing freezes the costs in the same statement as the state move (§10.2, §19)');
+check($trip->status === TripStatus::Closed && $trip->costs_frozen, 'closing freezes the costs in the same statement as the state move');
 checkRefuses('trips', ['id' => (string) Str::ulid(), 'company_id' => 1, 'trip_no' => 'TRP-99998', 'job_id' => $job->id, 'route_id' => $route->id, 'truck_id' => $truck->id, 'driver_id' => $driver->id, 'status' => 'completed', 'costs_frozen' => true, 'created_at' => $stamp, 'updated_at' => $stamp], 'a frozen row in any state but closed is refused by the engine (trips_frozen_is_closed)');
 
 $trip = (app(ReopenTrip::class))($trip, 'the toll receipt arrived late', 1);
-check($trip->status === TripStatus::Reopened && ! $trip->costs_frozen, 'a re-open unfreezes the costs — and requires a reason (§10.2)');
+check($trip->status === TripStatus::Reopened &&! $trip->costs_frozen, 'a re-open unfreezes the costs — and requires a reason');
 
 refuses('a re-opened trip cannot be closed directly; the checklist runs again', fn () => $close($trip, 1), InvalidArgumentException::class);
 
 $trip = $complete($trip, 210_000, 1_620.0, 1);
-check($trip->status === TripStatus::Completed, '...the re-opened trip re-runs the checklist and completes again (§10.2 reopened → completed)');
+check($trip->status === TripStatus::Completed, '...the re-opened trip re-runs the checklist and completes again (reopened → completed)');
 $trip = $close($trip, 1);
 check($trip->status === TripStatus::Closed, '...and closes again once the checklist has re-run');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.2 a stopped trip: cancelled before departure, aborted after ==\n";
+echo "\n== a stopped trip: cancelled before departure, aborted after ==\n";
 
 $second->refresh();
 if ($second->status !== JobStatus::Accepted) {
@@ -763,19 +766,19 @@ $holdTrip = (app(DispatchTrip::class))($holdTrip, 1);
 check(DB::table('vehicle_assignments')->where('trip_id', $holdTrip->id)->whereNull('to_at')->exists(), 'the held reservation is open');
 
 $holdTrip = (app(HoldTrip::class))($holdTrip, 'awaiting the customer\'s load window', 1);
-check($holdTrip->status === TripStatus::OnHold, 'a pre-departure blocker holds the trip (§10.2)');
+check($holdTrip->status === TripStatus::OnHold, 'a pre-departure blocker holds the trip');
 check(
     DB::table('vehicle_assignments')->where('trip_id', $holdTrip->id)->whereNull('to_at')->count() === 0,
     '...and the truck is not left reserved while it sits — a hold that kept the reservation would idle a truck nobody can use'
 );
 
 $holdTrip = (app(HoldTrip::class))($holdTrip, null, 1);
-check($holdTrip->status === TripStatus::Planned, 'lifting the hold returns it to planned, where the gate runs again (§10.2 on_hold → planned)');
+check($holdTrip->status === TripStatus::Planned, 'lifting the hold returns it to planned, where the gate runs again (on_hold → planned)');
 $holdTrip = (app(DispatchTrip::class))($holdTrip, 1);
 check($holdTrip->status === TripStatus::Assigned, '...and re-dispatch succeeds, re-testing the papers as of the start date');
 
 $holdTrip = (app(StopTrip::class))($holdTrip, 'the customer dropped the load', 1);
-check($holdTrip->status === TripStatus::Cancelled, 'a pre-departure stop is a cancellation (§10.2)');
+check($holdTrip->status === TripStatus::Cancelled, 'a pre-departure stop is a cancellation');
 check($truckB->fresh()->status === FleetStatus::Available, '...and the truck, never sent, is still available');
 check((int) DB::table('odometer_readings')->where('trip_id', $holdTrip->id)->count() === 0, '...a cancelled trip leaves no mileage behind');
 
@@ -790,14 +793,14 @@ $runTrip = $depart($runTrip, 6_000, 100.0, 1);
 check($truckC->fresh()->status === FleetStatus::OnTrip, 'the second truck is on its trip');
 
 $runTrip = (app(StopTrip::class))($runTrip, 'breakdown at the border, load returned', 1);
-check($runTrip->status === TripStatus::Aborted, 'a post-departure stop is an abort, not a cancellation (§10.2)');
+check($runTrip->status === TripStatus::Aborted, 'a post-departure stop is an abort, not a cancellation');
 check($truckC->fresh()->status === FleetStatus::Available, '...and the truck comes home');
-check((int) DB::table('odometer_readings')->where('trip_id', $runTrip->id)->count() === 1, '...while the mileage it actually did is kept — §10.2: costs still post and the trip may still be billed');
+check((int) DB::table('odometer_readings')->where('trip_id', $runTrip->id)->count() === 1, '...while the mileage it actually did is kept — costs still post and the trip may still be billed');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.3 the job badges are computed, never stored ==\n";
+echo "\n== the job badges are computed, never stored ==\n";
 
-// Measured on the job whose every trip has finished (one cancelled, one aborted): §10.3's derived badge
+// Measured on the job whose every trip has finished (one cancelled, one aborted): The derived badge
 // must treat "stopped" as "not still on the road" while never pretending the work was delivered.
 $finished = JobProgress::for($second->fresh());
 check($finished->tripCount() === 2, 'the job with two finished trips counts both');
@@ -807,11 +810,11 @@ check($finished->allTripsCompleted(), '...so the derived badge reads all trips c
 $progress = JobProgress::for($job->fresh());
 check($progress->tripCount() >= 1, 'the running job shows its trips ('.$progress->tripCount().' so far)');
 check($progress->openTripCount() > 0, '...and still counts the ones on the road as open');
-check($job->fresh()->status === JobStatus::InExecution, '...while the stored state stays in_execution — the badge is not a state (§10.3)');
+check($job->fresh()->status === JobStatus::InExecution, '...while the stored state stays in_execution — the badge is not a state');
 
 $keys = array_column($finished->badges(), 'key');
 check(in_array('all_trips_completed', $keys, true), '...and it is surfaced as a badge the board can print');
-check(! in_array('invoiced', $keys, true) && ! in_array('settled', $keys, true), '...while Phase 4\'s badges are absent rather than false (§15.2: nothing that can invoice a job exists yet)');
+check(! in_array('invoiced', $keys, true) &&! in_array('settled', $keys, true), '...while Phase 4\'s badges are absent rather than false (nothing that can invoice a job exists yet)');
 
 $other = (app(CreateJob::class))(new JobDto(customerId: $customer->id, routeId: $route->id, notes: 'OPX fixture job four'), 1);
 $created['job_ids'][] = $other->id;
@@ -821,21 +824,21 @@ $closingTrip = (app(CreateTrip::class))($other, 1);
 $created['trip_ids'][] = $closingTrip->id;
 
 refuses('a job cannot be closed while a trip is still on the road', fn () => (app(CloseJob::class))($other, 'wrap up', 1), InvalidArgumentException::class);
-check($other->fresh()->status === JobStatus::InExecution, '...and the refusal left it running, not half-closed (§10.3: closing is a move, not a flag)');
+check($other->fresh()->status === JobStatus::InExecution, '...and the refusal left it running, not half-closed (closing is a move, not a flag)');
 
-refuses('cancelling after acceptance is refused — §10.3 puts both exits before acceptance', function () use ($second): void {
+refuses('cancelling after acceptance is refused — the design puts both exits before acceptance', function () use ($second): void {
     $second->moveTo(JobStatus::Cancelled, 'probe');
 }, IllegalTransition::class);
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §9.3 the doors: who may close, reopen and dispatch ==\n";
+echo "\n== the doors: who may close, reopen and dispatch ==\n";
 
 foreach (['trips.plan', 'trips.dispatch', 'trips.complete', 'trips.close', 'trips.reopen', 'jobs.create', 'jobs.quote', 'jobs.close'] as $ability) {
-    check(Gate::forUser($owner)->allows($ability), "the Owner holds {$ability} (§9.3's F row)");
+    check(Gate::forUser($owner)->allows($ability), "the Owner holds {$ability} (the F row)");
 }
 
 /**
- * The two seats §9.3 distinguishes from the Owner, minted because the demo database has none: the
+ * The two seats distinguishes from the Owner, minted because the demo database has none: the
  * matrix's whole claim is about what a dispatcher and an accountant *cannot* do, and that is not
  * measurable against the Owner, who holds every name. Removed in cleanup by email pattern.
  */
@@ -856,21 +859,21 @@ $staffAs = static function (string $roleKey, string $email) use ($owner): User {
 $dispatcher = $staffAs('dispatcher', 'verify-opx-dispatcher@fleetguard.local');
 $accountant = $staffAs('accountant', 'verify-opx-accountant@fleetguard.local');
 
-check(Gate::forUser($dispatcher)->allows('trips.dispatch'), 'a dispatcher may dispatch (§9.3: F)');
+check(Gate::forUser($dispatcher)->allows('trips.dispatch'), 'a dispatcher may dispatch (F)');
 check(Gate::forUser($dispatcher)->allows('jobs.quote'), '...and may quote');
-check(! Gate::forUser($dispatcher)->allows('jobs.rate_cost.view'), '...but not see rate versus cost (§9.3\'s hidden column)');
-check(! Gate::forUser($dispatcher)->allows('trips.close'), '...and may not close a trip — that is an accounting act (§10.2)');
-check(! Gate::forUser($dispatcher)->allows('jobs.close'), '...or close a job (§10.3: Owner only)');
-check(! Gate::forUser($dispatcher)->allows('trips.reopen'), '...and may not re-open a closed trip (§9.3: A for the Owner only)');
+check(! Gate::forUser($dispatcher)->allows('jobs.rate_cost.view'), '...but not see rate versus cost (the hidden column)');
+check(! Gate::forUser($dispatcher)->allows('trips.close'), '...and may not close a trip — that is an accounting act');
+check(! Gate::forUser($dispatcher)->allows('jobs.close'), '...or close a job (Owner only)');
+check(! Gate::forUser($dispatcher)->allows('trips.reopen'), '...and may not re-open a closed trip (A for the Owner only)');
 
-check(Gate::forUser($accountant)->allows('trips.close'), 'the Accountant may close a trip (§10.2: Accountant / Owner)');
+check(Gate::forUser($accountant)->allows('trips.close'), 'the Accountant may close a trip (Accountant / Owner)');
 check(! Gate::forUser($accountant)->allows('trips.dispatch'), '...and may not dispatch it');
-check(! Gate::forUser($accountant)->allows('jobs.close'), '...and may not close a job, which is the Owner\'s alone (§10.3)');
+check(! Gate::forUser($accountant)->allows('jobs.close'), '...and may not close a job, which is the Owner\'s alone');
 
 check(Gate::forUser($owner)->allows('reopen', $trip), 'the trip policy answers reopen for the Owner');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §8 tenancy on the wire ==\n";
+echo "\n== tenancy on the wire ==\n";
 
 DB::table('companies')->insert([
     'id' => 2,
@@ -892,19 +895,19 @@ checkRefuses('trips', ['id' => (string) Str::ulid(), 'company_id' => 2, 'trip_no
 DB::table('companies')->where('id', 2)->delete();
 CurrentCompany::force(1);
 
-echo "\n== §7 numbering: the references agree with the counters ==\n";
+echo "\n== numbering: the references agree with the counters ==\n";
 
 /*
  * Measured while the rows still exist: `documents:number-integrity` compares `next_value` to the rows
  * on disk, so the only moment this proves anything is before the fixtures are removed. It is also the
  * moment to see the two new stores registered — a scope missing from `fleet.numbering.stores` is
- * reported as "unchecked", which is a green command that checked nothing (§7.4).
+ * reported as "unchecked", which is a green command that checked nothing.
  */
 $exit = Artisan::call('documents:number-integrity');
 $output = Artisan::output();
 check($exit === 0, 'documents:number-integrity passes with the trip and job stores registered', mb_substr(str_replace("\n", ' ', $output), 0, 200));
 
-// "A scope absent from the map is reported as unchecked rather than silently passing" (§7.1's store
+// "A scope absent from the map is reported as unchecked rather than silently passing" (the store
 // comment) — so the proof is that these two appear as *checked* lines, not merely that the command is
 // green. Every scope whose document does not exist yet (invoice, receipt, journal_entry) is still
 // reported unchecked, and that is the honest state of a Phase 2 database, not a pass.
@@ -933,14 +936,14 @@ $runTruckIds = array_values(array_filter(array_merge($created['truck_ids'], DB::
 $runDriverIds = array_values(array_filter(array_merge($created['driver_ids'], DB::table('drivers')->whereIn('employee_id', DB::table('employees')->where('employee_no', 'like', 'EMP-OPX%')->pluck('id')->all())->pluck('id')->all())));
 $runTripIds = array_values(array_unique(array_filter(array_merge($created['trip_ids'], DB::table('trips')->whereIn('job_id', $created['job_ids'] ?: ['0'])->pluck('id')->all()))));
 
-// Measured while the rows still exist: §7.4's promise is that a reference is *spent*, so the honest
+// Measured while the rows still exist: The promise is that a reference is *spent*, so the honest
 // proof is that each counter advanced by exactly the allocations this run made — never that it was
 // nudged to look tidy.
 foreach (['job' => count($created['job_ids']), 'trip' => count($runTripIds)] as $scope => $count) {
     $now = (int) DB::table('number_sequences')->where('company_id', 1)->where('scope', $scope)->sum('next_value');
     check(
         $now === $sequenceStart[$scope] + $count,
-        "the {$scope} counter advanced by exactly the {$count} references this run allocated (".($now - $sequenceStart[$scope]).' spent, §7.4)',
+        "the {$scope} counter advanced by exactly the {$count} references this run allocated (".($now - $sequenceStart[$scope]).' spent)',
         'start='.$sequenceStart[$scope].' now='.$now.' expected='.($sequenceStart[$scope] + $count)
     );
 }
@@ -971,7 +974,7 @@ DB::table('model_has_roles')->where('model_type', User::class)->whereIn('model_i
 DB::table('users')->whereIn('id', $probeIds ?: [0])->delete();
 /*
  * A verification run that allocated `JOB-00007`, deleted the job and left the counter at 8 would
- * break §7.4's tie-out in the only way that matters: the *scheduled* `documents:number-integrity`
+ * break the tie-out in the only way that matters: the *scheduled* `documents:number-integrity`
  * compares the counter to the rows, so it would report drift on a database with nothing wrong in it —
  * an alert about the verifier, forever. "Never reused" protects numbers issued to documents anyone
  * could still be asked about; a fixture that existed only inside this run was never such a document,

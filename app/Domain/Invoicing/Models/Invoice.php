@@ -17,22 +17,22 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.2 INVOICE — the fiscal document, and the three axes the migration deliberately keeps apart.
+ * INVOICE — the fiscal document, and the three axes the migration deliberately keeps apart.
  *
  * `status` here is only the lifecycle (`draft → issued → void`). Settlement is **derived** from
  * {@see self::settlementState()} over the balance the allocation rows decided, and ageing is a question
  * asked of `due_on` against today — neither is a column, because a stored `paid` would let payment
- * allocation mutate lifecycle state and quietly cost the gap-free number its meaning (§10.4).
+ * allocation mutate lifecycle state and quietly cost the gap-free number its meaning.
  *
- * `balance_amount` is a projection (§10.4), not the truth: `invoices:recompute-balances` rebuilds it from
+ * `balance_amount` is a projection, not the truth: `invoices:recompute-balances` rebuilds it from
  * the allocations and credit notes. It is carried because AR totals and ageing must be a query rather than
  * a walk over every allocation in the company.
  *
  * `job_id` is stored as an id with no relation, like every other cross-module reference in this codebase:
  * a `belongsTo(Job::class)` here would make Invoicing depend on Operations' models (D5).
  *
- * Money is integer minor units throughout (§5.1); `fx_rate` is "1 foreign unit = X base" as a string
- * (§5.2), and `base_amount` is authoritative and frozen at write (§5.3).
+ * Money is integer minor units throughout; `fx_rate` is "1 foreign unit = X base" as a string
+ *, and `base_amount` is authoritative and frozen at write.
  *
  * @property string $id
  * @property int $company_id
@@ -131,11 +131,11 @@ final class Invoice extends Model implements AuditableContract
         return $this->belongsTo(Customer::class);
     }
 
-    // There is deliberately no `job()` relation. `job_id` is Operations' row, and §13 D5 keeps Invoicing out
+    // There is deliberately no `job()` relation. `job_id` is Operations' row, and D5 keeps Invoicing out
     // of its models — the invoice names the id, and a screen that needs the number asks Operations' directory.
 
     /**
-     * §10.4 axis two, derived from what the allocations and credit notes actually did.
+     * Axis two, derived from what the allocations and credit notes actually did.
      *
      * Never stored: a `paid` column would have to be maintained by the allocator, the credit note and the
      * void path, and the day one of them forgot, an invoice would read paid while still owed.
@@ -149,7 +149,7 @@ final class Invoice extends Model implements AuditableContract
     }
 
     /**
-     * §10.4 axis three, computed from `due_on` against today and stored nowhere.
+     * Axis three, computed from `due_on` against today and stored nowhere.
      *
      * An ageing column is a number that is wrong every midnight, so the bucket is a question asked of the
      * row when the report runs. `disputed` is never returned: it is a customer's claim, not a date.
@@ -165,7 +165,7 @@ final class Invoice extends Model implements AuditableContract
         return $this->amount + $this->tax_amount;
     }
 
-    /** The number a screen may print; a draft is addressed by its ULID until §7.4's number is spent. */
+    /** The number a screen may print; a draft is addressed by its ULID until the number is spent. */
     public function reference(): string
     {
         return $this->number ?? 'draft '.substr($this->id, -8);

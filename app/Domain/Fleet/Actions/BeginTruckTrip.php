@@ -10,9 +10,9 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * Puts a truck on a trip, by id (§10.1's `available → on_trip`).
+ * Puts a truck on a trip, by id (the `available → on_trip`).
  *
- * This exists so Operations can move a truck's state without importing `Truck`. §3.1 D5 says a module
+ * This exists so Operations can move a truck's state without importing `Truck`. D5 says a module
  * may not reach into another module's model — and the alternative was a trip Action holding an
  * Eloquent object it has no business touching. The id is the contract; the state machine, the reason
  * and the event row stay here, in Fleet, where `ChangeTruckStatus` already owns them.
@@ -41,7 +41,7 @@ final class BeginTruckTrip
 
             if ($truck->status === FleetStatus::OnTrip) {
                 throw new InvalidArgumentException(sprintf(
-                    '%s is already on a trip. Release that trip first — one truck, one road at a time (§10.1).',
+                    '%s is already on a trip. Release that trip first — one truck, one road at a time.',
                     $truck->label(),
                 ));
             }

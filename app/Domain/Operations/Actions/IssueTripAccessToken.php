@@ -32,7 +32,8 @@ use Illuminate\Support\Facades\DB;
  * 2. **every scope asked for must be one this build honours** ({@see TripAccessScope::implemented()}).
  *    Handing out a `fuel` scope that no Action reads would tell the driver the phone is broken at the
  *    pump;
- * 3. **the horizon is the trip's**, not the clock's — planned end plus `fleet.kiosk.ttl_hours_after_trip_end`.
+ * 3. **the horizon is the trip's**, not the day's — its end plus `fleet.kiosk.ttl_hours_after_trip_end`,
+ *    measured from the issue when that date has already run out.
  */
 final class IssueTripAccessToken
 {
@@ -102,7 +103,7 @@ final class IssueTripAccessToken
                 'issued_by' => $actorId,
             ]);
 
-            // §14.4 asks this trail the question "who could have written that POD at 03:12?", and the
+            // The design asks this trail the question "who could have written that POD at 03:12?", and the
             // answer is the issuance, not the capture: the token never leaves as a hash.
             $this->audit->security(SecurityEventKind::KioskTokenIssued, [
                 'trip_access_token_id' => $token->id,
@@ -128,7 +129,7 @@ final class IssueTripAccessToken
      *
      * One secret serves both routes, so a `fuel`-only link is live on the POD page and refuses there.
      * Pointing the dispatcher at the capture URL anyway is how a driver standing at a pump is handed a
-     * signature pad; the URL names the screen the scopes can actually use (§15.2's 3g).
+     * signature pad; the URL names the screen the scopes can actually use (the 3g).
      *
      * @param  list<TripAccessScope>  $scopes
      */
@@ -142,6 +143,13 @@ final class IssueTripAccessToken
      *
      * A trip that has no planned end at all — a draft nobody has dated — gets the horizon from its job's
      * delivery promise, because a token that dies before the truck has even left is not a token.
+     *
+     * The grace runs from the later of that date and the issue itself. §10.2's rejection loop sends a
+     * driver back to the same capture days after the truck arrived, and a horizon read only from the trip
+     * would then be a date already in the past — which `trip_access_tokens_expires_after_issue` refuses,
+     * because a door that opens onto nothing is exactly what the constraint exists to catch. Clamping
+     * keeps the promise the constraint guards: the link still closes on its own after the grace, so a
+     * lost phone stays a temporary problem.
      */
     private function horizon(Trip $trip): Carbon
     {
@@ -153,6 +161,6 @@ final class IssueTripAccessToken
             ?? $trip->planned_departure_at
             ?? CurrentCompany::model()->created_at;
 
-        return Carbon::parse($end->toDateTimeString(), $end->timezone)->addHours($ttl);
+        return Carbon::parse($end->toDateTimeString(), $end->timezone)->max(Carbon::now())->addHours($ttl);
     }
 }

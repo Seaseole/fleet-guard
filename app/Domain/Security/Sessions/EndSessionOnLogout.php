@@ -10,7 +10,7 @@ use Illuminate\Auth\Events\Logout;
 use Illuminate\Support\Carbon;
 
 /**
- * A signed-out device stops being an active device (§9.2). Without this the screen would keep listing a
+ * A signed-out device stops being an active device. Without this the screen would keep listing a
  * depot computer as holding a session for the rest of the idle window after the person walked away from
  * it — which is the one claim the list must not get wrong.
  *

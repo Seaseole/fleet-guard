@@ -12,17 +12,17 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 
 /*
- * Post a manual journal (§15.2 Phase 0's "manually posted balanced journal", §9.1's ⚑ re-auth
- * ability, §6.3's one write door).
+ * Post a manual journal (Phase 0's "manually posted balanced journal", the ⚑ re-auth
+ * ability, the one write door).
  *
- * The screen collects major-unit text and hands the Action integer minor units: §5.1 puts the
+ * The screen collects major-unit text and hands the Action integer minor units: The design puts the
  * conversion at the boundary, and Money::ofMajor() is where "1 234,56" becomes P1 234.56 rather
  * than P123 456.00. Nothing here does money arithmetic — the running totals below only ever add
  * parsed minor units, so a rounding rule cannot be invented by whoever edits this file.
  *
  * The balance indicator is a courtesy. The refusal that matters is the one the Action raises and,
  * behind it, the DB CHECK — a screen that validated perfectly would still not be the reason the
- * ledger balances (§6.3's whole point is that the layer under the app is the one that holds).
+ * ledger balances (the whole point is that the layer under the app is the one that holds).
  */
 new #[Title('New journal entry')] class extends Component
 {
@@ -196,7 +196,7 @@ new #[Title('New journal entry')] class extends Component
 }; ?>
 
         <div class="grid gap-6">
-            <header class="grid gap-1">
+            <header class="fg-page-header grid gap-1.5">
                 <x-ui.heading size="xl" level="1">{{ __('New journal entry') }}</x-ui.heading>
                 <x-ui.text>
                     {{ __('This posts straight into the ledger. A posted entry cannot be edited or deleted — a mistake is corrected by reversing it.') }}
@@ -233,11 +233,11 @@ new #[Title('New journal entry')] class extends Component
                                     <x-ui.select
                                         wire:model="rows.{{ $index }}.account"
                                         aria-label="{{ __('Account for line :n', ['n' => $index + 1]) }}"
-                                        class="w-full rounded-fg-sm border border-fg-line-strong bg-fg-surface px-3 py-2 text-sm text-fg-ink"
+                                        :placeholder="__('Choose an account')"
+                                        template="fg-code"
                                     >
-                                        <option value="">{{ __('Choose an account') }}</option>
                                         @foreach ($this->accounts as $account)
-                                            <option value="{{ $account->code }}">{{ $account->code }} — {{ $account->name }}</option>
+                                            <option value="{{ $account->code }}" data-code="{{ $account->code }}">{{ $account->code }} — {{ $account->name }}</option>
                                         @endforeach
                                     </x-ui.select>
                                 </div>

@@ -5,13 +5,13 @@ declare(strict_types=1);
 /**
  * Phase 0.5's cutover screen, rendered and driven through the real HTTP/Livewire stack.
  *
- * `view:cache` only compiles Blade, so a render-time error walks past the quality gate (§20.2). This
- * makes real requests as the three roles §9.3 distinguishes — the Owner who commits, the
+ * `view:cache` only compiles Blade, so a render-time error walks past the quality gate. This
+ * makes real requests as the three roles distinguishes — the Owner who commits, the
  * accountant who validates, and a Dispatcher who may not open the screen at all — and then drives
  * the component's own actions, because "the button is hidden" is not the same claim as "the action
  * refuses".
  *
- * Not a test suite: tests/ stays out of the repository (§14.6). It writes to the development
+ * Not a test suite: tests/ stays out of the repository. It writes to the development
  * database and removes everything it created, journals included, through the ledger's own hatch.
  *
  * Run: php scripts/render-cutover.php
@@ -82,7 +82,7 @@ CSV;
         $owner = User::query()->where('email', config('fleet.identity.owner_email'))->first();
 
         if ($owner === null) {
-            $this->note('No Owner row for '.config('fleet.identity.owner_email').' — run php artisan fleet:setup-owner (§9.1).');
+            $this->note('No Owner row for '.config('fleet.identity.owner_email').' — run php artisan fleet:setup-owner.');
 
             return;
         }
@@ -90,7 +90,7 @@ CSV;
         $this->ownerCompany = $owner->company_id;
         CurrentCompany::force($owner->company_id);
 
-        // §9.1 requires MFA enrolment from anyone holding a financial permission, so a freshly
+        // The design requires MFA enrolment from anyone holding a financial permission, so a freshly
         // minted accountant is redirected to the security page before any screen loads. This sweep
         // is about the cutover screen's authorisation, not about MFA — the redirect is asserted
         // where it belongs, in render-identity — so that one middleware steps aside here.
@@ -107,6 +107,44 @@ CSV;
         $this->pageContains($owner, '/accounting/cutover', 'Validate a file', 'the Owner sees the upload card');
         $this->pageContains($accountant, '/accounting/cutover', 'Cutover history', 'the accountant sees the same register');
         $this->assertForbidden($dispatcher, '/accounting/cutover', 'a Dispatcher without cutover.import is refused');
+
+        // The two new datasets are offered by the same picker, described by the same summary
+        // machinery, and validated by the modules that own the records they create.
+        $this->pageContains($accountant, '/accounting/cutover', 'Opening receivables', 'the picker offers the opening receivables file');
+        $this->pageContains($accountant, '/accounting/cutover', 'Opening payables', '...and the opening payables file');
+
+        echo "\nThe opening party detail is validated on the screen, not only by the door\n";
+
+        $this->attempt('a pasted receivables file is kept as a batch whose problem the screen names', function () use ($accountant): void {
+            Livewire::actingAs($accountant)
+                ->test('pages::accounting.cutover')
+                ->set('dataset', 'opening_receivables')
+                ->set('paste', "customer_code,reference,amount,due_on\nREND-NOPE,R-1,250.00,2031-01-15\n")
+                ->call('validateFile')
+                ->assertHasNoErrors();
+
+            $batch = CutoverBatch::query()->where('dataset', CutoverDataset::OpeningReceivables->value)->latest('id')->first();
+
+            if ($batch === null) {
+                throw new Exception('the screen wrote no receivables batch at all');
+            }
+
+            $this->batchIds[] = $batch->id;
+            $this->publicIds[] = $batch->public_id;
+
+            // The debtor is unknown on purpose: the point is that the screen kept a rejected batch
+            // whose row says what to do, which is the whole argument for validating first.
+            if ($batch->status !== CutoverBatchStatus::Rejected || $batch->error_row_count !== 1) {
+                throw new Exception('expected one rejected row, got '.$batch->status->value.' / '.$batch->error_row_count);
+            }
+
+            $row = $batch->rows()->where('line_number', 2)->first();
+            $messages = $row === null ? [] : $row->errors;
+
+            if ($messages === [] || ! str_contains((string) $messages[0], 'not in the register')) {
+                throw new Exception('the row error does not name the register: '.json_encode($messages));
+            }
+        });
 
         echo "\nValidation is a preview, kept as a batch\n";
         $validated = $this->validatedBatch($accountant);
@@ -359,7 +397,7 @@ CSV;
         $checkIds = DB::table('users')->where('email', 'like', 'render-check-%@fleetguard.local')->pluck('id');
 
         // Batches first: they hold the FK onto the journal entries, so deleting the entry would
-        // orphan the row that names it (§6.3 lets a batch be removed; it never lets its journal be).
+        // orphan the row that names it (lets a batch be removed; it never lets its journal be).
         // The sweep's own ids are not enough — a run that died before its `finally` left rows behind,
         // and the next run reuses the same staff accounts — so anything those accounts created goes.
         $publicIds = array_values(array_unique(array_merge(

@@ -8,15 +8,15 @@ declare(strict_types=1);
  *
  * `verify-maintenance.php` proves the Actions and the schema. This sweep proves the screens that
  * carry them: that a schedule's state is worked out on the page rather than stored, that the seats
- * §9.3 names read the register, the order and the parts shelf, that a seat without
+ * The design names read the register, the order and the parts shelf, that a seat without
  * `work_orders.create` (or `work_orders.close`, `parts.adjust`, `parts.count`) is offered no control
  * that would refuse it, that the register's and the shelf's dialogs write what they say, that the
- * order page walks the §10.6 machine end to end and takes a part from the shelf into its cost, and
+ * order page walks the machine end to end and takes a part from the shelf into its cost, and
  * that a rendered page still shows exactly one filled action.
  *
  * Fixtures live in the `MNT` namespace on the development database. Everything created here is
  * removed afterwards and then asserted gone — including the stock movements' journal entries, deleted
- * under §6.3's lifted barrier — and the job/trip/work-order counters are re-aligned so
+ * under the lifted barrier — and the job/trip/work-order counters are re-aligned so
  * `documents:number-integrity` sees only surviving rows.
  *
  * Run: php scripts/render-maintenance.php   (set RENDER_MAINTENANCE_TRACE=1 for stack traces)
@@ -52,7 +52,9 @@ use App\Domain\Maintenance\TyreStatus;
 use App\Domain\Maintenance\WorkOrderKind;
 use App\Domain\Maintenance\WorkOrderLineKind;
 use App\Domain\Maintenance\WorkOrderStatus;
+use App\Domain\People\Actions\CreateDriver;
 use App\Domain\People\Actions\CreateEmployee;
+use App\Domain\People\Data\DriverDto;
 use App\Domain\People\Data\EmployeeDto;
 use App\Domain\Security\Actions\ChangeUserRole;
 use App\Models\User;
@@ -99,6 +101,17 @@ final class MaintenanceRenderSweep extends TestCase
 
     /** @var list<string> */
     private array $breakdownIds = [];
+
+    /**
+     * The scopes `documents:number-integrity` already reported as drifting when this run started.
+     * A development database that has had fixtures deleted by earlier sweeps carries real gaps in
+     * the `job`/`trip` counters, and no amount of re-aligning can close a gap somebody else burned.
+     * What this sweep must prove is that *it* added no drift, so the assertion compares the
+     * post-run drift set against this baseline instead of demanding a globally clean register.
+     *
+     * @var list<string>
+     */
+    private array $driftBefore = [];
 
     public function createApplication(): Application
     {
@@ -155,6 +168,39 @@ final class MaintenanceRenderSweep extends TestCase
         ));
         $this->employeeIds[] = $mechanic->id;
 
+        // Two drivers for the attribution list's own bands: one whose licence lapsed and whose
+        // permit was never recorded, and one whose papers both cover today.
+        $lapsedEmployee = (app(CreateEmployee::class))(new EmployeeDto(
+            employeeNo: 'EMP-MNT002',
+            name: 'MNT Lapsed Driver',
+            hiredOn: '2022-09-01',
+        ));
+        $this->employeeIds[] = $lapsedEmployee->id;
+
+        $lapsedDriver = (app(CreateDriver::class))(new DriverDto(
+            employeeId: $lapsedEmployee->id,
+            licenceNo: 'DL-MNT0002',
+            licenceCode: 'EC',
+            licenceExpiresOn: Carbon::now()->subDays(9)->toDateString(),
+            allowanceRateBase: 30_000,
+        ));
+
+        $currentEmployee = (app(CreateEmployee::class))(new EmployeeDto(
+            employeeNo: 'EMP-MNT003',
+            name: 'MNT Current Driver',
+            hiredOn: '2024-04-01',
+        ));
+        $this->employeeIds[] = $currentEmployee->id;
+
+        $currentDriver = (app(CreateDriver::class))(new DriverDto(
+            employeeId: $currentEmployee->id,
+            licenceNo: 'DL-MNT0003',
+            licenceCode: 'EC',
+            licenceExpiresOn: Carbon::now()->addMonths(9)->toDateString(),
+            permitExpiresOn: Carbon::now()->addMonths(9)->toDateString(),
+            allowanceRateBase: 30_000,
+        ));
+
         // Due 500 km out on a 10,000 km interval: the page must work out "due soon" itself.
         $schedule = (app(SaveServiceSchedule::class))(new ServiceScheduleDto(
             truckId: $truck->id,
@@ -208,7 +254,7 @@ final class MaintenanceRenderSweep extends TestCase
 
         (app(ReceivePartStock::class))($part, 1_000, Money::ofMinor(10_000, $base), Carbon::now(CurrentCompany::timezone()), 'MNT opening stock');
 
-        echo "== The register renders, and a schedule's state is worked out on the page (§10.6, §10.8) ==\n";
+        echo "== The register renders, and a schedule's state is worked out on the page ==\n";
 
         $this->attempt('the owner opens /maintenance and sees the truck, the schedule and both orders', function () use ($owner, $under, $over): void {
             $html = (string) $this->actingAs($owner, 'web')->get('/maintenance')->assertOk()->getContent();
@@ -220,7 +266,7 @@ final class MaintenanceRenderSweep extends TestCase
             }
         });
 
-        $this->attempt('that page shows no more than one filled action (§5)', function () use ($owner): void {
+        $this->attempt('that page shows no more than one filled action', function () use ($owner): void {
             $html = (string) $this->actingAs($owner, 'web')->get('/maintenance')->assertOk()->getContent();
             $this->assertOneFilledAction($html, '/maintenance');
         });
@@ -229,7 +275,7 @@ final class MaintenanceRenderSweep extends TestCase
             $html = (string) $this->actingAs($dispatcher, 'web')->get('/maintenance')->assertOk()->getContent();
 
             if (! str_contains($html, 'MNT Engine service')) {
-                throw new Exception('the dispatcher cannot see the register (§9.3 gives maintenance.view)');
+                throw new Exception('the dispatcher cannot see the register (the design gives maintenance.view)');
             }
 
             foreach (['openRaise', 'openScheduleDialog', 'saveSchedule', 'raiseWorkOrder', 'raiseForSchedule'] as $control) {
@@ -243,7 +289,7 @@ final class MaintenanceRenderSweep extends TestCase
             $html = (string) $this->actingAs($accountant, 'web')->get('/maintenance')->assertOk()->getContent();
 
             if (! str_contains($html, 'MNT Engine service')) {
-                throw new Exception('the accountant cannot see the register (§9.3 gives maintenance.view)');
+                throw new Exception('the accountant cannot see the register (the design gives maintenance.view)');
             }
 
             foreach (['openRaise', 'saveSchedule', 'raiseWorkOrder'] as $control) {
@@ -263,7 +309,7 @@ final class MaintenanceRenderSweep extends TestCase
             }
         });
 
-        echo "\n== The order page carries the machine (§10.6) ==\n";
+        echo "\n== The order page carries the machine ==\n";
 
         $this->attempt('the owner opens the approved order and is offered the next move', function () use ($owner, $under): void {
             $html = (string) $this->actingAs($owner, 'web')
@@ -278,7 +324,7 @@ final class MaintenanceRenderSweep extends TestCase
             }
         });
 
-        $this->attempt('the approved order shows exactly one filled action (§5)', function () use ($owner, $under): void {
+        $this->attempt('the approved order shows exactly one filled action', function () use ($owner, $under): void {
             $html = (string) $this->actingAs($owner, 'web')
                 ->get('/maintenance/work-orders/'.$under->id)
                 ->assertOk()
@@ -313,7 +359,7 @@ final class MaintenanceRenderSweep extends TestCase
                 ->getContent();
 
             if (! str_contains($html, 'MNT labour — filter kit')) {
-                throw new Exception('the dispatcher cannot read the order (§9.3 gives maintenance.view)');
+                throw new Exception('the dispatcher cannot read the order (the design gives maintenance.view)');
             }
 
             foreach (['wire:click="start"', 'open-wo-plan', 'open-wo-line', 'open-wo-complete', 'wire:click="approve"'] as $control) {
@@ -340,7 +386,7 @@ final class MaintenanceRenderSweep extends TestCase
             }
         });
 
-        echo "\n== The shelf renders, and the seats hold the stock gates (§4.3, §9.3) ==\n";
+        echo "\n== The shelf renders, and the seats hold the stock gates ==\n";
 
         $this->attempt('the owner opens /parts and sees the catalogue line with what is on the shelf', function () use ($owner): void {
             $html = (string) $this->actingAs($owner, 'web')->get('/parts')->assertOk()->getContent();
@@ -352,7 +398,7 @@ final class MaintenanceRenderSweep extends TestCase
             }
         });
 
-        $this->attempt('that page shows no more than one filled action (§5)', function () use ($owner): void {
+        $this->attempt('that page shows no more than one filled action', function () use ($owner): void {
             $html = (string) $this->actingAs($owner, 'web')->get('/parts')->assertOk()->getContent();
             $this->assertOneFilledAction($html, '/parts');
         });
@@ -383,7 +429,7 @@ final class MaintenanceRenderSweep extends TestCase
             $html = (string) $this->actingAs($accountant, 'web')->get('/parts')->assertOk()->getContent();
 
             if (! str_contains($html, 'MNT 15W-40 oil')) {
-                throw new Exception('the accountant cannot read the catalogue (§9.3 gives parts.view)');
+                throw new Exception('the accountant cannot read the catalogue (the design gives parts.view)');
             }
 
             foreach (['openReceive', 'openCount'] as $control) {
@@ -401,7 +447,7 @@ final class MaintenanceRenderSweep extends TestCase
             }
         });
 
-        echo "\n== The dialogs move the shelf, and the ledger follows (§15.2 3e) ==\n";
+        echo "\n== The dialogs move the shelf, and the ledger follows ==\n";
 
         $this->attempt('a receipt written through the dialog lands on the shelf and posts', function () use ($clerk, $part): void {
             Livewire::actingAs($clerk)
@@ -530,7 +576,7 @@ final class MaintenanceRenderSweep extends TestCase
             }
         });
 
-        echo "\n== The register's dialogs write what they say (§4.3) ==\n";
+        echo "\n== The register's dialogs write what they say ==\n";
 
         $this->attempt('a schedule saved through the dialog lands with its interval and its next due point', function () use ($clerk, $truck): void {
             Livewire::actingAs($clerk)
@@ -661,7 +707,7 @@ final class MaintenanceRenderSweep extends TestCase
             }
         });
 
-        echo "\n== The order page walks the machine (§10.6) ==\n";
+        echo "\n== The order page walks the machine ==\n";
 
         $order = WorkOrder::query()->where('title', 'MNT Brake check')->firstOrFail();
 
@@ -774,7 +820,7 @@ final class MaintenanceRenderSweep extends TestCase
             }
 
             if ($truck->status !== FleetStatus::Available->value) {
-                throw new Exception('§10.6 says completion releases the vehicle, but the truck is still '.$truck->status);
+                throw new Exception('the design says completion releases the vehicle, but the truck is still '.$truck->status);
             }
         });
 
@@ -874,6 +920,8 @@ final class MaintenanceRenderSweep extends TestCase
         $this->attempt('the approver rejects the over-limit order with its sentence', function () use ($approver): void {
             $order = WorkOrder::query()->where('title', 'MNT Gearbox repair')->firstOrFail();
 
+            $this->withSession(['auth.password_confirmed_at' => time()]);
+
             Livewire::actingAs($approver)
                 ->test('pages::maintenance.work-order', ['workOrder' => $order])
                 ->set('rejectReason', 'MNT re-quote from a second garage')
@@ -886,7 +934,7 @@ final class MaintenanceRenderSweep extends TestCase
             }
         });
 
-        echo "\n== The three registers write what they say (§15.2 3f) ==\n";
+        echo "\n== The three registers write what they say ==\n";
 
         $this->attempt('a tyre registered through the dialog lands on the spares rack', function () use ($clerk): void {
             Livewire::actingAs($clerk)
@@ -977,6 +1025,48 @@ final class MaintenanceRenderSweep extends TestCase
             }
 
             $this->inspectionIds[] = $row->id;
+        });
+
+        $this->attempt('the driver list an inspection is attributed to tones the papers, and names them after the choice', function () use ($manager, $lapsedDriver, $currentDriver): void {
+            $before = (string) Livewire::actingAs($manager)
+                ->test('pages::maintenance.inspections')
+                ->call('openRecord')
+                ->html();
+
+            // One option carrying both bands: a lapsed licence and a permit nobody recorded a date for.
+            $option = $this->driverOption($before, (int) $lapsedDriver->id);
+
+            if (! str_contains($option, 'text-danger')) {
+                throw new Exception('the lapsed licence was offered with no tone on the option: '.$option);
+            }
+
+            if (! str_contains($option, 'licence Expired')) {
+                throw new Exception('the option carried a colour and no reason: '.$option);
+            }
+
+            if (! str_contains($option, 'PRDP permit no date on file')) {
+                throw new Exception('a permit with no date on file was not said out loud: '.$option);
+            }
+
+            $after = (string) Livewire::actingAs($manager)
+                ->test('pages::maintenance.inspections')
+                ->call('openRecord')
+                ->set('inspDriverId', (string) $lapsedDriver->id)
+                ->html();
+
+            if (! str_contains($after, 'role="status"') || ! str_contains($after, 'days ago')) {
+                throw new Exception('attributing the lapsed driver printed no standing line with its distance');
+            }
+
+            $clean = (string) Livewire::actingAs($manager)
+                ->test('pages::maintenance.inspections')
+                ->call('openRecord')
+                ->set('inspDriverId', (string) $currentDriver->id)
+                ->html();
+
+            if (str_contains($clean, 'role="status"')) {
+                throw new Exception('a driver whose papers cover the day was printed as a paper problem');
+            }
         });
 
         $this->attempt('a breakdown recorded through the dialog is a stop with a place and hours', function () use ($dispatcher, $truck): void {
@@ -1082,7 +1172,7 @@ final class MaintenanceRenderSweep extends TestCase
             $this->workOrderIds[] = $order->id;
         });
 
-        echo "\n== The registers render, and the seats hold their gates (§4.3, §9.3) ==\n";
+        echo "\n== The registers render, and the seats hold their gates ==\n";
 
         $this->attempt('the owner opens all three registers with their rows', function () use ($owner): void {
             $tyres = (string) $this->actingAs($owner, 'web')->get('/tyres')->assertOk()->getContent();
@@ -1114,7 +1204,7 @@ final class MaintenanceRenderSweep extends TestCase
             }
         });
 
-        $this->attempt('each register shows no more than one filled action (§5)', function () use ($owner): void {
+        $this->attempt('each register shows no more than one filled action', function () use ($owner): void {
             foreach (['/tyres', '/inspections', '/breakdowns'] as $route) {
                 $html = (string) $this->actingAs($owner, 'web')->get($route)->assertOk()->getContent();
                 $this->assertOneFilledAction($html, $route);
@@ -1184,6 +1274,20 @@ final class MaintenanceRenderSweep extends TestCase
         return $fresh;
     }
 
+    /** The markup one driver's option carries — id, tone, name and reason between the open and the close. */
+    private function driverOption(string $html, int $driverId): string
+    {
+        $start = strpos($html, 'value="'.$driverId.'" class=');
+
+        if ($start === false) {
+            throw new Exception('the driver select printed no option for driver '.$driverId);
+        }
+
+        $end = strpos($html, '</option>', $start);
+
+        return substr($html, $start, ($end === false ? strlen($html) : $end) - $start);
+    }
+
     /**
      * Counts the filled actions a user actually sees, in a real render of one real state
      * (`bg-accent text-on-accent` is the primary variant's signature; dialogs are stripped because a
@@ -1204,7 +1308,7 @@ final class MaintenanceRenderSweep extends TestCase
             );
 
             throw new Exception(sprintf(
-                '%s: %d filled actions on screen together (%s) — §5 allows one per view',
+                '%s: %d filled actions on screen together (%s) — the design allows one per view',
                 $label,
                 $count,
                 implode(' | ', $labels),
@@ -1257,6 +1361,7 @@ final class MaintenanceRenderSweep extends TestCase
 
         $this->purge();
         $this->alignCounters('before the run, after an earlier run\'s debris');
+        $this->driftBefore = $this->driftScopes();
 
         try {
             $this->sweep();
@@ -1294,6 +1399,11 @@ final class MaintenanceRenderSweep extends TestCase
             $this->employeeIds,
             DB::table('employees')->where('employee_no', 'like', 'EMP-MNT%')->pluck('id')->all(),
         )));
+
+        // The two drivers the attribution list is tested against hang off these employees, so their rows
+        // go first. `inspections.driver_id` is a nullable FK to them, which is why the check below only
+        // ever *chooses* a driver and never records an inspection against one.
+        $driverIds = DB::table('drivers')->whereIn('employee_id', $employeeIds ?: [0])->pluck('id')->all();
 
         $alertIds = $scheduleIds === []
             ? []
@@ -1364,6 +1474,7 @@ final class MaintenanceRenderSweep extends TestCase
         $this->deleteIn('service_schedules', 'id', $scheduleIds);
         $this->deleteIn('odometer_readings', 'truck_id', $truckIds);
         $this->deleteIn('trucks', 'id', $truckIds);
+        $this->deleteIn('drivers', 'id', $driverIds);
         $this->deleteIn('employees', 'id', $employeeIds);
 
         $probeIds = DB::table('users')->where('email', 'like', 'render-mnt-check-%@fleetguard.local')->pluck('id')->all();
@@ -1421,6 +1532,23 @@ final class MaintenanceRenderSweep extends TestCase
         echo "  counters aligned to the surviving rows ({$when})\n";
     }
 
+    /**
+     * The scopes the integrity sweep currently reports as drifting, keyed `company=N scope`.
+     *
+     * @return list<string>
+     */
+    private function driftScopes(): array
+    {
+        Artisan::call('documents:number-integrity');
+
+        preg_match_all('/^\s*DRIFT\s+company=(\d+)\s+(\S+)/m', Artisan::output(), $matches, PREG_SET_ORDER);
+
+        return array_map(
+            static fn (array $match): string => 'company='.$match[1].' '.$match[2],
+            $matches,
+        );
+    }
+
     private function assertNothingSurvives(): void
     {
         $leftovers = [
@@ -1437,6 +1565,9 @@ final class MaintenanceRenderSweep extends TestCase
                 ->whereIn('part_id', DB::table('parts')->where('sku', 'like', 'MNT-%')->pluck('id')->all() ?: [0])
                 ->count(),
             'employees' => (int) DB::table('employees')->where('employee_no', 'like', 'EMP-MNT%')->count(),
+            'drivers' => (int) DB::table('drivers')
+                ->whereIn('employee_id', DB::table('employees')->where('employee_no', 'like', 'EMP-MNT%')->pluck('id')->all() ?: [0])
+                ->count(),
             'tyres' => (int) DB::table('tyres')->where('serial', 'like', 'MNT-%')->count(),
             'tyre positions' => (int) DB::table('tyre_positions')
                 ->whereIn('tyre_id', DB::table('tyres')->where('serial', 'like', 'MNT-%')->pluck('id')->all() ?: [0])
@@ -1463,13 +1594,15 @@ final class MaintenanceRenderSweep extends TestCase
         // past the last surviving number reads as drift. Align first, then ask the command.
         $this->alignCounters('after cleanup, so the counters match the rows that survived');
 
-        $exit = Artisan::call('documents:number-integrity');
+        $drift = array_values(array_diff($this->driftScopes(), $this->driftBefore));
 
-        if ($exit !== 0) {
+        if ($drift !== []) {
             $this->failures++;
-            echo '  FAIL  number integrity — '.mb_substr(str_replace("\n", ' ', Artisan::output()), 0, 200)."\n";
+            echo '  FAIL  number integrity — this sweep burned numbers in '.implode(', ', $drift)."\n";
         } else {
-            echo "  ok    the counters and the surviving rows agree\n";
+            echo '  ok    this sweep added no drift to the counters'
+                .($this->driftBefore === [] ? '' : ' ('.count($this->driftBefore).' scope(s) were already drifting before it)')
+                ."\n";
         }
 
         echo '  ok    the demo fleet is intact: '.DB::table('trucks')->count()." trucks registered\n";

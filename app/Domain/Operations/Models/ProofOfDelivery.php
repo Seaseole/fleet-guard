@@ -18,7 +18,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
  * PROOF_OF_DELIVERY — the evidence that one delivery happened, and who said so.
  *
  * `signature_document_id` and the photo are document ULIDs, not paths: bytes, MIME truth, retention and
- * signed download are the document module's job (§10.8), so a POD inherits "keep the signed note for the
+ * signed download are the document module's job, so a POD inherits "keep the signed note for the
  * tax horizon" instead of re-inventing it next to a file column.
  *
  * `client_uuid` is the offline natural key. A retry after a dropped border signal must land on
@@ -74,6 +74,7 @@ final class ProofOfDelivery extends Model implements AuditableContract
         ];
     }
 
+    /** @return BelongsTo<Trip, $this> */
     public function trip(): BelongsTo
     {
         return $this->belongsTo(Trip::class, 'trip_id');
@@ -85,12 +86,15 @@ final class ProofOfDelivery extends Model implements AuditableContract
      * Named `loadRecord` rather than `load` because `Model::load(array $relations)` is Eloquent's own
      * eager-loading door — PHP refuses the override outright, and the fatal is named after a relation
      * nobody had finished calling yet.
+     *
+     * @return BelongsTo<Load, $this>
      */
     public function loadRecord(): BelongsTo
     {
         return $this->belongsTo(Load::class, 'load_id');
     }
 
+    /** @return BelongsTo<Document, $this> */
     public function signature(): BelongsTo
     {
         return $this->belongsTo(Document::class, 'signature_document_id');

@@ -13,9 +13,10 @@ use App\Domain\Operations\Models\Trip;
 use App\Domain\Operations\TripStatus;
 use App\Domain\People\Queries\DriverDirectory;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 
 /**
- * §10.2's `planned → assigned` validity check, in one place.
+ * The `planned → assigned` validity check, in one place.
  *
  * This is the gate the phase's definition of done turns on: **dispatch refuses an expired licence**.
  * Four things are asked, all of them as of the trip's planned departure rather than as of now,
@@ -32,7 +33,9 @@ use Carbon\CarbonImmutable;
  * drift. What this gate adds is the answers the dispatcher can act on, collected in one pass so the
  * screen lists every problem instead of one per click.
  *
- * @return list<string>
+ * One trip is one question; a week of trips is one round of reads. {@see findingsFor()} answers a
+ * whole board with a fixed number of queries, and `findings()` is that same answer for a single row
+ * — two entry points, one rule set, so the board and the dispatch refusal cannot disagree.
  */
 final class DispatchGate
 {
@@ -46,52 +49,7 @@ final class DispatchGate
      */
     public function findings(Trip $trip): array
     {
-        $on = $this->startDate($trip);
-
-        $findings = [];
-
-        $truck = $this->fleet->truck($trip->truck_id);
-
-        if ($truck === null) {
-            $findings[] = sprintf('Truck #%d is not in this company\'s fleet.', $trip->truck_id);
-        } elseif (! $truck->mayBeDispatched()) {
-            $findings[] = sprintf('Truck %s is %s, so it cannot be dispatched.', $truck->label, $truck->status->label());
-        }
-
-        if ($trip->trailer_id !== null) {
-            $trailer = $this->fleet->trailer($trip->trailer_id);
-
-            if ($trailer === null) {
-                $findings[] = sprintf('Trailer #%d is not in this company\'s fleet.', $trip->trailer_id);
-            } elseif (! $trailer->mayBeDispatched()) {
-                $findings[] = sprintf('Trailer %s is %s, so it cannot be hauled.', $trailer->label, $trailer->status->label());
-            }
-        }
-
-        $driver = $this->drivers->find($trip->driver_id);
-
-        if ($driver === null) {
-            $findings[] = sprintf('Driver #%d is not in this company.', $trip->driver_id);
-        } elseif (! $driver->eligibleOn($on)) {
-            $findings[] = sprintf(
-                '%s cannot drive on %s: status %s, licence %s, PDP permit %s.',
-                $driver->name,
-                $on->toDateString(),
-                $driver->status->value,
-                $driver->licenceExpiresOn === null ? 'not on file' : $driver->licenceExpiresOn->toDateString(),
-                $driver->permitExpiresOn === null ? 'not on file' : $driver->permitExpiresOn->toDateString(),
-            );
-        }
-
-        foreach ($this->expiredPapers($trip, $on) as $paper) {
-            $findings[] = $paper;
-        }
-
-        foreach ($this->driverDoubleBooking($trip, $on) as $clash) {
-            $findings[] = $clash;
-        }
-
-        return $findings;
+        return $this->findingsFor([$trip])[$trip->id] ?? [];
     }
 
     public function mayDispatch(Trip $trip): bool
@@ -100,88 +58,215 @@ final class DispatchGate
     }
 
     /**
-     * The filed papers that no longer cover the start date.
+     * The findings for every trip in the set, keyed by trip id.
      *
-     * The driver's *row* carries the two dates dispatch reads (§4.3), and the document register
-     * carries the scans with their own expiry — a lapsed insurance certificate is the one that stops
-     * a truck at a border, and nothing else in the schema knows about it. Only `current` paper is
-     * asked: a superseded scan is evidence of what was once filed, not a claim about today (§10.8).
+     * The board used to ask this once per row, and each answer cost a truck, a trailer, a driver,
+     * two document reads and a clash read. The same questions are asked here with a bulk read per
+     * kind: every truck, every trailer, every driver, every possibly-expired paper and every
+     * same-day commit, each fetched once for the whole set.
      *
-     * @return list<string>
+     * @param  iterable<Trip>  $trips
+     * @return array<string, list<string>>
      */
-    private function expiredPapers(Trip $trip, CarbonImmutable $on): array
+    public function findingsFor(iterable $trips): array
     {
-        $subjects = [
-            'truck' => [$trip->truck_id, DocumentType::Insurance],
-            'driver' => [$trip->driver_id, DocumentType::Licence, DocumentType::Permit],
-        ];
+        /** @var Collection<int, Trip> $rows */
+        $rows = Collection::make($trips)->values();
 
-        $expired = [];
-
-        foreach ($subjects as $morphType => $spec) {
-            $morphId = (string) $spec[0];
-            $types = array_slice($spec, 1);
-
-            /** @var list<Document> $documents */
-            $documents = Document::query()
-                ->where('morph_type', $morphType)
-                ->where('morph_id', $morphId)
-                ->where('lifecycle', Lifecycle::Current->value)
-                ->whereIn('type', array_map(static fn (DocumentType $t): string => $t->value, $types))
-                ->whereNotNull('expires_on')
-                ->whereDate('expires_on', '<', $on->toDateString())
-                ->get()
-                ->all();
-
-            foreach ($documents as $document) {
-                $expired[] = sprintf(
-                    'The filed %s "%s" against the %s expired on %s, before this trip departs.',
-                    $document->type instanceof DocumentType ? $document->type->value : (string) $document->type,
-                    $document->title,
-                    $morphType,
-                    $document->expires_on?->toDateString() ?? 'an unknown date',
-                );
-            }
+        if ($rows->isEmpty()) {
+            return [];
         }
 
-        return $expired;
+        /** @var array<int, CarbonImmutable> $on the day each trip is judged against */
+        $on = [];
+
+        foreach ($rows as $trip) {
+            $on[$trip->id] = $this->startDate($trip);
+        }
+
+        /** @var non-empty-list<string> $days */
+        $days = array_values(array_map(static fn (CarbonImmutable $day): string => $day->toDateString(), $on));
+        $first = min($days);
+        $last = max($days);
+
+        $trucks = $this->fleet->trucksById($rows->pluck('truck_id')->filter()->all());
+        $trailers = $this->fleet->trailersById($rows->pluck('trailer_id')->filter()->all());
+        $drivers = $this->drivers->findMany($rows->pluck('driver_id')->filter()->all());
+        $papers = $this->filedPapers($rows, $last);
+        $clashes = $this->sameDayCommits($rows, $first, $last);
+
+        $found = [];
+
+        foreach ($rows as $trip) {
+            $day = $on[$trip->id];
+            $findings = [];
+
+            $truck = $trucks[$trip->truck_id] ?? null;
+
+            if ($truck === null) {
+                $findings[] = sprintf('Truck #%d is not in this company\'s fleet.', $trip->truck_id);
+            } elseif (! $truck->mayBeDispatched()) {
+                $findings[] = sprintf('Truck %s is %s, so it cannot be dispatched.', $truck->label, $truck->status->label());
+            }
+
+            if ($trip->trailer_id !== null) {
+                $trailer = $trailers[$trip->trailer_id] ?? null;
+
+                if ($trailer === null) {
+                    $findings[] = sprintf('Trailer #%d is not in this company\'s fleet.', $trip->trailer_id);
+                } elseif (! $trailer->mayBeDispatched()) {
+                    $findings[] = sprintf('Trailer %s is %s, so it cannot be hauled.', $trailer->label, $trailer->status->label());
+                }
+            }
+
+            $driver = $drivers[$trip->driver_id] ?? null;
+
+            if ($driver === null) {
+                $findings[] = sprintf('Driver #%d is not in this company.', $trip->driver_id);
+            } elseif (! $driver->eligibleOn($day)) {
+                $findings[] = sprintf(
+                    '%s cannot drive on %s: status %s, licence %s, PRDP permit %s.',
+                    $driver->name,
+                    $day->toDateString(),
+                    $driver->status->value,
+                    $driver->licenceExpiresOn === null ? 'not on file' : $driver->licenceExpiresOn->toDateString(),
+                    $driver->permitExpiresOn === null ? 'not on file' : $driver->permitExpiresOn->toDateString(),
+                );
+            }
+
+            foreach ($papers as $key => $documents) {
+                // Only this trip's subjects; the bulk read holds every subject in the set.
+                if ($key !== 'truck:'.$trip->truck_id && $key !== 'driver:'.$trip->driver_id) {
+                    continue;
+                }
+
+                foreach ($documents as $document) {
+                    if ($document->expires_on === null || $document->expires_on->toDateString() >= $day->toDateString()) {
+                        continue;
+                    }
+
+                    $findings[] = sprintf(
+                        'The filed %s "%s" against the %s expired on %s, before this trip departs.',
+                        $document->type instanceof DocumentType ? $document->type->value : (string) $document->type,
+                        $document->title,
+                        $document->morph_type,
+                        $document->expires_on->toDateString(),
+                    );
+                }
+            }
+
+            foreach ($clashes[$trip->driver_id.'|'.$day->toDateString()] ?? [] as $other) {
+                if ($other->id === $trip->id) {
+                    continue;
+                }
+
+                $findings[] = sprintf(
+                    'That driver is already on trip %s, planned for the same day.',
+                    $other->trip_no,
+                );
+            }
+
+            $found[$trip->id] = $findings;
+        }
+
+        return $found;
     }
 
     /**
-     * A driver committed to another trip that is still live on this date.
+     * Filed documents that have lapsed before the latest day in the set, grouped by subject.
+     *
+     * Only `current` paper is asked: a superseded scan is evidence of what was once filed, not a
+     * claim about today. Each trip then keeps the papers against its own subject that
+     * expired before *its* start date — the bulk read is per set, the comparison is per trip.
+     *
+     * @param  Collection<int, Trip>  $trips
+     * @return array<string, list<Document>> keyed `morphType:morphId`
+     */
+    private function filedPapers(Collection $trips, string $latestDay): array
+    {
+        $truckIds = $trips->pluck('truck_id')->filter()->unique()->values()->all();
+        $driverIds = $trips->pluck('driver_id')->filter()->unique()->values()->all();
+
+        if ($truckIds === [] && $driverIds === []) {
+            return [];
+        }
+
+        /** @var Collection<int, Document> $documents */
+        $documents = Document::query()
+            ->where('lifecycle', Lifecycle::Current->value)
+            ->whereNotNull('expires_on')
+            ->whereDate('expires_on', '<', $latestDay)
+            ->where(function ($query) use ($truckIds, $driverIds): void {
+                if ($truckIds !== []) {
+                    $query->orWhere(fn ($truck) => $truck
+                        ->where('morph_type', 'truck')
+                        ->whereIn('morph_id', $truckIds)
+                        ->where('type', DocumentType::Insurance->value));
+                }
+
+                if ($driverIds !== []) {
+                    $query->orWhere(fn ($driver) => $driver
+                        ->where('morph_type', 'driver')
+                        ->whereIn('morph_id', $driverIds)
+                        ->whereIn('type', [DocumentType::Licence->value, DocumentType::Permit->value]));
+                }
+            })
+            ->get();
+
+        $grouped = [];
+
+        foreach ($documents as $document) {
+            $grouped[$document->morph_type.':'.$document->morph_id][] = $document;
+        }
+
+        return $grouped;
+    }
+
+    /**
+     * Live trips by driver and stored day, for every driver in the set.
      *
      * Checked against trips rather than assignments because the crew is named on both sides, and it
      * is the trip the dispatcher is looking at. A trip that has reached `completed` no longer needs
      * the driver, and an aborted or cancelled one never did.
      *
-     * @return list<string>
+     * @param  Collection<int, Trip>  $trips
+     * @return array<string, list<Trip>> keyed `driverId|Y-m-d` of the stored departure date
      */
-    private function driverDoubleBooking(Trip $trip, CarbonImmutable $on): array
+    private function sameDayCommits(Collection $trips, string $firstDay, string $lastDay): array
     {
-        $clashing = Trip::query()
-            ->whereKeyNot($trip->id)
-            ->where('driver_id', $trip->driver_id)
-            ->whereNotNull('planned_departure_at')
-            ->whereDate('planned_departure_at', '=', $on->toDateString())
-            ->get()
-            ->reject(static fn (Trip $other): bool => in_array($other->status, [
-                TripStatus::Cancelled,
-                TripStatus::Aborted,
-                TripStatus::Completed,
-                TripStatus::Closed,
-                TripStatus::Draft,
-            ], true));
+        $driverIds = $trips->pluck('driver_id')->filter()->unique()->values()->all();
 
-        return $clashing
-            ->map(static fn (Trip $other): string => sprintf(
-                'That driver is already on trip %s, planned for the same day.',
-                $other->trip_no,
-            ))
-            ->values()
-            ->all();
+        if ($driverIds === []) {
+            return [];
+        }
+
+        /** @var Collection<int, Trip> $others */
+        $others = Trip::query()
+            ->whereIn('driver_id', $driverIds)
+            ->whereNotNull('planned_departure_at')
+            ->whereDate('planned_departure_at', '>=', $firstDay)
+            ->whereDate('planned_departure_at', '<=', $lastDay)
+            ->whereNotIn('status', [
+                TripStatus::Cancelled->value,
+                TripStatus::Aborted->value,
+                TripStatus::Completed->value,
+                TripStatus::Closed->value,
+                TripStatus::Draft->value,
+            ])
+            ->get(['id', 'driver_id', 'trip_no', 'status', 'planned_departure_at']);
+
+        $grouped = [];
+
+        foreach ($others as $other) {
+            // The stored date, not the company's day: this is the comparison the single-trip query
+            // has always made (`whereDate(...) = $on`), and the board must not drift from the gate.
+            $grouped[$other->driver_id.'|'.$other->planned_departure_at->toDateString()][] = $other;
+        }
+
+        return $grouped;
     }
 
-    /** The trip's own start date, in the company's day (§2), defaulting to today for an undated plan. */
+    /** The trip's own start date, in the company's day, defaulting to today for an undated plan. */
     private function startDate(Trip $trip): CarbonImmutable
     {
         $planned = $trip->planned_departure_at;

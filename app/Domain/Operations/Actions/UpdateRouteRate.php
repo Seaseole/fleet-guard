@@ -13,7 +13,7 @@ use App\Domain\Operations\Support\RouteRateWindow;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Corrects a rate card (§4.1, D1) — a wrong digit, a wrong basis, a window that was entered from
+ * Corrects a rate card (D1) — a wrong digit, a wrong basis, a window that was entered from
  * the wrong month.
  *
  * The overlap check re-runs **excluding this row**, which is what makes an in-place correction

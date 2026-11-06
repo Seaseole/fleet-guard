@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * §10.5 CREDIT_NOTE_LINE — the line a credit is for, and the invoice line it corrects.
+ * CREDIT_NOTE_LINE — the line a credit is for, and the invoice line it corrects.
  *
  * Dimensions are **copied from the invoice line at write time**, not read back at report time: a credit
  * raised in March against a leg corrected in June must still debit the same truck and trip, or that leg's

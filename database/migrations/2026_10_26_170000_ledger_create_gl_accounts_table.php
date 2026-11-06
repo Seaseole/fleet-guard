@@ -10,14 +10,14 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.2 / §6.1 GL_ACCOUNT — the chart of accounts as a tree (§6.1 decision 1).
+     * / GL_ACCOUNT — the chart of accounts as a tree (decision 1).
      *
      * `parent_id` gives the trial-balance rollups without a report-definition table;
      * `is_postable` marks the header rows that group but never take a line; `is_system` marks the
      * seeded accounts that cannot be deleted or re-coded; `external_ref` holds the accountant's own
      * code so an export lines up without a mapping spreadsheet.
      *
-     * `default_tax_rate_id` and the dimension-mask check land with their tables (§17 Q4 leaves the
+     * `default_tax_rate_id` and the dimension-mask check land with their tables (Q4 leaves the
      * VAT rates unresolved), which is why it is an unconstrained bigint here rather than an FK that
      * would have to be dropped later.
      */
@@ -37,7 +37,7 @@ return new class extends Migration
             $table->boolean('is_postable')->default(true);
             $table->boolean('is_active')->default(true);
 
-            // §6.1 bit flags: truck|trip|customer|driver|cost_centre. A mask rather than five
+            // Bit flags: truck|trip|customer|driver|cost_centre. A mask rather than five
             // booleans because the poster asserts one integer and the report reads it the same way.
             $table->unsignedTinyInteger('allowed_dimension_mask')->default(0);
 
@@ -55,7 +55,7 @@ return new class extends Migration
             $table->foreign('currency_code')->references('code')->on('currencies');
         });
 
-        // Blueprint has no CHECK support (§20.4). §6.1 decision 2: `type` is a string + enum +
+        // Blueprint has no CHECK support. Decision 2: `type` is a string + enum +
         // CHECK rather than a MySQL ENUM, because adding an ENUM value is an ALTER TABLE with the
         // whole value list and both engines enforce a CHECK list as one statement.
         DB::statement('alter table `gl_accounts` add constraint `gl_accounts_type_allowed` check (type in (\'asset\', \'liability\', \'equity\', \'revenue\', \'expense\'))');

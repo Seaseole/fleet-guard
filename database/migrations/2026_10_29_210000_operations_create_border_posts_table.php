@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.4 BORDER_POST — the master list of gates a trip can cross at.
+     * BORDER_POST — the master list of gates a trip can cross at.
      *
      * Held per company because the post's country and opening hours are operational facts a
      * dispatcher edits, not a global gazetteer. `open_from`/`open_to` are nullable: a post that does

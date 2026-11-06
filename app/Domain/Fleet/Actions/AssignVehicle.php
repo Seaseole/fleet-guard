@@ -15,11 +15,11 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Assigns a truck (and optionally a trailer and a driver) to a period (§4.3, D1).
+ * Assigns a truck (and optionally a trailer and a driver) to a period (D1).
  *
  * Three refusals, all before anything is written:
  *
- * - an asset that is not `available` — §10.1 says only an available asset may start an assignment;
+ * - an asset that is not `available` — the design says only an available asset may start an assignment;
  * - an overlapping assignment for the truck, trailer or driver — history is append-only, so the
  *   overlap is refused rather than the old row being closed implicitly;
  * - a driver whose status or papers do not cover the start date. People answers that question
@@ -112,11 +112,11 @@ final class AssignVehicle
      * The new assignment is open-ended, so any existing row that is still open — or closes at or
      * after the new start — covers the same interval.
      *
-     * One row shape is excluded: a window whose end equals its start. §10.2 lets a hold lift a
+     * One row shape is excluded: a window whose end equals its start. Lets a hold lift a
      * reservation *before the truck ever left*, and the honest end time for that is the moment it
      * opened — a zero-length window that still blocked the corridor would strand a truck that was
      * never actually held. Every real window keeps the inclusive rule, so a handover at 10:00 still
-     * counts against a 10:00 start (§10.1's "history is append-only, so the overlap is refused rather
+     * counts against a 10:00 start (the "history is append-only, so the overlap is refused rather
      * than the old row being closed implicitly").
      */
     private function refuseOverlap(string $kind, string $label, string $column, int $id, CarbonImmutable $from): void

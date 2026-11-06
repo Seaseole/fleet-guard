@@ -7,13 +7,13 @@ namespace App\Domain\Invoicing;
 /**
  * What a billed line actually charges for, and the ledger account that answers to it.
  *
- * The six chargeable values are inherited verbatim from `chargeables.type` (§4.1) so a POD's earning
+ * The six chargeable values are inherited verbatim from `chargeables.type` so a POD's earning
  * arrives at the same account an office-raised line of the same kind does; `manual` is the seventh because
- * an invoice drafted from nothing has no chargeable behind it, and §4.1's list has no word for it.
+ * an invoice drafted from nothing has no chargeable behind it, and the list has no word for it.
  *
- * `accountCode()` is §6.8's answer to "which account does this line hit" — one place, one file, exactly as
+ * `accountCode()` is the answer to "which account does this line hit" — one place, one file, exactly as
  * the design asks its posting rules to live. It is keyed here rather than in a registry table because the
- * mapping is a decision, not a preference: `4100` requires truck **and** trip **and** customer (§6.1's
+ * mapping is a decision, not a preference: `4100` requires truck **and** trip **and** customer (the
  * mask), which is only satisfiable by a line that names a freight leg, so a `freight` line that could not
  * post to 4100 is a bug rather than a configuration.
  *
@@ -49,7 +49,7 @@ enum InvoiceLineKind: string
         };
     }
 
-    /** The COA v1 code this line's revenue is credited to (§6.8). */
+    /** The COA v1 code this line's revenue is credited to. */
     public function accountCode(): string
     {
         return match ($this) {
@@ -62,7 +62,7 @@ enum InvoiceLineKind: string
     }
 
     /**
-     * The dimensions this account demands (§6.1). Only 4100 asks for a truck and a trip; 4200/4300/4400 ask
+     * The dimensions this account demands. Only 4100 asks for a truck and a trip; 4200/4300/4400 ask
      * for the trip alone. A line that cannot name what its account requires is refused before the row is
      * written rather than at the ledger, so the answer arrives on the form.
      *

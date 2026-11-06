@@ -16,7 +16,7 @@ use App\Domain\Kernel\Cutover\Support\ImportValues;
 use InvalidArgumentException;
 
 /**
- * §15.2 Phase 1 — the truck register.
+ * Phase 1 — the truck register.
  *
  * Matched by registration number, which is how the fleet is spoken about; `fleet_no` and `vin` are
  * two alternate unique keys, so each is checked against the database and the rest of the file before
@@ -24,7 +24,7 @@ use InvalidArgumentException;
  *
  * An existing truck is updated through {@see UpdateTruck}, which deliberately ignores
  * `odometer_km`: mileage is a projection of readings, and an import that typed over it would be the
- * silent correction §4.3's plausibility rule exists to prevent. The file's reading therefore applies
+ * silent correction the plausibility rule exists to prevent. The file's reading therefore applies
  * only when the truck is created here.
  */
 final class ImportTrucks implements CutoverDatasetHandler

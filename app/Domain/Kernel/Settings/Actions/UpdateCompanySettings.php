@@ -12,11 +12,11 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * The only write path for company settings (§14.2).
+ * The only write path for company settings.
  *
  * It refuses a key that is not in the catalogue, so "settings" cannot become a second, untyped
  * key/value store; it normalises at this boundary (a major-unit amount becomes minor units once);
- * and it records the change in the security trail, because §9.3 marks `settings.manage` ⚑ and a
+ * and it records the change in the security trail, because marks `settings.manage` ⚑ and a
  * lowered approval limit is exactly the kind of "who did that" the trail exists for.
  */
 final class UpdateCompanySettings
@@ -37,7 +37,7 @@ final class UpdateCompanySettings
             throw new InvalidArgumentException('Refusing to write settings outside the catalogue: '.implode(', ', $unknown));
         }
 
-        // A door field's truth lives in another register (§20.37), so storing it here would create the
+        // A door field's truth lives in another register, so storing it here would create the
         // second answer this design refuses: the form excludes them, but the rule belongs to the writer,
         // which is the only path every caller shares.
         $doors = array_values(array_filter(

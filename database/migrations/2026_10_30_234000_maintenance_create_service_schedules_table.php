@@ -10,10 +10,10 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 SERVICE_SCHEDULE — "this truck is serviced every N km / hours / days, and it was last
-     * done at X" (§15.2 phase 3).
+     * SERVICE_SCHEDULE — "this truck is serviced every N km / hours / days, and it was last
+     * done at X".
      *
-     * The row stores the *rule* and the *last service*; the due state is derived, not stored. §10.8
+     * The row stores the *rule* and the *last service*; the due state is derived, not stored.
      * made that argument for document validity — a stored `expired` boolean is a second definition
      * of expiry that drifts from the first — and the same holds here: whether a schedule is due is a
      * function of the truck's odometer, the truck's engine hours, today's date and this row, and
@@ -22,7 +22,7 @@ return new class extends Migration
      * ended.
      *
      * `interval_value` and the two `*_at_value` columns carry kilometres for a `km` schedule and
-     * engine hours **×100** for an `hours` one, so an hours interval is still an integer (§5.5's
+     * engine hours **×100** for an `hours` one, so an hours interval is still an integer (the
      * scale applied to a physical quantity). A `date` schedule uses `interval_value` as days and
      * `last_done_on`/`next_due_on` for the dates. A `condition` schedule has no interval at all: it is
      * done when a person says the condition exists, and the register shows it without a due point.

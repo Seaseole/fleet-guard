@@ -6,7 +6,7 @@ use App\Http\Controllers\Operations\DownloadDriverLinkQrController;
 use Illuminate\Support\Facades\Route;
 
 /*
- * Operations screens (§3.2). Phase 1 ships the route register and its rate cards; jobs, dispatch,
+ * Operations screens. Phase 1 ships the route register and its rate cards; jobs, dispatch,
  * trips and POD arrive in Phase 2 on the same file.
  *
  * Routes and their prices are one screen because a corridor with no price on it is a plan, not an
@@ -20,7 +20,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         ->name('operations.routes');
 
     /*
-     * The board is gated on `trips.view` rather than `trips.dispatch`: §9.3's Dispatcher seat plans and
+     * The board is gated on `trips.view` rather than `trips.dispatch`: The Dispatcher seat plans and
      * dispatches, but an Accountant or Workshop should still be able to open it to answer "is that truck
      * coming back". What each seat may *do* is decided by the buttons, which ask their own permission.
      */
@@ -30,15 +30,15 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
 
     /*
      * `jobs.view` opens the register; the quote's *amount* is a second question, answered by the
-     * `seeCustomerTerms` field gate inside the page (§9.4), which is why the Dispatcher — who may create
-     * and quote a job (§9.3) — is not handed the figure by the route.
+     * `seeCustomerTerms` field gate inside the page, which is why the Dispatcher — who may create
+     * and quote a job — is not handed the figure by the route.
      */
     Route::livewire('jobs', 'pages::operations.jobs')
         ->middleware('can:jobs.view')
         ->name('operations.jobs');
 
     /*
-     * Bound by the trip's ULID (§2), so a foreign id is a 404 rather than somebody else's manifest: the
+     * Bound by the trip's ULID, so a foreign id is a 404 rather than somebody else's manifest: the
      * tenancy scope answers the lookup before `mount()` ever sees a row.
      */
     Route::livewire('trips/{trip}', 'pages::operations.detail')
@@ -47,7 +47,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         ->name('operations.trip');
 
     /*
-     * The QR of a driver link (§9.6). `kiosk.token.issue` rather than `trips.view`, because the file it
+     * The QR of a driver link. `kiosk.token.issue` rather than `trips.view`, because the file it
      * draws is the live door itself: a seat that may only read the trip must not be able to ask for the
      * code a driver scans at the gate.
      */

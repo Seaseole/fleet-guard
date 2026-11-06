@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Maintenance;
 
 /**
- * §4.3 INSPECTION `result` — what the check found, in three words.
+ * INSPECTION `result` — what the check found, in three words.
  *
  * The enum carries the rule the JSON cannot: a `pass` means every item was answered and every answer
  * was yes, and a `fail` means an item was answered no. Without that, "pass" becomes a button a hurried

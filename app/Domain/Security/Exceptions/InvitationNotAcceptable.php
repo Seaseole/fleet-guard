@@ -38,7 +38,7 @@ final class InvitationNotAcceptable extends RuntimeException
 
     /**
      * A deploy fault, not a user fault: the invitation names a role that this company's role set
-     * does not contain (§9.1's first-run setup has not run, or the catalogue changed under an
+     * does not contain (the first-run setup has not run, or the catalogue changed under an
      * existing invite). It reaches the log, and the invitee is told the link needs re-sending.
      */
     public static function roleSetMissing(string $roleKey, int $companyId): self

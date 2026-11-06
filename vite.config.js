@@ -19,6 +19,12 @@ export default defineConfig({
                 bunny('IBM Plex Mono', {
                     weights: [400, 500],
                 }),
+                // The Display voice for a view's nameplate (`--font-display`). Condensed, because the
+                // role is signage — a plate, a header band, a tachograph print — not prose. Same family
+                // as the UI face, so the nameplate and the labels under it cannot drift out of tune.
+                bunny('IBM Plex Sans Condensed', {
+                    weights: [600, 700],
+                }),
             ],
         }),
         tailwindcss(),

@@ -18,7 +18,7 @@ use App\Domain\Invoicing\CreditNoteLifecycle;
 use App\Domain\Invoicing\Data\CreditNoteDto;
 use App\Domain\Invoicing\Data\CustomerDto;
 use App\Domain\Invoicing\Data\PaymentDto;
-use App\Domain\Invoicing\Models\CreditNote;
+use App\Domain\Invoicing\Documents\InvoiceDocuments;
 use App\Domain\Invoicing\InvoiceKind;
 use App\Domain\Invoicing\InvoiceLifecycle;
 use App\Domain\Invoicing\InvoiceLineKind;
@@ -28,6 +28,8 @@ use App\Domain\Invoicing\Models\Payment;
 use App\Domain\Invoicing\Models\PaymentAllocation;
 use App\Domain\Invoicing\Models\TaxRate;
 use App\Domain\Invoicing\PaymentMethod;
+use App\Domain\Invoicing\Queries\AgeingReport;
+use App\Domain\Invoicing\Queries\Statements;
 use App\Domain\Invoicing\SettlementState;
 use App\Domain\Kernel\Identity\RoleKey;
 use App\Domain\Kernel\Ledger\Models\JournalEntry;
@@ -69,22 +71,22 @@ use Illuminate\Support\Str;
 
 /*
  * Phase 4 slice 4b verification — the invoice, its gap-free number and the `InvoiceIssued` posting
- * (DESIGN.md §4.2, §5.5, §6.8, §7.4, §10.4, §20.32).
+ *.
  *
  * The sentences this slice turns on:
  *
  *  - a delivered trip's `ready` chargeables become **one** fiscal document, numbered at issue and never
- *    before (§7.4), with the customer, terms, due date and currency block the ageing axis will read;
- *  - VAT is computed per line and rounded once (§5.5), so the invoice's tax is the sum of its lines;
+ *    before, with the customer, terms, due date and currency block the ageing axis will read;
+ *  - VAT is computed per line and rounded once, so the invoice's tax is the sum of its lines;
  *  - the ledger receives exactly one `InvoiceIssued` entry: Dr 1150 gross, Cr each line's own revenue
  *    account for the net, Cr 2125 for the tax — with truck, trip and customer on the revenue line because
- *    4100 cannot be posted without them (§6.1);
+ *    4100 cannot be posted without them;
  *  - the chargeables are claimed `ready → billed`, so a second issue returns the first document instead of
  *    spending a second number or billing the delivery twice;
- *  - and the trip's projection finally carries revenue (§20.17 left it at zero until an invoice existed).
+ *  - and the trip's projection finally carries revenue (left it at zero until an invoice existed).
  *
  * Fixtures are prefixed `INV-VERIFY` and removed in `finally` — including this run's journal entries, which
- * are deleted under {@see LedgerBarrier::withLiftedGuard()} with a written reason, as §6.3 requires.
+ * are deleted under {@see LedgerBarrier::withLiftedGuard()} with a written reason, as the design requires.
  *
  * Run: php scripts/verify-invoicing.php
  */
@@ -213,10 +215,10 @@ function cleanUp(): void
     DB::table('trucks')->where('registration_no', 'like', '%IV1')->delete();
     DB::table('trailers')->where('registration_no', 'like', '%IV1')->delete();
 
-    // The issuer probe, and the role row that carried `invoices.issue` (§9.3).
+    // The issuer probe, and the role row that carried `invoices.issue`.
     $probeIds = DB::table('users')->where('email', 'like', 'verify-inv-%@fleetguard.local')->pluck('id')->all();
 
-    // The allocator records who spent each number (§7.4). That reference has to be released before the
+    // The allocator records who spent each number. That reference has to be released before the
     // probe user can be removed, or the cleanup is what breaks the run.
     DB::table('number_sequences')->whereIn('last_used_by', $probeIds ?: [0])->update(['last_used_by' => null]);
     DB::table('model_has_roles')->where('model_type', User::class)->whereIn('model_id', $probeIds ?: [0])->delete();
@@ -225,7 +227,7 @@ function cleanUp(): void
 
     /*
      * Put every counter this run could have advanced back where the surviving documents leave it. This is
-     * §20.8's rule that a harness must not break its neighbours: deleting the fixture trip and job while
+     * The rule that a harness must not break its neighbours: deleting the fixture trip and job while
      * their numbers stay burned makes `documents:number-integrity` report drift that no person caused, and
      * the next allocator call would then collide. The journal counter is included because this run posts and
      * purges entries; the invoice counter because that is the number this slice spends.
@@ -265,7 +267,7 @@ cleanUp();
 Artisan::call('numbering:ensure', ['--company' => 1]);
 
 /*
- * The seat that issues is the Accountant's (§9.3 gives it `invoices.issue`); the seeded user 1 is a
+ * The seat that issues is the Accountant's (the design gives it `invoices.issue`); the seeded user 1 is a
  * dispatcher and must not be silently granted it by a harness. The probe is created the way
  * verify-fuel creates its own, and removed in the same `cleanUp()`.
  */
@@ -352,7 +354,7 @@ try {
     }
 
     check($trip->status->value === 'planned', 'the probe reaches a planned trip with two ready charges');
-    check(Trip::query()->findOrFail($trip->id)->revenue_base === 0, '...whose revenue projection is still zero, as §20.17 left it');
+    check(Trip::query()->findOrFail($trip->id)->revenue_base === 0, '...whose revenue projection is still zero, as left it');
 
     /* ------------------------------------------------------------------ A: the number */
     echo "\n== A: one fiscal document, numbered at issue and never before ==\n";
@@ -365,7 +367,7 @@ try {
         ->where('period_key', NumberPeriod::keyFor('financial_year', Carbon::now(), 'invoice'))
         ->value('next_value');
 
-    check(! Gate::forUser($dispatcher)->allows('invoices.issue'), 'a dispatcher does not hold invoices.issue (§9.3)');
+    check(! Gate::forUser($dispatcher)->allows('invoices.issue'), 'a dispatcher does not hold invoices.issue');
 
     Auth::login($dispatcher);
     $dispatcherRefused = '';
@@ -384,28 +386,28 @@ try {
 
     check($invoice->status === InvoiceLifecycle::Issued, 'the invoice is issued, not drafted');
     check($invoice->number !== null && preg_match('/^INV-[A-Z0-9\/]+-\d{7}$/', $invoice->number) === 1, '...and carries a rendered INV-{PERIOD}-{SEQ:7} number', (string) $invoice->number);
-    check($invoice->issued_at !== null && $invoice->issued_by === $issuer->id, '...with who issued it and when (§7.4)');
+    check($invoice->issued_at!== null && $invoice->issued_by === $issuer->id, '...with who issued it and when');
     check($invoice->kind === InvoiceKind::Trip, '...as a trip invoice');
     check($invoice->issue_date->toDateString() === Carbon::now()->toDateString(), '...dated today');
-    check($invoice->due_on->toDateString() === Carbon::now()->addDays(30)->toDateString(), '...due on the customer\'s net_30 terms, not on today (§10.4 ageing)');
+    check($invoice->due_on->toDateString() === Carbon::now()->addDays(30)->toDateString(), '...due on the customer\'s net_30 terms, not on today (ageing)');
     check($invoice->terms_snapshot === 'net_30', '...with the terms frozen on the document, so a later change cannot re-date it');
     check($invoice->customer_id === $customer->id && $invoice->job_id === $job->id, '...addressed to the job\'s customer and naming the job');
     check($invoice->amount === 9_250_000, '...net 9 250 000 minor units: the sum of the charges, no more', (string) $invoice->amount);
     check((int) $sequenceBefore + 1 === (int) DB::table('number_sequences')
         ->where('company_id', 1)->where('scope', 'invoice')
         ->where('period_key', NumberPeriod::keyFor('financial_year', Carbon::now(), 'invoice'))
-        ->value('next_value'), '...and exactly one sequence value was consumed (§7.4)');
+        ->value('next_value'), '...and exactly one sequence value was consumed');
 
     /* ------------------------------------------------------------------ B: the lines */
-    echo "\n== B: one line per chargeable, VAT rounded per line (§5.5) ==\n";
+    echo "\n== B: one line per chargeable, VAT rounded per line ==\n";
 
     $lines = $invoice->lines;
     check($lines->count() === 2, 'two lines, one per chargeable');
     check($lines[0]->line_kind === InvoiceLineKind::Freight && $lines[1]->line_kind === InvoiceLineKind::Detention, '...in the order the work was delivered');
     check($lines[0]->chargeable_id === $freightId && $lines[1]->chargeable_id === $detentionId, '...each naming the charge it billed');
-    check($lines[0]->revenue_account_code === '4100' && $lines[1]->revenue_account_code === '4200', '...and the account its kind answers to (§6.8)');
+    check($lines[0]->revenue_account_code === '4100' && $lines[1]->revenue_account_code === '4200', '...and the account its kind answers to');
     check($lines[0]->quantity_x100 === 100 && $lines[0]->unit_price_minor === 9_000_000, '...one unit at the chargeable\'s own price, so the row\'s rounded-product CHECK holds');
-    check($lines[0]->trip_id === $trip->id && $lines[0]->truck_id === $truck->id, '...carrying the leg 4100 requires (§6.1)');
+    check($lines[0]->trip_id === $trip->id && $lines[0]->truck_id === $truck->id, '...carrying the leg 4100 requires');
 
     // 12.00% is stored as 120 000, i.e. a percentage with two decimals — so the fraction of the amount is
     // the product over 120 000 × 100, not over 120 000. Computed here independently of `TaxRate::taxOn()`
@@ -415,7 +417,7 @@ try {
 
     check($lines[0]->tax_amount === $expectedTaxOne, '...VAT on the freight line is the rate applied once, integer arithmetic', (string) $lines[0]->tax_amount);
     check($lines[1]->tax_amount === $expectedTaxTwo, '...and VAT on the detention line is computed on that line, not on the total', (string) $lines[1]->tax_amount);
-    check($invoice->tax_amount === $expectedTaxOne + $expectedTaxTwo, 'the invoice tax is the sum of the rounded lines, never round-of-sum (§5.5)');
+    check($invoice->tax_amount === $expectedTaxOne + $expectedTaxTwo, 'the invoice tax is the sum of the rounded lines, never round-of-sum');
     check($invoice->balance_amount === $invoice->amount + $invoice->tax_amount, '...and the outstanding balance is the gross the customer owes');
     check($lines[0]->tax_rate_id === $rate->id, '...each line naming the rate window it was billed under');
 
@@ -446,10 +448,10 @@ try {
     check(count($vat) === 1 && $vat[0]->direction->value === 'credit' && $vat[0]->amount_base === $invoice->tax_amount, 'Cr 2125 for the output VAT');
     check($vat !== [] && ($byCode['2120'] ?? []) === [], '...and not to 2120, which is Phase 3\'s purchase/diesel side');
 
-    check(($ar[0]->customer_id ?? null) === $customer->id && ($ar[0]->invoice_id ?? null) === $invoice->id, 'the receivable names its customer and its invoice (§6.2)');
+    check(($ar[0]->customer_id?? null) === $customer->id && ($ar[0]->invoice_id?? null) === $invoice->id, 'the receivable names its customer and its invoice');
     check(($freight[0]->trip_id ?? null) === $trip->id
         && ($freight[0]->truck_id ?? null) === $truck->id
-        && ($freight[0]->customer_id ?? null) === $customer->id, 'the freight revenue names truck, trip and customer, or 4100 could not have been posted (§6.1)');
+        && ($freight[0]->customer_id?? null) === $customer->id, 'the freight revenue names truck, trip and customer, or 4100 could not have been posted');
 
     /* ------------------------------------------------------------------ D: claimed */
     echo "\n== D: the charges are claimed, so the delivery cannot be billed twice ==\n";
@@ -463,10 +465,10 @@ try {
     check((int) DB::table('number_sequences')
         ->where('company_id', 1)->where('scope', 'invoice')
         ->where('period_key', NumberPeriod::keyFor('financial_year', Carbon::now(), 'invoice'))
-        ->value('next_value') === (int) $sequenceBefore + 1, '...without spending a second number (§7.4: a retry is not a gap)');
+        ->value('next_value') === (int) $sequenceBefore + 1, '...without spending a second number (a retry is not a gap)');
 
     /* ------------------------------------------------------------------ E: the projection */
-    echo "\n== E: the trip's projection finally carries revenue (§20.17) ==\n";
+    echo "\n== E: the trip's projection finally carries revenue ==\n";
 
     $reloaded = Trip::query()->findOrFail($trip->id);
     check($reloaded->revenue_base === 9_250_000, 'trips.revenue_base is the net revenue posted, not the gross', (string) $reloaded->revenue_base);
@@ -528,7 +530,7 @@ try {
         $paymentRefusal = $refused->getMessage();
     }
 
-    check(str_contains($paymentRefusal, 'payments.allocate'), 'a dispatcher cannot bank a receipt either (§9.3)', $paymentRefusal);
+    check(str_contains($paymentRefusal, 'payments.allocate'), 'a dispatcher cannot bank a receipt either', $paymentRefusal);
     Auth::login($issuer);
 
     $payment = (app(RecordPayment::class))(new PaymentDto(
@@ -551,14 +553,14 @@ try {
     }
 
     check(($receiptLines['1120']->direction->value ?? null) === 'debit' && $receiptLines['1120']->amount_base === $gross, 'PaymentReceived posts Dr 1120 for the money');
-    check(($receiptLines['2150']->direction->value ?? null) === 'credit' && $receiptLines['2150']->amount_base === $gross, '...and Cr 2150 Unapplied customer cash, not AR (§6.8)');
+    check(($receiptLines['2150']->direction->value?? null) === 'credit' && $receiptLines['2150']->amount_base === $gross, '...and Cr 2150 Unapplied customer cash, not AR');
 
     $settledInvoice = (app(AllocatePayment::class))($invoice->fresh(), $issuer->id);
 
     check($settledInvoice->balance_amount === 0, 'the paid invoice reaches exactly zero through allocations only (definition of done 2)', (string) $settledInvoice->balance_amount);
     check($settledInvoice->balance_base === 0, '...in base currency too');
     check($settledInvoice->settlementState() === SettlementState::Paid, '...and its derived settlement state is paid, not a stored flag');
-    check($settledInvoice->status === InvoiceLifecycle::Issued, '...while the lifecycle stays issued — a payment never mutates it (§10.4)');
+    check($settledInvoice->status === InvoiceLifecycle::Issued, '...while the lifecycle stays issued — a payment never mutates it');
 
     $allocation = PaymentAllocation::query()->where('invoice_id', $invoice->id)->first();
     check($allocation !== null && $allocation->settled === true, 'the allocation that closed the invoice is marked settled');
@@ -644,22 +646,22 @@ try {
     $voided = (app(VoidInvoice::class))($secondInvoice->fresh(), 'Dispatched against the wrong customer account', $issuer->id);
 
     check($voided->status === InvoiceLifecycle::Void, 'an unpaid invoice voids');
-    check($voided->number === $secondInvoice->number, '...keeping its spent number, because a fiscal number is never reused (§7.4)');
+    check($voided->number === $secondInvoice->number, '...keeping its spent number, because a fiscal number is never reused');
     check($voided->void_reason !== null && mb_strlen((string) $voided->void_reason) >= 10, '...and carrying the reason it was voided');
 
     $reversal = JournalEntry::query()->where('source_type', 'invoice_void')->where('source_id', $secondInvoice->id)->first();
 
-    check($reversal !== null, 'the void mirrors the posting rather than editing it (§6.4)');
+    check($reversal!== null, 'the void mirrors the posting rather than editing it');
     check($reversal !== null && $reversal->reverses_entry_id === $secondEntry?->id, '...naming the entry it reverses');
     check($reversal?->total_debit === $secondEntry?->total_credit, '...with the sides swapped, so the pair nets to zero');
 
     check(Chargeable::query()->whereKey($secondChargeableId)->where('status', ChargeableStatus::Ready->value)->exists(), 'the delivery is released back to ready, so the trip can be billed again');
 
     $reissue = (app(IssueInvoice::class))($secondTrip->id, $issuer->id);
-    check($reissue->number !== $secondInvoice->number, '...and a fresh issue takes a new number rather than reusing the void one (§7.4)');
+    check($reissue->number!== $secondInvoice->number, '...and a fresh issue takes a new number rather than reusing the void one');
 
     /* ------------------------------------------------------------------ J: the credit note */
-    echo "\n== J: a credit note corrects the invoice without rewinding it (§10.5) ==\n";
+    echo "\n== J: a credit note corrects the invoice without rewinding it ==\n";
 
     $creditedLine = $reissue->lines->first();
     $creditNet = 400_000;
@@ -726,7 +728,7 @@ try {
     check(array_filter($creditFindings, static fn ($f): bool => $f->isDrift()) === [], '...and the note\'s number agrees with its sequence');
 
     /* ------------------------------------------------------------------ K: the consolidated run */
-    echo "\n== K: a consolidated run bills one customer's month as one document (§10.4) ==\n";
+    echo "\n== K: a consolidated run bills one customer's month as one document ==\n";
 
     $bulk = (app(CreateCustomer::class))(new CustomerDto(name: 'INV-VERIFY Bulk', code: 'INV-VERIFY-BULK', paymentTerms: 'net_14'));
 
@@ -791,7 +793,7 @@ try {
     check($statement->kind === InvoiceKind::Consolidated, 'the run issues a consolidated invoice, not a per-trip one');
     check($statement->job_id === null, '...naming no single job, because it bundles several legs');
     check($statement->customer_id === $bulk->id, '...addressed to the one customer the charges belong to');
-    check($statement->terms_snapshot === 'net_14' && $statement->due_on->toDateString() === Carbon::now()->addDays(14)->toDateString(), '...on that customer\'s own terms (§10.4)');
+    check($statement->terms_snapshot === 'net_14' && $statement->due_on->toDateString() === Carbon::now()->addDays(14)->toDateString(), '...on that customer\'s own terms');
     check($statement->lines->count() === 2, 'one line per chargeable across both trips');
     check($statement->lines->pluck('trip_id')->unique()->count() === 2, '...each naming its own leg, so 4100 keeps its trip dimension');
     check($statement->amount === 2_000_000, '...net is the sum of both trips', (string) $statement->amount);
@@ -799,7 +801,7 @@ try {
     check((int) DB::table('number_sequences')
         ->where('company_id', 1)->where('scope', 'invoice')
         ->where('period_key', NumberPeriod::keyFor('financial_year', Carbon::now(), 'invoice'))
-        ->value('next_value') === $sequenceBeforeRun + 1, 'the run spends exactly one number from the same gap-free scope (§7.4)');
+        ->value('next_value') === $sequenceBeforeRun + 1, 'the run spends exactly one number from the same gap-free scope');
     check(preg_match('/^INV-[A-Z0-9\/]+-\d{7}$/', (string) $statement->number) === 1, '...rendered in the invoice scope\'s format', (string) $statement->number);
 
     check(Chargeable::query()->whereIn('id', $bulkChargeIds)->where('status', ChargeableStatus::Billed->value)->count() === 2, 'both trips\' charges are claimed in the same transaction');
@@ -813,7 +815,7 @@ try {
         $statementLines[$line->account->code][] = $line;
     }
 
-    check(($statementLines['4100'] ?? []) !== [] && count($statementLines['4100']) === 2, 'one entry with a 4100 credit per leg, never one lump revenue figure (§6.1)');
+    check(($statementLines['4100']?? [])!== [] && count($statementLines['4100']) === 2, 'one entry with a 4100 credit per leg, never one lump revenue figure');
     check(count(array_unique(array_map(static fn ($line): string => (string) $line->trip_id, $statementLines['4100']))) === 2, '...each credit naming its own trip');
     check(($statementLines['1150'][0]->direction->value ?? null) === 'debit' && $statementLines['1150'][0]->amount_base === $statement->balance_amount, '...and one receivable debit for the statement\'s gross');
 
@@ -838,12 +840,12 @@ try {
     /* ------------------------------------------------------------------ L: the print gate */
     echo "\n== L: the documents render under the DOMPDF driver (definition of done 4) ==\n";
 
-    $documents = app(\App\Domain\Invoicing\Documents\InvoiceDocuments::class);
+    $documents = app(InvoiceDocuments::class);
 
     $invoicePdf = $documents->invoice($invoice->fresh());
     $creditPdf = $documents->creditNote($note->fresh());
 
-    $statement = (app(\App\Domain\Invoicing\Queries\Statements::class))->forCustomer($bulk->id, $windowFrom, $windowTo);
+    $statement = (app(Statements::class))->forCustomer($bulk->id, $windowFrom, $windowTo);
     $statementPdf = $documents->statement($statement);
 
     check(str_starts_with($invoicePdf, '%PDF-'), 'the invoice renders as a PDF, not an HTML error page');
@@ -852,14 +854,14 @@ try {
     check(str_starts_with($statementPdf, '%PDF-') && strlen($statementPdf) > 2_000, 'the customer statement renders from its snapshot, without re-reading the invoice models');
     check(count($statement->lines) === 1 && str_starts_with($statement->lines[0]->number, 'INV-'), 'the statement carries the invoice row it printed, with that document\'s number');
     check($statement->outstandingMinor === $statement->lines[0]->balanceMinor, '...and its outstanding total is the sum of those rows', (string) $statement->outstandingMinor);
-    check(config('laravel-pdf.driver') === 'dompdf', 'the default driver is DOMPDF, which needs no Chrome or Node (§17)');
+    check(config('laravel-pdf.driver') === 'dompdf', 'the default driver is DOMPDF, which needs no Chrome or Node');
 
     /* ------------------------------------------------------------------ M: the ageing report */
-    echo "\n== M: the ageing report buckets open invoices by their due date (§10.4) ==\n";
+    echo "\n== M: the ageing report buckets open invoices by their due date ==\n";
 
-    $ageing = app(\App\Domain\Invoicing\Queries\AgeingReport::class);
+    $ageing = app(AgeingReport::class);
     $rows = $ageing();
-    $totals = \App\Domain\Invoicing\Queries\AgeingReport::totals($rows);
+    $totals = AgeingReport::totals($rows);
 
     check($rows !== [], 'the report has a row for at least one customer with money owing');
     check(array_filter($rows, static fn ($row): bool => $row->totalMinor() <= 0) === [], '...and every row is money actually owed, not a settled invoice');

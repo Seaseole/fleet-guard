@@ -10,14 +10,14 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 WORK_ORDER_LINE — what the work is made of: hours, parts, an outside garage's invoice, a
-     * consumable (§10.6).
+     * WORK_ORDER_LINE — what the work is made of: hours, parts, an outside garage's invoice, a
+     * consumable.
      *
-     * `quantity_x100` is §5.5's scale applied to hours and units, so 2.50 hours is the integer 250 and
+     * `quantity_x100` is the scale applied to hours and units, so 2.50 hours is the integer 250 and
      * "1.00 × a tyre" is 100. `unit_cost_minor` is in `currency_code`; `base_amount` is the figure the
      * work order totals, frozen at the line's own write.
      *
-     * The arithmetic CHECK restates the *rounding*, not the multiply (§20.25's lesson): the base
+     * The arithmetic CHECK restates the *rounding*, not the multiply (the lesson): the base
      * amount is `quantity × unit cost ÷ 100` rounded HALF_UP once, so the constraint pins a band one
      * minor unit wide around that product rather than claiming an identity a between-cents line can
      * never satisfy. Lines are entered in the company's base currency this phase — the Action refuses

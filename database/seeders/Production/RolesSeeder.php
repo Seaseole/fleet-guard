@@ -10,13 +10,13 @@ use App\Domain\Kernel\Tenancy\CurrentCompany;
 use Illuminate\Database\Seeder;
 
 /**
- * Seeds the §9.2 roles and the §9.3 permission matrix for **every** company row, from the catalogue
+ * Seeds the roles and the permission matrix for **every** company row, from the catalogue
  * rather than from a list in this file.
  *
- * Production data, not demo data (§14.6): roles and permissions are how the app behaves, and a fresh
+ * Production data, not demo data: roles and permissions are how the app behaves, and a fresh
  * deploy that only ran `DatabaseSeeder` must still refuse a Dispatcher the trip margin.
  *
- * Per company, not global: roles are company-keyed (§8), so a second company gets its own role rows
+ * Per company, not global: roles are company-keyed, so a second company gets its own role rows
  * on the next provision instead of inheriting company 1's — and the loop is the cheapest proof that
  * the team key actually works, because a bug in the resolver shows up here as duplicate-key errors.
  */

@@ -39,7 +39,7 @@ final class ExchangeRate extends Model
     {
         return [
             // A rate is a dimensionless multiplier, so it is the one decimal in this design
-            // (§5.2). Read and written as a string: a float cannot hold the 8 dp this corridor needs.
+            //. Read and written as a string: a float cannot hold the 8 dp this corridor needs.
             'rate_to_base' => 'decimal:8',
             'rate_date' => 'date',
             'entered_at' => 'datetime',
@@ -59,7 +59,7 @@ final class ExchangeRate extends Model
     }
 
     /**
-     * §5.4's staleness warning, counted from a given date rather than from now: a Friday rate
+     * The staleness warning, counted from a given date rather than from now: a Friday rate
      * read against a Monday document is 3 days old, which is what the owner wants to see before
      * quoting a ZAR-denominated job across a weekend. Negative means the rate is dated in the
      * future, which is a data-entry error rather than a warning.

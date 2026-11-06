@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 TRAILER — an asset in its own right, assigned beside a truck rather than being a
-     * property of one. A trailer outlives the tractor it was bought with, and §10.2's dispatch gate
+     * TRAILER — an asset in its own right, assigned beside a truck rather than being a
+     * property of one. A trailer outlives the tractor it was bought with, and the dispatch gate
      * measures load against both capacities, so the pair is stored as two assignments.
      */
     public function up(): void

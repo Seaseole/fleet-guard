@@ -11,7 +11,7 @@ use DateTimeInterface;
 use Illuminate\Support\Carbon;
 
 /**
- * Turns a business date into its accounting period row (§6.5).
+ * Turns a business date into its accounting period row.
  *
  * `firstOrCreate` *inside* the posting transaction, which is what the design says a missing
  * period must not do: it must not block the posting. Refusing to post because someone forgot to

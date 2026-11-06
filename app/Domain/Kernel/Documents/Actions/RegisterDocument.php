@@ -12,7 +12,7 @@ use App\Domain\Kernel\Documents\RetentionClass;
 use Carbon\CarbonInterface;
 
 /**
- * A register entry with no bytes yet (§10.8's `draft`).
+ * A register entry with no bytes yet (the `draft`).
  *
  * Separate from {@see UploadDocumentVersion} because the two things a clerk does are two things:
  * "we have to get this permit, file the slot" and "here is the scan". Merging them would mean a

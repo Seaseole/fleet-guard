@@ -25,9 +25,14 @@ use App\Domain\Kernel\Money\Currency;
 use App\Domain\Kernel\Money\FxRateSource;
 use App\Domain\Kernel\Money\Money;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
+use App\Domain\Kernel\Identity\ConfirmsRecentPassword;
+use App\Domain\Reporting\Series\ChartWindow;
+use App\Domain\Reporting\Series\FuelVarianceSpread;
+use App\Domain\Reporting\Series\Series;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
@@ -36,22 +41,23 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /*
- * The fuel register (§3.2, §4.3): the slips the fleet bought, the stations that sold them, the
+ * The fuel register: the slips the fleet bought, the stations that sold them, the
  * tanks the trucks carry, the yard tank the deliveries go into, and the issues those tanks have
  * dispensed.
  *
  * An issue is not recorded here. It belongs to a trip — the trip names the truck, the truck names
- * the tank, and the cost accounts 5100 requires the trip dimension (§6.1) — so issuing happens on
+ * the tank, and the cost accounts 5100 requires the trip dimension — so issuing happens on
  * the trip's own fuel panel. What this screen answers is the office's question before a trip
  * leaves: which slips still have litres on them, which trucks are actually fitted for fuel, and what
  * the yard tank holds after the last delivery and the last dip.
  *
- * Writing is `fuel.record` (§9.3 — Owner, Operations Manager, Workshop Manager, Stores Clerk);
+ * Writing is `fuel.record` (Owner, Operations Manager, Workshop Manager, Stores Clerk);
  * the Accountant reads with `fuel.view`. Every write is a dialog of its own, because each Action
  * refuses by name and the sentence belongs beside the form that caused it.
  */
 new #[Title('Fuel')] class extends Component
 {
+    use ConfirmsRecentPassword;
     use WithPagination;
 
     public string $stationName = '';
@@ -332,6 +338,10 @@ new #[Title('Fuel')] class extends Component
     {
         abort_unless($this->canDecideVariance(), 403);
 
+        if (! $this->confirmRecentPassword()) {
+            return;
+        }
+
         $validated = $this->validate([
             'varianceDecision' => ['required', Rule::in([
                 FuelVarianceState::Acknowledged->value,
@@ -369,7 +379,7 @@ new #[Title('Fuel')] class extends Component
         return CurrentCompany::model()->base_currency_code;
     }
 
-    /** "45.32" → 4532, without ever building a float (§20.4). */
+    /** "45.32" → 4532, without ever building a float. */
     private function scaledHundredths(string $input, string $label): int
     {
         $text = trim(str_replace([' ', ','], ['', '.'], $input));
@@ -442,6 +452,17 @@ new #[Title('Fuel')] class extends Component
             ->paginate(10, pageName: 'variances');
     }
 
+    /**
+     * The variance register's shape in one picture — the divergent bars of docs/REDESIGN-CONCEPT.md §4.
+     * It reads the same rows the paginated table below prints and re-derives nothing, so the two can only
+     * ever disagree by being stale for different milliseconds.
+     */
+    #[Computed]
+    public function varianceSpread(): Series
+    {
+        return app(FuelVarianceSpread::class)(ChartWindow::trailing(CarbonImmutable::now(CurrentCompany::timezone())));
+    }
+
     /** @return list<FuelTankKind> */
     public function tankKinds(): array
     {
@@ -507,18 +528,17 @@ new #[Title('Fuel')] class extends Component
 }; ?>
 
 <div class="grid gap-6">
-    <header class="flex flex-wrap items-end justify-between gap-3">
-        <div class="grid gap-1">
-            <x-ui.heading size="xl" level="1">{{ __('Fuel') }}</x-ui.heading>
-            <x-ui.text>
-                {{ __('The slips the fleet bought and what is left on each. Fuel is issued on the trip that burns it — open a trip and use its fuel panel.') }}
-            </x-ui.text>
-        </div>
-
+    <x-shell.nameplate
+        :title="__('Fuel')"
+        :stamped="true"
+        :description="__('The slips the fleet bought and what is left on each. Fuel is issued on the trip that burns it — open a trip and use its fuel panel.')"
+    >
         @if ($this->canRecord())
-            <x-ui.button x-on:click="$dispatch('open-fuel-slip')">{{ __('Record a slip') }}</x-ui.button>
+            <x-slot:action>
+                <x-ui.button x-on:click="$dispatch('open-fuel-slip')">{{ __('Record a slip') }}</x-ui.button>
+            </x-slot:action>
         @endif
-    </header>
+    </x-shell.nameplate>
 
     <x-ui.card :title="__('Fuel bought')" class="min-w-0">
         <x-ui.table :caption="__('Fuel purchases, newest first — the slip, its station and the litres still to be issued')">
@@ -527,9 +547,9 @@ new #[Title('Fuel')] class extends Component
                 <x-ui.table.th>{{ __('Bought') }}</x-ui.table.th>
                 <x-ui.table.th>{{ __('Fuel') }}</x-ui.table.th>
                 <x-ui.table.th numeric>{{ __('Litres') }}</x-ui.table.th>
-                <x-ui.table.th numeric>{{ __('Price / L') }}</x-ui.table.th>
+                <x-ui.table.th numeric hideBelow="lg">{{ __('Price / L') }}</x-ui.table.th>
                 <x-ui.table.th numeric>{{ __('Amount') }}</x-ui.table.th>
-                <x-ui.table.th numeric>{{ __('Left on slip') }}</x-ui.table.th>
+                <x-ui.table.th numeric hideBelow="lg">{{ __('Left on slip') }}</x-ui.table.th>
                 <x-ui.table.th>{{ __('Ledger') }}</x-ui.table.th>
             </x-slot>
 
@@ -546,9 +566,9 @@ new #[Title('Fuel')] class extends Component
                     <x-ui.table.td nowrap>{{ $slip->purchased_on?->format('d M Y') ?? '—' }}</x-ui.table.td>
                     <x-ui.table.td>{{ $slip->fuel_type->label() }}</x-ui.table.td>
                     <x-ui.table.td numeric>{{ $slip->litresMajor() }}</x-ui.table.td>
-                    <x-ui.table.td numeric>{{ $this->money($slip->pricePerLitre()) }}</x-ui.table.td>
+                    <x-ui.table.td numeric hideBelow="lg">{{ $this->money($slip->pricePerLitre()) }}</x-ui.table.td>
                     <x-ui.table.td numeric>{{ $this->money($slip->amountMoney()) }}</x-ui.table.td>
-                    <x-ui.table.td numeric>
+                    <x-ui.table.td numeric hideBelow="lg">
                         @if ($slip->isBulkDelivery())
                             <span class="text-xs text-fg-ink-muted">{{ __('in the tank') }}</span>
                         @else
@@ -653,13 +673,13 @@ new #[Title('Fuel')] class extends Component
                 <x-slot name="head">
                     <x-ui.table.th>{{ __('Trip') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Truck') }}</x-ui.table.th>
-                    <x-ui.table.th numeric>{{ __('Distance') }}</x-ui.table.th>
+                    <x-ui.table.th numeric hideBelow="lg">{{ __('Distance') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('Litres') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('L / 100 km') }}</x-ui.table.th>
-                    <x-ui.table.th numeric>{{ __('Expected') }}</x-ui.table.th>
+                    <x-ui.table.th numeric hideBelow="md">{{ __('Expected') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('Variance') }}</x-ui.table.th>
-                    <x-ui.table.th numeric>{{ __('Load') }}</x-ui.table.th>
-                    <x-ui.table.th>{{ __('Detected') }}</x-ui.table.th>
+                    <x-ui.table.th numeric hideBelow="lg">{{ __('Load') }}</x-ui.table.th>
+                    <x-ui.table.th hideBelow="lg">{{ __('Detected') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('State') }}</x-ui.table.th>
                     @if ($this->canDecideVariance())
                         <x-ui.table.th>{{ __('Decision') }}</x-ui.table.th>
@@ -669,16 +689,16 @@ new #[Title('Fuel')] class extends Component
                 @foreach ($this->variances as $variance)
                     <tr wire:key="variance-{{ $variance->id }}">
                         <x-ui.table.td nowrap>
-                            <a href="{{ route('operations.trip', $variance->trip_id) }}" class="fg-identifier text-sm text-accent">{{ $variance->trip?->trip_no ?? '—' }}</a>
+                            <a href="{{ route('operations.trip', $variance->trip_id) }}" class="fg-identifier text-sm text-accent-ink underline-offset-4 transition duration-(--t-fast) ease-(--ease-standard) hover:text-accent-hover hover:underline">{{ $variance->trip?->trip_no ?? '—' }}</a>
                         </x-ui.table.td>
                         <x-ui.table.td>{{ $variance->truck?->label() ?? __('Truck #:id', ['id' => $variance->truck_id]) }}</x-ui.table.td>
-                        <x-ui.table.td numeric>{{ number_format($variance->distance_km) }} km</x-ui.table.td>
+                        <x-ui.table.td numeric hideBelow="lg">{{ number_format($variance->distance_km) }} km</x-ui.table.td>
                         <x-ui.table.td numeric>{{ $variance->litresMajor() }}</x-ui.table.td>
                         <x-ui.table.td numeric>{{ $variance->litres_per_100_10_2 }}</x-ui.table.td>
-                        <x-ui.table.td numeric>{{ $variance->expected_per_100_10_2 }}</x-ui.table.td>
+                        <x-ui.table.td numeric hideBelow="md">{{ $variance->expected_per_100_10_2 }}</x-ui.table.td>
                         <x-ui.table.td numeric>{{ $variance->varianceLabel() }}</x-ui.table.td>
-                        <x-ui.table.td numeric>{{ $variance->tonnes_carried_10_2 }} t</x-ui.table.td>
-                        <x-ui.table.td nowrap>{{ $variance->detected_at?->format('d M Y') ?? '—' }}</x-ui.table.td>
+                        <x-ui.table.td numeric hideBelow="lg">{{ $variance->tonnes_carried_10_2 }} t</x-ui.table.td>
+                        <x-ui.table.td nowrap hideBelow="lg">{{ $variance->detected_at?->format('d M Y') ?? '—' }}</x-ui.table.td>
                         <x-ui.table.td><x-ui.badge :tone="$variance->state->tone()">{{ $variance->state->label() }}</x-ui.badge></x-ui.table.td>
                         @if ($this->canDecideVariance())
                             <x-ui.table.td>
@@ -705,8 +725,11 @@ new #[Title('Fuel')] class extends Component
         @endif
     </x-ui.card>
 
+    {{-- The spread beside the register: the table answers "which trips", the bars answer "how bad, which way". --}}
+    <x-patterns.chart :series="$this->varianceSpread" />
+
     <div class="grid gap-6 lg:grid-cols-2">
-        <section class="grid min-w-0 gap-4 rounded-fg-lg border border-fg-line bg-fg-surface p-5">
+        <section class="grid min-w-0 gap-4 fg-panel p-5">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <x-ui.subheading>{{ __('Stations on file') }}</x-ui.subheading>
 
@@ -736,7 +759,7 @@ new #[Title('Fuel')] class extends Component
             @endif
         </section>
 
-        <section class="grid min-w-0 gap-4 rounded-fg-lg border border-fg-line bg-fg-surface p-5">
+        <section class="grid min-w-0 gap-4 fg-panel p-5">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <x-ui.subheading>{{ __('Tanks on trucks') }}</x-ui.subheading>
 
@@ -772,9 +795,9 @@ new #[Title('Fuel')] class extends Component
             <x-slot name="head">
                 <x-ui.table.th>{{ __('Trip') }}</x-ui.table.th>
                 <x-ui.table.th>{{ __('Truck') }}</x-ui.table.th>
-                <x-ui.table.th>{{ __('Tank') }}</x-ui.table.th>
+                <x-ui.table.th hideBelow="lg">{{ __('Tank') }}</x-ui.table.th>
                 <x-ui.table.th numeric>{{ __('Litres') }}</x-ui.table.th>
-                <x-ui.table.th numeric>{{ __('Odometer') }}</x-ui.table.th>
+                <x-ui.table.th numeric hideBelow="lg">{{ __('Odometer') }}</x-ui.table.th>
                 <x-ui.table.th numeric>{{ __('Cost') }}</x-ui.table.th>
                 <x-ui.table.th>{{ __('State') }}</x-ui.table.th>
             </x-slot>
@@ -783,15 +806,15 @@ new #[Title('Fuel')] class extends Component
                 <tr wire:key="issue-{{ $issue->id }}">
                     <x-ui.table.td nowrap>
                         @if ($issue->trip !== null)
-                            <a href="{{ route('operations.trip', $issue->trip) }}" class="fg-identifier text-sm text-accent">{{ $issue->trip->trip_no }}</a>
+                            <a href="{{ route('operations.trip', $issue->trip) }}" class="fg-identifier text-sm text-accent-ink underline-offset-4 transition duration-(--t-fast) ease-(--ease-standard) hover:text-accent-hover hover:underline">{{ $issue->trip->trip_no }}</a>
                         @else
                             <span class="text-xs text-fg-ink-muted">{{ __('bulk tank') }}</span>
                         @endif
                     </x-ui.table.td>
                     <x-ui.table.td>{{ $issue->truck?->label() ?? __('Truck #:id', ['id' => $issue->truck_id]) }}</x-ui.table.td>
-                    <x-ui.table.td>{{ $issue->tank?->kind->label() ?? '—' }}</x-ui.table.td>
+                    <x-ui.table.td hideBelow="lg">{{ $issue->tank?->kind->label() ?? '—' }}</x-ui.table.td>
                     <x-ui.table.td numeric>{{ $issue->litresMajor() }}</x-ui.table.td>
-                    <x-ui.table.td numeric>{{ $issue->odometer_km }}</x-ui.table.td>
+                    <x-ui.table.td numeric hideBelow="lg">{{ $issue->odometer_km }}</x-ui.table.td>
                     <x-ui.table.td numeric>{{ $this->money($issue->cost()) }}</x-ui.table.td>
                     <x-ui.table.td>
                         <x-ui.badge :tone="$issue->status->tone()">{{ $issue->status->label() }}</x-ui.badge>
@@ -875,7 +898,7 @@ new #[Title('Fuel')] class extends Component
             <form wire:submit="addBulkTank" class="grid gap-4 p-5">
                 <div class="grid gap-3 sm:grid-cols-2">
                     <x-ui.input name="bulkTankName" wire:model="bulkTankName" :label="__('Name')" placeholder="{{ __('Yard tank 1') }}" />
-                    <x-ui.input name="bulkTankCapacity" wire:model="bulkTankCapacity" numeric :label="__('Capacity in litres')" :hint="__('A delivery past this figure is flagged, not refused (§7 R7).')" />
+                    <x-ui.input name="bulkTankCapacity" wire:model="bulkTankCapacity" numeric:label="__('Capacity in litres')":hint="__('A delivery past this figure is flagged, not refused (R7).')" />
                 </div>
 
                 <p class="text-xs text-fg-ink-muted">
@@ -981,7 +1004,7 @@ new #[Title('Fuel')] class extends Component
                     @if (trim((string) $this->slipBulkTankId) !== '')
                         {{ __('This delivery enters stock: the amount posts Dr 1180 Bulk fuel stock / Cr 2110 Supplier payable, and the tank’s moving average becomes what a trip pays per litre.') }}
                     @else
-                        {{ __('The amount is litres × price, computed here — the register refuses a slip whose figures disagree. The slip is posted to the ledger with the supplier bill (§6.8, Phase 5).') }}
+                        {{ __('The amount is litres × price, computed here — the register refuses a slip whose figures disagree. The slip is posted to the ledger with the supplier bill.') }}
                     @endif
                 </p>
 

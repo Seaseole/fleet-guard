@@ -17,10 +17,10 @@ use DateTimeInterface;
 use Illuminate\Support\Str;
 
 /**
- * Post a journal that a person typed (§15.2 Phase 0: "a manually posted balanced journal").
+ * Post a journal that a person typed (Phase 0: "a manually posted balanced journal").
  *
  * This is the screen-facing door, and it takes flat scalars on purpose. The Livewire component
- * that collects the lines never imports {@see LineDto} or {@see PostingDto}: §3.1 D3 forbids a
+ * that collects the lines never imports {@see LineDto} or {@see PostingDto}: D3 forbids a
  * module reaching into the ledger's internals, and a component that assembles a DTO is doing
  * exactly that with a different file extension.
  */

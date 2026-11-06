@@ -18,12 +18,12 @@ final class MissingFieldKey extends RuntimeException
     {
         return new self(
             "No DB_CRYPT_KEY is configured for key version '{$version}'. Set fleet.crypto.keys.{$version} in the environment; ".
-            'this column never falls back to APP_KEY (§9.5).'
+            'this column never falls back to APP_KEY.'
         );
     }
 
     public static function malformed(string $cipher): self
     {
-        return new self("DB_CRYPT_KEY is not decodable base64 for cipher '{$cipher}' (§9.5).");
+        return new self("DB_CRYPT_KEY is not decodable base64 for cipher '{$cipher}'.");
     }
 }

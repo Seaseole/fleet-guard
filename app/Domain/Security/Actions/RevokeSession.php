@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
- * §9.2's "log out this device", and §10.1's rule that a state change is an event with an actor: the
+ * The "log out this device", and the rule that a state change is an event with an actor: the
  * tombstone is one write, the `security_events` row is the other, and they commit together.
  *
  * A tombstone rather than a delete because `TrackUserSessions` adopts a session it has never seen —
@@ -42,7 +42,7 @@ final class RevokeSession
 
             $row->forceFill(['revoked_at' => Carbon::now()])->save();
 
-            // Inside the transaction, per §11.1: a revocation whose audit row was lost is a device that
+            // Inside the transaction,: a revocation whose audit row was lost is a device that
             // was cut off and cannot be explained afterwards.
             $this->audit->security(SecurityEventKind::SessionRevoked, [
                 'session' => $row->id,

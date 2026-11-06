@@ -20,7 +20,7 @@ $icons = [
     'bell-alert', 'bell', 'circle-stack', 'clipboard-document-list', 'queue-list',
     'chevron-left', 'arrow-right-end-on-rectangle',
 
-    // Module navigation (DESIGN.md §3.2).
+    // Module navigation.
     'truck', 'cube', 'map', 'wrench', 'receipt-percent', 'calculator', 'users', 'user-circle',
     'globe-alt', 'chart-bar', 'shield-check', 'document-text', 'folder', 'banknotes', 'scale',
     'clock', 'signal', 'building-storefront', 'identification', 'hashtag',

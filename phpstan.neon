@@ -1,6 +1,7 @@
 includes:
     - vendor/larastan/larastan/extension.neon
     - vendor/nesbot/carbon/extension.neon
+    - phpstan-baseline.neon
 
 parameters:
     paths:
@@ -14,3 +15,9 @@ parameters:
 
     treatPhpDocTypesAsCertain: false
 
+    # The baseline is a ratchet, not a hiding place: the 25 findings it carries were fixed or
+    # re-triaged during Phase 9's hardening pass. Fixing one must not fail CI by making its entry
+    # "unmatched", so unmatched entries are tolerated; new findings are not, because they are not
+    # in the baseline at all. Update it deliberately with --generate-baseline, never by widening
+    # ignoreErrors by hand.
+    reportUnmatchedIgnoredErrors: false

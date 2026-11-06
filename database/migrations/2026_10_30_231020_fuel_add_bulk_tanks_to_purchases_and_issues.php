@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Where a delivery went: onto the slips a trip draws from, or into the yard tank (§15.2 phase 3).
+     * Where a delivery went: onto the slips a trip draws from, or into the yard tank.
      *
      * A purchase with `bulk_tank_id` is a **delivery into stock**, and the CHECK says so in the only
      * way the database can: such a row must be posted, because the diesel became an asset

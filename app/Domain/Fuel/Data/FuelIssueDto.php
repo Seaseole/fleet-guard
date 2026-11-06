@@ -10,7 +10,7 @@ use DateTimeInterface;
 use InvalidArgumentException;
 
 /**
- * One fuel issue as the trip's fuel panel hands it over (§4.3 FUEL_ISSUE).
+ * One fuel issue as the trip's fuel panel hands it over (FUEL_ISSUE).
  *
  * The truck is **not** a field: an issue belongs to the trip it fuels, and the trip already names
  * the truck. A caller that could name a different one would be able to pour Trip 12's diesel into

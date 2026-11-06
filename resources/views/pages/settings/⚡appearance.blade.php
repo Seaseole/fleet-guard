@@ -10,7 +10,7 @@ new #[Title('Appearance settings')] class extends Component {
     public function mount(): void
     {
         // Read at render, not baked into the markup: the Owner may have changed it on the Application
-        // settings screen since this page was compiled (§20.37).
+        // settings screen since this page was compiled.
         $this->companyTheme = Theme::defaultMode();
     }
 }; ?>
@@ -23,13 +23,17 @@ new #[Title('Appearance settings')] class extends Component {
     <x-pages::settings.layout :heading="__('Appearance')" :subheading="__('What this app looks like on this device')">
         {{-- Two layers, deliberately: this screen is a personal choice kept in the browser so it can
              apply before first paint (partials/head.blade.php), while the theme everyone opens in is
-             the company's own setting under Application settings (§20.37). --}}
+             the company's own setting under Application settings.
+
+             The write is bound to `change`, not to a watcher on the state: the reset button below also
+             moves the state, and a watcher cannot tell the two apart — it would store the company's
+             answer as a personal choice and the seat would silently stop following the company again. --}}
         <div
             x-data="{
                 appearance: window.FleetGuardTheme?.effective() ?? 'system',
                 personal: window.FleetGuardTheme?.isPersonal() ?? false,
             }"
-            x-init="$watch('appearance', (mode) => { window.FleetGuardTheme?.set(mode); personal = true; })"
+            x-on:change="window.FleetGuardTheme?.set(appearance); personal = true;"
             class="grid gap-4"
         >
             <div

@@ -9,7 +9,7 @@ use DateTimeInterface;
 use Illuminate\Support\Carbon;
 
 /**
- * The FX block from §5.2, copied verbatim onto every transactional table (ADR-0004 #3).
+ * The FX block from, copied verbatim onto every transactional table (ADR-0004 #3).
  *
  * One object instead of eight loose columns being re-derived at each call site: the columns
  * only make sense together, and the invariant `base_amount == round(amount × fx_rate)` is
@@ -73,7 +73,7 @@ final class Fx
 
     /**
      * The eight columns. `base_currency_code` is copied from the company at write time rather
-     * than read from config at read time (§5.2), which is what lets a period's numbers stay
+     * than read from config at read time, which is what lets a period's numbers stay
      * readable if the company's base currency ever changes.
      *
      * @return array<string, string|int|null>

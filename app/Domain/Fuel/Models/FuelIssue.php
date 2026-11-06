@@ -19,7 +19,7 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.3 FUEL_ISSUE — fuel leaving a purchase into a truck, on a trip (§10.9's small machine).
+ * FUEL_ISSUE — fuel leaving a purchase into a truck, on a trip (the small machine).
  *
  * `litres_x100` is the spec's scale, so a pump's 45.32 L is the integer 4532 and sums in Sqlite and
  * MySQL agree to the last hundredth. `cost_base` is frozen at issue time from the purchase's own
@@ -27,7 +27,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
  * today's rate for money the ledger posted at yesterday's.
  *
  * The machine is the trait's; `recorded` is the inside-a-transaction state that exists so a row never
- * claims to have posted when its trip cost did not land. `reversed` is a leaf — §10.9's correction
+ * claims to have posted when its trip cost did not land. `reversed` is a leaf — the correction
  * is a reversal and a fresh issue, never an edit — and the reversal Action ships with the variance
  * slice. `reversalOf` links the pair, so the register can show both rows and the net.
  *
@@ -60,7 +60,7 @@ final class FuelIssue extends Model implements AuditableContract
 {
     use Auditable, BelongsToCompany, CanTransition;
 
-    /** ULID key (§2): the issue names itself as the trip cost's `source_id`. */
+    /** ULID key: the issue names itself as the trip cost's `source_id`. */
     protected $keyType = 'string';
 
     public $incrementing = false;

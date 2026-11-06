@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Fuel;
 
 /**
- * §10.9's consumption-variance machine: a trip burns more diesel than its load and distance explain.
+ * The consumption-variance machine: a trip burns more diesel than its load and distance explain.
  *
  * `open` is the state a row is created in when the threshold is crossed at completion. A person then
  * says what they think of it — `acknowledged` (the reason is known and acceptable) or `disputed` (the

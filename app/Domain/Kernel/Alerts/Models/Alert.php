@@ -20,7 +20,7 @@ use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Carbon;
 
 /**
- * §4.4/§14.1 ALERT — one thing that needs attention, and the record of what was done about it.
+ * / ALERT — one thing that needs attention, and the record of what was done about it.
  *
  * `state`, every `*_at` and every `*_by` are absent from `$fillable` on purpose, exactly as
  * `lifecycle` is absent from {@see Document}: they are the
@@ -28,7 +28,7 @@ use Illuminate\Support\Carbon;
  * says who did it and why. Those columns belong to the Actions.
  *
  * There is no `subject()` morph relation, and that is a decision rather than an omission. `subject_type`
- * holds a domain word (`document`, `truck`, `invoice`) and not a class name, because §4.4's own column
+ * holds a domain word (`document`, `truck`, `invoice`) and not a class name, because the design's own column
  * pair has to survive the row it points at arriving in a later phase: a morphTo against `document`
  * would be a broken relation on every screen until someone guessed the mapping. The register renders
  * `payload.title` — which the emitter wrote, in the words it had when the condition fired — and a later
@@ -78,7 +78,7 @@ final class Alert extends Model
      * The cooldown keys one condition can occupy: the base key, then `base#2` … for every time the
      * finding was resolved and returned.
      *
-     * Exact strings, never a prefix match: §14.1's own type names contain underscores, which `LIKE`
+     * Exact strings, never a prefix match: The design's own type names contain underscores, which `LIKE`
      * reads as "any character" — `doc_expiry` would collide with `docXexpiry`, and a key built that way
      * can also match a *different* condition's episodes and inflate them.
      *
@@ -164,7 +164,7 @@ final class Alert extends Model
     }
 
     /**
-     * Mutes whose end has passed, so the sweep can reopen them (§10: a mute that outlives its own
+     * Mutes whose end has passed, so the sweep can reopen them (a mute that outlives its own
      * expiry is a resolve with a different name).
      *
      * @param  Builder<Alert>  $query
@@ -206,7 +206,7 @@ final class Alert extends Model
     }
 
     /**
-     * How many of this person's unread deliveries describe something still live (§14.1's bell).
+     * How many of this person's unread deliveries describe something still live (the bell).
      *
      * Both halves matter and they are different facts. The delivery is per person, which is why the dot
      * can be one clerk's and not another's; the alert's state is per company, which is why an alert
@@ -215,7 +215,7 @@ final class Alert extends Model
      *
      * Read the delivery ids first and the alerts second, rather than joining on a JSON path, because the
      * unread set is small by construction and a `data->alert_id` join would be an unindexable JSON
-     * extraction on every page render of the topbar (§14.3).
+     * extraction on every page render of the topbar.
      */
     public static function countUnreadDeliveriesFor(User $user): int
     {

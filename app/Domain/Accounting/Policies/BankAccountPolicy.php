@@ -9,12 +9,12 @@ use App\Domain\Kernel\Identity\FieldGatePolicy;
 use App\Models\User;
 
 /**
- * Who may see and change a bank account (§9.3 "Bank & cash accounts, encrypted numbers").
+ * Who may see and change a bank account ("Bank & cash accounts, encrypted numbers").
  *
  * Two separate questions, deliberately in two separate places: this policy answers *may you touch
  * the row*, and {@see FieldGatePolicy::seeBankDetail()} answers *may the
  * full number be rendered*. A policy that also decided the column would be the ad-hoc `@can`
- * expression §9.4 forbids, and a gate that also decided row access would be a second owner for the
+ * expression the design forbids, and a gate that also decided row access would be a second owner for the
  * same rule.
  */
 final class BankAccountPolicy
@@ -38,7 +38,7 @@ final class BankAccountPolicy
     }
 
     /**
-     * Changing bank details is a `⚑` action in §9.1. The permission is checked here; the
+     * Changing bank details is a `⚑` action in. The permission is checked here; the
      * re-authentication step is the `reauth` middleware that lands with task #21 and is driven by
      * `PermissionCatalogue::requiresReauth()`.
      */
@@ -49,7 +49,7 @@ final class BankAccountPolicy
     }
 
     /**
-     * §9.5: no hard deletion of posted financial data. Until the ledger slice decides whether this
+     * No hard deletion of posted financial data. Until the ledger slice decides whether this
      * account has ever been posted through, closing it (`active = false`, `closed_on`) is the only
      * supported "removal", so there is no delete path to authorise.
      */

@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * §10.6's `awaiting_approval → approved`: somebody with the seat says the spend may happen.
+ * The `awaiting_approval → approved`: somebody with the seat says the spend may happen.
  *
  * The approval is dated onto the row rather than inferred from the trail, because the schema's own
  * control (`work_orders_started_is_approved`) asks the row whether an approver named themselves, and
@@ -27,7 +27,7 @@ final class ApproveWorkOrder
     public function __invoke(WorkOrder $workOrder, ?int $actorId = null): WorkOrder
     {
         if (! Gate::allows('work_orders.approve')) {
-            throw new InvalidArgumentException('Approving work-order spend is the Owner’s and Operations Manager’s call (§9.3).');
+            throw new InvalidArgumentException('Approving work-order spend is the Owner’s and Operations Manager’s call.');
         }
 
         if ($actorId === null) {
@@ -40,7 +40,7 @@ final class ApproveWorkOrder
 
             if ($locked->status !== WorkOrderStatus::AwaitingApproval) {
                 throw new InvalidArgumentException(sprintf(
-                    '%s is %s. Approving answers a request that is waiting; it cannot bless an order the machine has already moved (§10.6).',
+                    '%s is %s. Approving answers a request that is waiting; it cannot bless an order the machine has already moved.',
                     $locked->wo_no,
                     strtolower($locked->status->label()),
                 ));

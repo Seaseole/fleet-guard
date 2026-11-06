@@ -10,19 +10,19 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.2 / §10.4 — the document a customer is billed with.
+     * / The document a customer is billed with.
      *
-     * **Three axes, deliberately not one enum** (§10.4). `status` is stored and holds only the
+     * **Three axes, deliberately not one enum**. `status` is stored and holds only the
      * lifecycle `draft → issued → void`; settlement (`open`/`partially_paid`/`paid`/`refunded`) and
      * ageing (`current`/`d1_30`/…) are *derived* — from the allocation rows and from `due_on` against
      * today. A single status containing both `void` and `paid` would mean payment allocation mutates
      * lifecycle state, and gap-free numbering plus audit semantics die quietly in that coupling.
      *
-     * §5.2's FX block is applied verbatim, which is why a ZAR invoice can be issued today and read in
-     * Pula forever: `base_amount` is authoritative and frozen at write (§5.3), and the journal entry
+     * The FX block is applied verbatim, which is why a ZAR invoice can be issued today and read in
+     * Pula forever: `base_amount` is authoritative and frozen at write, and the journal entry
      * this row posts carries the same currency and rate.
      *
-     * `balance_amount` and `balance_base` are a **projection**, not the truth (§10.4): allocations and
+     * `balance_amount` and `balance_base` are a **projection**, not the truth: allocations and
      * credit notes are what decided whether an invoice is paid, and `invoices:recompute-balances` is
      * the tie-out that rebuilds these two from those rows. They are kept because ageing and the AR
      * total must be a query, not a walk over every allocation on the screen.
@@ -48,7 +48,7 @@ return new class extends Migration
             $table->date('due_on');
             $table->string('terms_snapshot', 16);
 
-            // §5.2 verbatim.
+            // Verbatim.
             $table->char('currency_code', 3);
             $table->unsignedBigInteger('amount');
             $table->decimal('fx_rate', 19, 8);
@@ -85,7 +85,7 @@ return new class extends Migration
 
         DB::statement('alter table `invoices` add constraint `invoices_job_company_fk` foreign key (`job_id`, `company_id`) references `freight_jobs` (`id`, `company_id`)');
 
-        // §7.4: a number is allocated at issue and corresponds to a fiscal document. A draft is
+        // A number is allocated at issue and corresponds to a fiscal document. A draft is
         // addressed by ULID, so NULL-while-draft is the rule, not a convenience.
         DB::statement('alter table `invoices` add constraint `invoices_number_only_when_issued` check (
             (status = \'draft\' and number is null)

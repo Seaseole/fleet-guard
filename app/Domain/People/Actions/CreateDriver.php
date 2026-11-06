@@ -10,7 +10,7 @@ use App\Domain\People\Models\Employee;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Turns an employee into a driver (§4.3, D1).
+ * Turns an employee into a driver (D1).
  *
  * The employee is looked up through the tenant scope rather than by raw id, so a form that posted
  * another company's employee id cannot create a driver pointing at it — the FK would allow the row,

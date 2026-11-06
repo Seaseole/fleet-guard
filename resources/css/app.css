@@ -1,4 +1,15 @@
+/* Hallmark · v2.0.0 · redesign: full · scope: app
+ * theme: brand (locked: docs/DESIGN-SYSTEM.md — corridor teal, IBM Plex Sans + Plex Mono)
+ * shape: app screen · genre: modern-minimal (inferred; no stamp on the targets before this run)
+ * surface: token-only (tokens/palette.css, roles.css, themes.css; shadcn alias layer §2.5)
+ * nav: the project shell, unchanged (layouts/app/sidebar + topbar, config/navigation.php)
+ * footer: none in the app shell · state: URL (filters, tabs, pagination)
+ * built: the project · v2.0.0 */
+/* Hallmark · waive 75 · the design system fixes body at 14px for a ledger grid, and every page in this app reads it · owner's own number, not a generated default */
 @import 'tailwindcss';
+@import './tokens/palette.css';
+@import './tokens/themes.css';
+@import './tokens/roles.css';
 
 @source '../views';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
@@ -6,161 +17,56 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- | Fleet Guard design tokens — docs/DESIGN-SYSTEM.md is the source of truth.
- |
- | TWO VOCABULARIES, ONE PALETTE. `--*-fg-*` is this application's own naming and 672 class references in
- | pages and partials are written against it. Alongside it sits the shadcn contract (`background`,
- | `foreground`, `card`, `popover`, `primary`, `secondary`, `muted`, `destructive`, `border`, `input`,
- | `ring`), because a copied component snippet expects those names. The contract is an **alias layer**
- | declared in `@theme inline` over the same variables, not a second palette: an alias cannot drift from
- | what it points at, which is where a forked palette always ends up.
- |
- | Every colour pair below is AA-checked in both themes and its ratio written next to it; a new colour
- | requires one. Borders are the documented exception — `fg-line` (1.27:1 on a surface) and
- | `fg-line-strong` (1.65:1) are separators, never the sole signal that a control exists: the field carries
- | a label and keyboard focus paints `--color-focus` at 5.24:1 on the canvas (§10), so the 3:1 that
- | WCAG 1.4.11 demands is met by the affordance that actually has to be perceivable.
- |
- | ONE DELIBERATE DEVIATION from shadcn: their `accent` slot is a hover *surface*, while `--color-accent`
- | here is the corridor teal — the brand, referenced 52 times (`text-accent` 32, `border-accent` 6,
- | `bg-accent-soft` 5). Re-pointing that name would recolour 88 pages to satisfy a label. The hover surface
- | is therefore `--color-fg-surface-hover`, and shadcn's `accent` role maps onto `--color-muted`.
+ | The touch minimum in ("targets ≥44 px on touch and kiosk") is a property of the *input device*, not of
+ | the window width. A `sm:` prefix is a min-width query, so it fires on every laptop and never on a phone
+ | held in portrait — which is how a desktop density pass got mistaken for a mobile one. `pointer: coarse`
+ | asks the device instead: a phone or a tablet in the yard gets the 44 px box, a laptop keeps the 36/32/28 px
+ | metrics the component table documents.
  */
-@theme {
-    /* Typography: IBM Plex Sans for UI, IBM Plex Mono for figures and identifiers. */
-    --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
-    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+@custom-variant touch (@media (pointer: coarse));
 
-    /* Neutrals — cool and low-chroma. shadcn's grey, this app's ratios. */
-    --color-fg-canvas: #fafafa;
-    --color-fg-surface: #ffffff;
-    --color-fg-surface-raised: #ffffff;
-    --color-fg-surface-sunk: #f4f4f5;
-    --color-fg-surface-hover: #f0f0f2;
-    --color-fg-ink: #131417;                 /* 17.65:1 on canvas, 18.42:1 on surface */
-    --color-fg-ink-secondary: #52555c;       /* 7.15:1 on canvas, 7.47:1 on surface */
-    --color-fg-ink-muted: #6b6f77;           /* 4.83:1 on canvas, 5.04:1 on surface, 4.59:1 on sunk */
-    --color-fg-line: #e4e4e7;
-    --color-fg-line-strong: #c8c9ce;
+@utility fg-page-header {
+    @apply min-w-0 border-b border-fg-line pb-4;
 
-    /* Accent — corridor teal, one per view. */
-    --color-accent: #0f766e;                /* white text on it = 5.47:1; as text on a surface = 5.47:1 */
-    --color-accent-hover: #0b5f59;
-    --color-accent-soft: #e2f1ef;
-    --color-on-accent: #ffffff;
+    & > * {
+        min-width: 0;
+    }
 
-    /* Semantic state, never mood. */
-    --color-success: #067647;
-    --color-success-soft: #ecfdf3;
-    --color-warning: #b54708;
-    --color-warning-soft: #fffaeb;
-    --color-danger: #b42318;
-    --color-danger-hover: #991b14;
-    --color-danger-soft: #fff1f0;
-    --color-on-danger: #ffffff;              /* 6.57:1 on fg-danger */
-    --color-info: #175cd3;
-    --color-info-soft: #eff6ff;
-    --color-neutral-badge: #5a5f66;          /* 6.43:1 on surface, 5.85:1 on sunk */
+    &.flex > :first-child {
+        flex: 1 1 20rem;
+    }
 
-    /* Focus ring. */
-    --color-focus: #0f766e;                 /* 5.24:1 on canvas, 5.47:1 on surface */
+    & h1 {
+        overflow-wrap: anywhere;
+    }
+}
 
-    /* Radii — shadcn's scale off a 0.625rem base: 6 / 8 / 10 / 14. */
-    --radius-fg-sm: 6px;
-    --radius-fg-md: 8px;
-    --radius-fg-lg: 10px;
-    --radius-fg-xl: 14px;
-
-    /* Elevation — quieter than before: a card sits on the page rather than floating above it. */
-    --shadow-fg-1: 0 1px 2px rgb(15 18 23 / 0.06);
-    --shadow-fg-2: 0 1px 3px rgb(15 18 23 / 0.08), 0 4px 10px rgb(15 18 23 / 0.06);
-    --shadow-fg-3: 0 4px 8px rgb(15 18 23 / 0.08), 0 16px 40px rgb(15 18 23 / 0.14);
-
-    /* Motion (use with duration-(--t-*) / ease-(--ease-*)). */
-    --t-fast: 120ms;
-    --t-base: 180ms;
-    --t-slow: 240ms;
-    --ease-standard: cubic-bezier(0.2, 0, 0.1, 1);
-    --ease-emphasis: cubic-bezier(0.2, 0.8, 0.2, 1);
+@utility fg-panel {
+    @apply min-w-0 rounded-fg-xl border border-fg-line bg-fg-surface shadow-fg-1;
 }
 
 /*
- | The shadcn contract, as aliases. `inline` is what makes these utilities emit `var(…)` rather than a
- | copied literal, so the `.dark` block below stays the only place a value changes.
+ | Tokens are three tiers in three files, and this file is only the seams:
+ |   tokens/palette.css  every literal value, in the light reading theme
+ |   tokens/themes.css   the dark flip — the only place a value changes
+ |   tokens/roles.css    the shadcn contract, as aliases over the names above
+ | A skin is therefore reviewed as two files rather than a hunt across 149 views. docs/DESIGN-SYSTEM.md is
+ | the source of truth for what each name means.
  */
-@theme inline {
-    --color-background: var(--color-fg-canvas);
-    --color-foreground: var(--color-fg-ink);
-
-    --color-card: var(--color-fg-surface);
-    --color-card-foreground: var(--color-fg-ink);
-
-    --color-popover: var(--color-fg-surface-raised);
-    --color-popover-foreground: var(--color-fg-ink);
-
-    /* The affirmative action of a view — brand teal here, near-black in stock shadcn. */
-    --color-primary: var(--color-accent);
-    --color-primary-foreground: var(--color-on-accent);
-
-    --color-secondary: var(--color-fg-surface-sunk);
-    --color-secondary-foreground: var(--color-fg-ink);
-
-    --color-muted: var(--color-fg-surface-sunk);
-    --color-muted-foreground: var(--color-fg-ink-muted);
-
-    --color-destructive: var(--color-danger);
-    --color-destructive-foreground: var(--color-on-danger);
-
-    --color-border: var(--color-fg-line);
-    --color-input: var(--color-fg-line-strong);
-    --color-ring: var(--color-focus);
-
-    /* `text-accent-foreground` is referenced once already and had no token behind it, so it painted
-       nothing. Defining it here is the fix; the value is the same white the button uses. */
-    --color-accent-foreground: var(--color-on-accent);
-}
-
-@layer theme {
-    .dark {
-        --color-fg-canvas: #0e1013;
-        --color-fg-surface: #171a1f;
-        --color-fg-surface-raised: #1d2127;
-        --color-fg-surface-sunk: #21252b;
-        --color-fg-surface-hover: #22262d;
-        --color-fg-ink: #e7e9ea;             /* 15.64:1 on canvas, 14.32:1 on surface */
-        --color-fg-ink-secondary: #a8adb5;   /* 8.45:1 on canvas, 7.73:1 on surface */
-        --color-fg-ink-muted: #90949d;       /* 6.27:1 on canvas, 5.74:1 on surface, 5.06:1 on sunk */
-        --color-fg-line: #2a2f37;
-        --color-fg-line-strong: #3a4048;
-
-        --color-accent: #2dbbae;
-        --color-accent-hover: #45d0c2;
-        --color-accent-soft: #102a28;
-        --color-on-accent: #04211e;          /* 7.11:1 on fg-accent */
-
-        --color-success: #4cc38a;
-        --color-success-soft: #0d2a1c;
-        --color-warning: #f79009;
-        --color-warning-soft: #2a1c0a;
-        --color-danger: #f97066;
-        --color-danger-hover: #fb8b84;
-        --color-danger-soft: #2c1413;
-        --color-on-danger: #0e1013;          /* 6.84:1 on fg-danger */
-        --color-info: #7ca9f9;
-        --color-info-soft: #101d33;
-        --color-neutral-badge: #99a0a8;      /* 6.60:1 on surface */
-
-        --color-focus: #2dbbae;              /* 8.01:1 on canvas */
-
-        --shadow-fg-1: 0 1px 2px rgb(0 0 0 / 0.4);
-        --shadow-fg-2: 0 1px 3px rgb(0 0 0 / 0.45), 0 4px 10px rgb(0 0 0 / 0.5);
-        --shadow-fg-3: 0 4px 8px rgb(0 0 0 / 0.5), 0 16px 40px rgb(0 0 0 / 0.6);
-    }
-}
 
 @layer base {
     html {
         color-scheme: light;
+    }
+
+    /*
+     * `clip`, not `hidden`: a page-wide sideways scrollbar is what a wide ledger table is not supposed to
+     * cause, and `hidden` would break the sticky header and the fixed sidebar that sit inside this scroll
+     * container. Each table keeps its own `overflow-x-auto` — the clip only stops the *document* from scrolling.
+     */
+    html,
+    body {
+        overflow-x: clip;
     }
 
     html.dark {
@@ -173,12 +79,56 @@
 
     /*
      * Focus is always visible, and it is one global rule rather than a ring per control. That is how a
-     * keyboard user reaches a `<summary>`, a table's sort button or a `[tabindex]` signature canvas —
-     * none of them shadcn components — and an `outline-offset` band is what survives an
-     * `overflow-x-auto` table, which a `ring-offset`-style box shadow does not.
+     * keyboard user reaches a `<summary>`, a table's sort button, a `role="region" tabindex="0"` scroll
+     * wrapper or the select2 trigger — none of them shadcn components — and an `outline-offset` band is
+     * what survives an `overflow-x-auto` table, which a `ring-offset`-style box shadow does not.
      */
-    :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
         @apply outline-2 outline-offset-2 outline-focus;
+    }
+
+    /*
+     * The same argument, one rule instead of twenty-two. `x-ui.button` now compresses on press, but the shell
+     * is full of buttons that are not that component: the sidebar's collapse toggle, the drawer's close, the
+     * topbar's search and theme and avatar, the chart's scrub arrows, a kiosk's own confirm. Each was written
+     * before the control existed or outside it, and every one of them answers a press with nothing.
+     *
+     * This lives in the base layer rather than in a utility so a component can still overrule it: `x-ui.button`
+     * carries its own `active:scale-[0.97]` and its own property list, and utilities beat base by layer order.
+     * `scale` is set as the `scale` property, not inside `transform`, because that is what Tailwind v4 compiles
+     * `scale-*` to — a rule that wrote `transform: scale(...)` would be thrown away by any element carrying a
+     * translate utility, since v4 keeps the two on separate properties.
+     *
+     * `--ease-standard` rather than `--ease-enter`: this is a control already in place changing state under a
+     * finger, not an element arriving, so it wants the settle at the end and not the launch at the start. The
+     * disabled and `aria-disabled` exclusions are the point of writing it as two selectors instead of one —
+     * a control that cannot be actioned must not animate as though it just was, because the compression is
+     * the only answer the interface gives, and giving it to a dead button teaches the seat the wrong lesson.
+     */
+    button:not([disabled]):not([aria-disabled='true']),
+    [role='button']:not([disabled]):not([aria-disabled='true']) {
+        transition: color, background-color, border-color, box-shadow, opacity, transform, translate,
+            scale;
+        transition-duration: var(--t-fast);
+        transition-timing-function: var(--ease-standard);
+    }
+
+    button:not([disabled]):not([aria-disabled='true']):active,
+    [role='button']:not([disabled]):not([aria-disabled='true']):active,
+    summary:active {
+        scale: 0.97;
+    }
+
+    /*
+     * A grid item's automatic minimum size is its content's minimum, so one wide register can push the whole
+     * page sideways instead of scrolling inside the overflow-x-auto box that already wraps it. Measured in a
+     * settled DOM (fonts loaded, transitions disabled) at the 768 px the plan asks to degrade gracefully:
+     * /documents +147 px, /alerts +73. Clamping the minimum to zero gives the scroll wrapper back its job.
+     * This is a base rule, so a page's own `min-w-*` utility still wins — the dispatch board's `min-w-44`
+     * truck column is untouched.
+     */
+    main .grid > * {
+        min-width: 0;
     }
 
     /* Figures and machine identifiers are monospace with tabular numerals. */
@@ -206,13 +156,74 @@
     }
 
     dialog[open] {
-        transition: opacity var(--t-fast) var(--ease-standard),
-            transform var(--t-fast) var(--ease-standard),
+        transition: opacity var(--t-fast) var(--ease-enter),
+            transform var(--t-fast) var(--ease-enter),
             overlay var(--t-fast) allow-discrete,
             display var(--t-fast) allow-discrete;
 
         @starting-style {
             @apply opacity-0 scale-[0.98];
+        }
+    }
+
+    /*
+     * The same seam for a page. `wire:navigate` does not preserve the layout — Livewire replaces the whole
+     * `<body>` and destroys the old Alpine tree — so there is no element whose `x-show` flips, and an
+     * `x-transition` has nothing to hook. `@starting-style` fires on an element's *first* rendered frame,
+     * which is exactly the moment a swapped-in `<main>` is, so the entry needs no JavaScript either.
+     *
+     * Opacity only, and only --t-fast, because docs/DESIGN-SYSTEM.md 4 settles that a data app never slides:
+     * a figure that travels is a figure whose value the reader has to re-find, and the seat is reading a
+     * register, not watching an intro. The Livewire progress bar already carries the wait; this carries the
+     * hand-over.
+     */
+    #main {
+        opacity: 1;
+        transition: opacity var(--t-fast) var(--ease-enter);
+
+        @starting-style {
+            @apply opacity-0;
+        }
+    }
+
+    /*
+     * The drawer variant of `x-ui.dialog` is the same native element, so it inherits the fade above — but a
+     * panel pinned to the inline end that scales from its own centre grows on two sides and detaches from the
+     * edge it lives against. It travels instead, on the drawer curve, and the travel is the same 100 % of its
+     * own width in both directions so the open and the close read as one gesture reversed rather than two
+     * events. `translate` in the property list, not `transform`: this is the property v4 compiles a utility
+     * like `translate-x-full` to, and it composes with the centring translate the panel does not use.
+     *
+     * `scale: 1` is here to unset the inherited `@starting-style` scale rather than to assert a size; without
+     * it a drawer would do both — grow from the middle and slide from the edge — which is two stories about
+     * the same panel.
+     */
+    dialog.fg-drawer:not([open]) {
+        opacity: 0;
+        translate: 100% 0;
+    }
+
+    dialog.fg-drawer[open] {
+        transition: opacity var(--t-drawer) var(--ease-drawer),
+            translate var(--t-drawer) var(--ease-drawer),
+            overlay var(--t-drawer) allow-discrete,
+            display var(--t-drawer) allow-discrete;
+
+        @starting-style {
+            opacity: 0;
+            scale: 1;
+            translate: 100% 0;
+        }
+    }
+
+    /* The panel is on the inline start when the document runs right-to-left, so it arrives from there. */
+    [dir='rtl'] dialog.fg-drawer:not([open]) {
+        translate: -100% 0;
+    }
+
+    [dir='rtl'] dialog.fg-drawer[open] {
+        @starting-style {
+            translate: -100% 0;
         }
     }
 
@@ -248,13 +259,195 @@
         filter: invert(1) brightness(1.5);
     }
 
+    /*
+     * The overview's three motions, all of them transform or opacity and all of them on the one
+     * clock the page already keeps — GSAP and Lenis are deliberately not installed in an operations
+     * app, so a data screen animates with CSS and nothing else.
+     *
+     * `.fg-settle` is the hand-over: a figure arrives 4 px below where it will sit. `both` is what makes
+     * it safe under reduced motion, where the global block at the end of this file collapses every
+     * animation duration to 0.001 ms and drops the transform half of every transition — the element lands on
+     * its final frame instead of being caught at the start one, which is how "fade up on scroll" quietly
+     * hides content from the visitors who asked for less motion. The stagger is a custom property because
+     * Tailwind v4 cannot see a class name built by interpolation (the defect 4).
+     *
+     * `.fg-draw` draws the pipeline's rules left-to-right in stage order, so the direction of work is
+     * the first thing the band says. A 1 px hairline scaled on X loses nothing a reader could see.
+     *
+     * `.fg-breathe` is an alarm, not a decoration: it belongs to a self-check that has actually found
+     * drift (the "silence is loud"), it always sits beside the word that names the condition, and it
+     * stops when motion is not wanted. It goes on an **icon, never on text** — fading a caption to 55 %
+     * drops its measured contrast under AA at the dimmest frame, which the overview's first QA pass
+     * found (docs/HOME-DESIGN.md, pass 1) and this rule answers. A clean desk stays still.
+     */
+    @keyframes fg-settle {
+        from {
+            opacity: 0;
+            transform: translate3d(0, 4px, 0);
+        }
+
+        to {
+            opacity: 1;
+            transform: none;
+        }
+    }
+
+    .fg-settle {
+        animation: fg-settle var(--t-base) var(--ease-emphasis) both;
+        animation-delay: var(--fg-settle-delay, 0ms);
+    }
+
+    @keyframes fg-draw {
+        from {
+            transform: scaleX(0);
+        }
+
+        to {
+            transform: scaleX(1);
+        }
+    }
+
+    .fg-draw {
+        transform-origin: left center;
+        animation: fg-draw var(--t-slow) var(--ease-enter) both;
+        animation-delay: var(--fg-draw-delay, 0ms);
+        will-change: transform;
+    }
+
+    @keyframes fg-breathe {
+        0%,
+        100% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0.55;
+        }
+    }
+
+    .fg-breathe {
+        animation: fg-breathe 2.4s var(--ease-standard) infinite;
+    }
+
+    /*
+     * The stagger, for the two places a page arrives as a set rather than as one figure: a register's first
+     * screen of rows and the overview's card grid. 30 ms between neighbours — enough to read as an order,
+     * short enough that the twelfth row lands inside 400 ms. The cap at twelve is deliberate: a 40-row
+     * register must not finish arriving after the seat has already started scanning it.
+     *
+     * `html[data-fg-first-paint]` is what keeps this honest. app.js raises that flag for ~900 ms around an
+     * arrival (first load and every `wire:navigate`) and lets it fall. Without the gate, a seat that types
+     * three characters into a register's search would watch the result list re-stagger three times, and
+     * motion that accompanies a keystroke is the exact thing this framework says never to animate. With it,
+     * the choreography belongs to arriving at a page — which is occasional — and not to working on one.
+     */
+    html[data-fg-first-paint] .fg-stagger > * {
+        animation: fg-settle var(--t-base) var(--ease-emphasis) both;
+    }
+
+    html[data-fg-first-paint] .fg-stagger > :nth-child(2) {
+        animation-delay: 30ms;
+    }
+
+    html[data-fg-first-paint] .fg-stagger > :nth-child(3) {
+        animation-delay: 60ms;
+    }
+
+    html[data-fg-first-paint] .fg-stagger > :nth-child(4) {
+        animation-delay: 90ms;
+    }
+
+    html[data-fg-first-paint] .fg-stagger > :nth-child(5) {
+        animation-delay: 120ms;
+    }
+
+    html[data-fg-first-paint] .fg-stagger > :nth-child(6) {
+        animation-delay: 150ms;
+    }
+
+    html[data-fg-first-paint] .fg-stagger > :nth-child(7) {
+        animation-delay: 180ms;
+    }
+
+    html[data-fg-first-paint] .fg-stagger > :nth-child(8) {
+        animation-delay: 210ms;
+    }
+
+    html[data-fg-first-paint] .fg-stagger > :nth-child(9) {
+        animation-delay: 240ms;
+    }
+
+    html[data-fg-first-paint] .fg-stagger > :nth-child(10) {
+        animation-delay: 270ms;
+    }
+
+    html[data-fg-first-paint] .fg-stagger > :nth-child(11) {
+        animation-delay: 300ms;
+    }
+
+    html[data-fg-first-paint] .fg-stagger > :nth-child(n + 12) {
+        animation-delay: 330ms;
+    }
+
+    /*
+     * Livewire ships NProgress for the `wire:navigate` bar and leaves both of its extras switched on: a
+     * spinning ring under its own `nprogress-spinner` keyframe, and the `.peg`'s 10 px glow. The bar is the
+     * whole signal — a second, unrelated indicator in the opposite corner of a seat that is already watching
+     * the top edge only makes the wait feel less accounted for. The glow is a 2013 flourish that reads as a
+     * rendering artefact on a hairline rule.
+     *
+     * Both carry `!important` for a reason that is easy to get backwards: Livewire injects these selectors
+     * unlayered, and in the cascade-layer order an `!important` declaration inside a layer *outranks* an
+     * unlayered one — the reverse of the normal case. Without `!important` the same rule loses. This is the
+     * only place in the stylesheet where the layering is load-bearing rather than incidental.
+     */
+    #nprogress .spinner {
+        display: none !important;
+    }
+
+    #nprogress .peg {
+        box-shadow: none !important;
+        transform: none !important;
+    }
+
+    /*
+     * Reduced motion asks for less *movement*, not for less information. Collapsing every duration to
+     * zero — the usual one-line reset — throws away the fades that tell a seat a menu opened, a toast left,
+     * a figure settled, and those are the transitions that carry meaning rather than style.
+     *
+     * So this block removes the travel instead: `transition-property` is re-pointed at the paint-only
+     * list, which leaves a transform-based change (a drawer sliding in, a menu scaling from its trigger, a
+     * figure settling up 4 px) applying on the frame it is asked for, while every colour and opacity change
+     * keeps fading on the app's own clock. Animations lose their iteration and duration outright, because a
+     * shimmer and a breathe are pure movement — and `both` fill lands each of them on its final frame, so
+     * content never hides from the visitor who asked for less motion.
+     */
     @media (prefers-reduced-motion: reduce) {
         *,
         *::before,
         *::after {
             animation-duration: 0.001ms !important;
             animation-iteration-count: 1 !important;
-            transition-duration: 0.001ms !important;
+            transition-property: opacity, color, background-color, border-color, outline-color,
+                box-shadow, text-decoration-color, fill, stroke !important;
+            transition-duration: var(--t-fast) !important;
         }
     }
+}
+
+/*
+ * Livewire's progress bar takes its colour from `--livewire-progress-bar-color`, printed by `@livewireStyles`
+ * into an unlayered `:root` in the head — which head.blade.php renders *before* `@vite`.
+ *
+ * It cannot live in `tokens/palette.css`, for two separate reasons: Tailwind prunes a `@theme` variable that
+ * no rule ever references (verified against the built sheet — the two new curves appear only because a
+ * component asks for them, and this name never would), and a declaration inside `@layer base` would be a
+ * layered-versus-unlayered contest it loses on a normal-weight property. Declared here, unlayered, at equal
+ * specificity and later in source order, it wins on order alone.
+ *
+ * It is an alias, not a second value: `tokens/themes.css` re-points `--color-accent` on the same element, so
+ * the bar is the fleet green in both readings themes and there is nothing here to keep in step.
+ */
+:root {
+    --livewire-progress-bar-color: var(--color-accent);
 }

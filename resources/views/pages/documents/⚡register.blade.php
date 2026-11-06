@@ -21,7 +21,7 @@ use Livewire\Component;
 use Livewire\WithFileUploads;
 
 /*
- * Registering a document, with its first copy if the person already has it (§14.4, §10.8's `draft`).
+ * Registering a document, with its first copy if the person already has it (the `draft`).
  *
  * Two steps in one screen and two Actions behind it, because they are two decisions: filing the slot
  * in the register so something exists to chase, and attaching the paper. Submitting without a file
@@ -61,7 +61,7 @@ new #[Title('Register a document')] class extends Component {
     /**
      * The row this paper evidences, when the screen was reached from that row's page. Both are
      * URL-bound so a link can carry them; only the whitelist in {@see subject()} is honoured,
-     * because the pair is written verbatim into the §14.4 storage path.
+     * because the pair is written verbatim into the storage path.
      */
     #[Url('subject_type')]
     public string $subjectType = '';
@@ -185,13 +185,13 @@ new #[Title('Register a document')] class extends Component {
     }
 }; ?>
 
-    <div class="grid gap-6">
+    <div class="grid w-full max-w-(--breakpoint-sm) gap-6">
         @php($locked = $registeredDocumentId !== null)
 
-        <header class="grid gap-1">
+        <header class="fg-page-header grid gap-1.5">
             <x-ui.heading size="xl" level="1">{{ __('Register a document') }}</x-ui.heading>
             <x-ui.text>
-                {{ __('A licence, permit, insurance policy, POD or customs paper — the register holds one entry per piece of paper and every version of it. (§10.8)') }}
+                {{ __('A licence, permit, insurance policy, POD or customs paper — the register holds one entry per piece of paper and every version of it.') }}
             </x-ui.text>
         </header>
 

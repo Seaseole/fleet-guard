@@ -6,7 +6,7 @@ declare(strict_types=1);
  * UI lint for the promises in docs/DESIGN-SYSTEM.md that a human can only keep by machine.
  *
  * Same shape as lint-architecture.php: dumb, textual, no dependencies, exit 1 on any violation. There is
- * no committed test suite (§14.6), so the design contract needs the same treatment as the module
+ * no committed test suite, so the design contract needs the same treatment as the module
  * boundaries — a rule nobody can check is a rule that quietly stops being true. This file exists because
  * `x-ui.button` defaulted to `primary` and nothing measured how many times that put two filled buttons in
  * one container (docs/UX-UI-PLAN.md P0-1).
@@ -15,19 +15,35 @@ declare(strict_types=1);
  *   U1  one primary per view. A view is the page outside any `<x-ui.dialog>`, or one dialog — a native
  *       `<dialog>` makes the page behind it inert, so a dialog may carry its own affirmative action. Inline
  *       forms do *not* get their own budget: their submits are on screen together with each other.
- *   U2  no raw `<select>` in a page component — the design system's controls only (§13, `x-ui.select`).
- *   U3  every `<x-ui.table>` carries `:caption` — the accessible name of the table (WCAG, §10).
+ *   U2  no raw `<select>` in a page component — the design system's controls only (`x-ui.select`).
+ *   U3  every `<x-ui.table>` carries `:caption` — the accessible name of the table.
  *   U4  a `role="tab"` may not appear without its `tabpanel` and `aria-controls` — half a WAI-ARIA
  *       pattern is a promise a screen reader cannot keep.
  *   U5  one numeric path in a table: a component cell asks for `numeric`/`identifier`/`nowrap`, it does not
  *       re-type the classes; and no cell hand-copies `text-right font-mono`, which is how the same Amount
  *       column came to read differently on two screens (docs/UX-UI-PLAN.md P3-1).
+ *   U6  a control component's size may not change on a *width* query. `sm:` is min-width 640 px, so
+ *       `h-9 sm:h-11` reads as "44 px on mobile" to whoever writes it and ships 44 px on every laptop while
+ *       leaving the phone at 36 — the exact inversion a responsive pass landed in the control table. The
+ *       device asks `touch:` (`@media (pointer: coarse)`, declared in resources/css/app.css); the window does
+ *       not know whether a thumb is coming.
+ *   U7  the signal orange is a fill, a bar and a ring. It is never a *reading*: `text-accent` measures
+ *       3.59:1 on a surface, which is the one accessibility defect the reference screen carried and the
+ *       reason an accent that bright cannot be small text. The text role is `text-accent-ink`, the deep end
+ *       of the same hue, and it passes on every surface in both themes.
  *
  * Run: php scripts/lint-ui.php   (composer lint:ui)
  */
 final class UiLint
 {
     private const PAGES_GLOB = 'resources/views/pages/*/*.blade.php';
+
+    /**
+     * The shared chrome: components and the app shell. U6 reads these, because a metric change made here
+     * lands on every screen at once — which is exactly how one responsive pass put 44 px controls on
+     * every laptop in the yard office.
+     */
+    private const SHELL_DIRS = ['resources/views/components', 'resources/views/layouts'];
 
     private const BUTTON_COMPONENT = 'resources/views/components/ui/button.blade.php';
 
@@ -38,7 +54,7 @@ final class UiLint
      *
      * @var list<string>
      */
-    private const ENABLED = ['U1', 'U2', 'U3', 'U4', 'U5'];
+    private const ENABLED = ['U1', 'U2', 'U3', 'U4', 'U5', 'U6', 'U7'];
 
     /** @var array<string, string> */
     private const PENDING = [];
@@ -70,6 +86,12 @@ final class UiLint
             $this->checkSelectsAreComponents($file);
             $this->checkTablesHaveCaptions($file);
             $this->checkNumericTreatmentIsOnePath($file);
+            $this->checkAccentIsNotUsedAsSmallText($file);
+        }
+
+        foreach ($this->shellFiles() as $file) {
+            $this->checkSizesFollowTheDeviceNotTheWindow($file);
+            $this->checkAccentIsNotUsedAsSmallText($file);
         }
 
         return $this->report();
@@ -140,7 +162,7 @@ final class UiLint
         // page-level button and hide the very conflict the rule exists to catch. The reason is mandatory in
         // the pattern because an unexplained claim is how a marker turns into a mute button.
         //
-        // This is not a suppression. `canDepart()` and `canComplete()` (§10.2) are mutually exclusive states
+        // This is not a suppression. `canDepart()` and `canComplete()` are mutually exclusive states
         // the textual pass cannot evaluate, and the truthful per-view count lives in the render sweeps,
         // which render one real state and can count what is actually on screen.
         $markers = [];
@@ -225,7 +247,7 @@ final class UiLint
                 $this->fail(
                     $this->rel($file),
                     sprintf(
-                        'U1: %d buttons resolve to primary in %s (lines %s) — §5 allows one affirmative action per view, and a dialog counts as its own',
+                        'U1: %d buttons resolve to primary in %s (lines %s) — the design allows one affirmative action per view, and a dialog counts as its own',
                         $scope['primary'],
                         $key,
                         implode(', ', $scope['lines']),
@@ -326,7 +348,32 @@ final class UiLint
 
         foreach ($matches[0] as $match) {
             $line = substr_count(substr($contents, 0, $match[1]), "\n") + 1;
-            $this->fail($this->rel($file), "U2: raw <select> at line {$line} — use x-ui.select (§13: one component system)");
+            $this->fail($this->rel($file), "U2: raw <select> at line {$line} — use x-ui.select (one component system)");
+        }
+    }
+
+    /**
+     * U7 — the accent is spent on a fill, a bar and a ring, never on a reading.
+     *
+     * `text-accent` is a Tailwind utility generated from `--color-accent`, so the class and the fill are the
+     * same value and cannot be separated at the token layer. What separates them is the name a page writes:
+     * `text-accent-ink` is the deep end of the hue and clears 4.5:1 on every surface in both themes, while
+     * the bright one measures 3.59:1 as text. The reference screen this palette was asked for shipped that
+     * defect; this rule is why the app takes its accent and not its contrast.
+     */
+    private function checkAccentIsNotUsedAsSmallText(string $file): void
+    {
+        if (! in_array('U7', self::ENABLED, true)) {
+            return;
+        }
+
+        $contents = (string) file_get_contents($file);
+
+        preg_match_all('/(?<![\w-])text-accent(?!-)/', $contents, $matches, PREG_OFFSET_CAPTURE);
+
+        foreach ($matches[0] as $match) {
+            $line = substr_count(substr($contents, 0, $match[1]), "\n") + 1;
+            $this->fail($this->rel($file), "U7: text-accent at line {$line} puts a 3.59:1 fill in a text role — use text-accent-ink");
         }
     }
 
@@ -401,10 +448,65 @@ final class UiLint
         }
     }
 
+    /**
+     * U6 — a control's size follows the *device*, not the width of its window.
+     *
+     * `sm:` is `min-width: 640px`, so `h-9 sm:h-11` keeps a phone at 36 px and gives every desktop the 44 px
+     * kiosk box (reserves 44 px for `lg` and for the kiosk). The pass that wrote it was aiming at touch
+     * targets, and the comment on the line even said so; the prefix is what was wrong. A device answers to
+     * `touch:` (`@media (pointer: coarse)`), a window answers to nothing a thumb cares about.
+     */
+    private function checkSizesFollowTheDeviceNotTheWindow(string $file): void
+    {
+        if (! in_array('U6', self::ENABLED, true)) {
+            return;
+        }
+
+        $contents = (string) file_get_contents($file);
+
+        preg_match_all('/\b(?:sm|md|lg|xl|2xl):(?:h|w|min-h|min-w|max-h|max-w|size)-[0-9a-z]+/', $contents, $matches, PREG_OFFSET_CAPTURE);
+
+        foreach ($matches[0] as $match) {
+            $this->fail($this->rel($file), sprintf(
+                'U6: %s at line %d sizes a shared control by window width — use the touch: variant, or set the metric once',
+                $match[0],
+                substr_count(substr($contents, 0, $match[1]), "\n") + 1,
+            ));
+        }
+    }
+
     /** @return list<string> */
     private function pageFiles(): array
     {
         $files = glob($this->root.'/'.self::PAGES_GLOB) ?: [];
+
+        sort($files);
+
+        return $files;
+    }
+
+    /**
+     * Every Blade file under the shared chrome, at any depth.
+     *
+     * @return list<string>
+     */
+    private function shellFiles(): array
+    {
+        $files = [];
+
+        foreach (self::SHELL_DIRS as $dir) {
+            $root = $this->root.'/'.$dir;
+
+            if (! is_dir($root)) {
+                continue;
+            }
+
+            foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root)) as $entry) {
+                if ($entry instanceof SplFileInfo && str_ends_with(str_replace('\\', '/', $entry->getFilename()), '.blade.php')) {
+                    $files[] = str_replace('\\', '/', $entry->getPathname());
+                }
+            }
+        }
 
         sort($files);
 

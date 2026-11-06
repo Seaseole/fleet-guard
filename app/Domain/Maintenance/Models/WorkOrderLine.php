@@ -13,10 +13,10 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.3 WORK_ORDER_LINE — one cost inside a work order (§10.6).
+ * WORK_ORDER_LINE — one cost inside a work order.
  *
  * The row is deliberately ignorant of posting: phase 3d records what the workshop spent, and the
- * three posting paths §10.6 names (parts issue, timesheet, supplier bill) each arrive in their own
+ * three posting paths the design names (parts issue, timesheet, supplier bill) each arrive in their own
  * slice with their own ledger side. What this row owns is the arithmetic — quantity × unit cost,
  * rounded once — and the frozen base figure the work order totals.
  *

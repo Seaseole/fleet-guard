@@ -17,7 +17,7 @@ use InvalidArgumentException;
  * `tripId` is the trip the vehicle is being held for. It arrived with Phase 2 and is deliberately
  * nullable: a workshop loaner or an owner's errand is a real assignment with no job behind it, and
  * forcing one would invent a trip to satisfy a column. When it *is* set it is the trip's own ULID —
- * no FK, because §4.3's assignments predate the trips table and the reference is by id alone.
+ * no FK, because the assignments predate the trips table and the reference is by id alone.
  */
 final readonly class AssignmentDto
 {

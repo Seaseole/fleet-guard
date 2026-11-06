@@ -14,11 +14,11 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
- * What a person does to an alert: acknowledge it, mute it, resolve it (§10).
+ * What a person does to an alert: acknowledge it, mute it, resolve it.
  *
  * One action for the three exits, because the rules are the same three rules asked in a different
  * order — is the move legal, does it need a reason, which columns does it date itself with. Three
- * near-identical classes would each have to remember §10.1's reason rule, and a rule remembered in
+ * near-identical classes would each have to remember the reason rule, and a rule remembered in
  * three places is a rule that drifts in two. This is {@see
  * \App\Domain\Kernel\Documents\Actions\TransitionDocument}'s shape for the same reason.
  *
@@ -27,7 +27,7 @@ use Illuminate\Support\Facades\DB;
  *
  * The reason is checked **before** the update, and the DB CHECK then refuses the row that follows.
  * That order is not belt-and-braces: without the first check the alert would move and the trail would
- * fail, leaving the state changed with nothing saying who did it — the precise shape of the hole §10.1
+ * fail, leaving the state changed with nothing saying who did it — the precise shape of the hole
  * closes.
  */
 final class TransitionAlert
@@ -50,7 +50,7 @@ final class TransitionAlert
         if (! in_array($to, self::Targets, true)) {
             throw new \InvalidArgumentException(sprintf(
                 '%s is not a state a person puts an alert into. An expired mute is reopened by the sweep — '
-                .'nothing needs to set %s by hand (§10).',
+                .'nothing needs to set %s by hand.',
                 $to->value,
                 AlertState::Open->value,
             ));
@@ -68,20 +68,20 @@ final class TransitionAlert
 
         if ($to === AlertState::Muted && $mutedUntil === null) {
             throw new \InvalidArgumentException(
-                'A mute needs an end. §10 says muting carries an expiry "so muting cannot silently become '
+                'A mute needs an end. The design says muting carries an expiry "so muting cannot silently become '
                 .'permanent" — an open-ended mute is a resolved alert with no reason attached.'
             );
         }
 
         // The scheduler is allowed exactly one of these exits, and only because it owns the findings it
-        // raised: §14.6's self-check alert must close itself when the next run comes back clean, or the
+        // raised: The self-check alert must close itself when the next run comes back clean, or the
         // register fills with accurate rows about problems that no longer exist. Acknowledging and
         // muting both say "a person has decided this can wait", which is not something a cron entry gets
         // to claim.
         if ($actorKind !== ActorKind::User && $to !== AlertState::Resolved) {
             throw new \InvalidArgumentException(sprintf(
                 'The %s principal cannot move an alert to %s. Only a person acknowledges or mutes; the '
-                .'scheduler may only close a finding its own next run disproved (§14.6).',
+                .'scheduler may only close a finding its own next run disproved.',
                 $actorKind->value,
                 $to->value,
             ));

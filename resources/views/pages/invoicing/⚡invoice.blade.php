@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 use App\Domain\Invoicing\Actions\AllocatePayment;
+use App\Domain\Invoicing\Actions\DiscardManualInvoice;
 use App\Domain\Invoicing\Actions\IssueCreditNote;
+use App\Domain\Invoicing\Actions\IssueManualInvoice;
 use App\Domain\Invoicing\Actions\RecordPayment;
 use App\Domain\Invoicing\Actions\VoidInvoice;
 use App\Domain\Invoicing\Data\CreditNoteDto;
@@ -16,8 +18,10 @@ use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Models\InvoiceLine;
 use App\Domain\Invoicing\Models\PaymentAllocation;
 use App\Domain\Invoicing\PaymentMethod;
+use App\Domain\Kernel\Money\FxRateSource;
 use App\Domain\Kernel\Money\Money;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
+use App\Domain\Kernel\Identity\ConfirmsRecentPassword;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Mail;
@@ -26,19 +30,21 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 
 /*
- * One invoice, its money and the three things that may happen to it (§10.4, §10.5, §10.6).
+ * One invoice, its money and the three things that may happen to it.
  *
- * The screen shows the three axes §10.4 keeps apart — lifecycle, derived settlement state, derived ageing
+ * The screen shows the three axes the design keeps apart — lifecycle, derived settlement state, derived ageing
  * bucket — because most arguments about an invoice are really an argument about which of the three someone
  * meant. Nothing here writes a state: every button calls the Action that owns the transition, and a refusal
  * from that Action is displayed rather than pre-empted, so the screen and a script get the same sentence.
  *
- * The money panel deliberately separates **recording a receipt** from **allocating it**: §6.8 banks money
+ * The money panel deliberately separates **recording a receipt** from **allocating it**: Banks money
  * into `2150` first, and an overpayment is a real balance on the customer's account rather than an
  * adjustment to this invoice. "Record and apply" does both in order, and if the allocation is refused the
  * receipt still exists — which is the correct outcome, not a partial failure.
  */
 new #[Title('Invoice')] class extends Component {
+    use ConfirmsRecentPassword;
+
     public string $invoiceId = '';
 
     public string $voidReason = '';
@@ -48,6 +54,12 @@ new #[Title('Invoice')] class extends Component {
     public string $receiptMethod = 'bank';
 
     public string $receiptReference = '';
+
+    public string $receiptRate = '';
+
+    public string $receiptBase = '';
+
+    public string $discardReason = '';
 
     public string $receiptOn = '';
 
@@ -73,7 +85,7 @@ new #[Title('Invoice')] class extends Component {
     /**
      * Re-read on every action rather than trusting the Livewire snapshot: a receipt allocated from another
      * tab must be visible here, and an Action's refusal must leave the screen showing the row that actually
-     * exists (§10.4's "derived, never stored" applies to the screen too).
+     * exists (the "derived, never stored" applies to the screen too).
      */
     #[Computed]
     public function invoice(): Invoice
@@ -110,6 +122,14 @@ new #[Title('Invoice')] class extends Component {
         return Money::ofMinor($minor, $currency)->format($currency);
     }
 
+    /** What the books carry, in the currency the ledger is kept in (the second half). */
+    public function baseMoney(int $minor): string
+    {
+        $currency = CurrentCompany::model()->base_currency_code;
+
+        return Money::ofMinor($minor, $currency)->format($currency);
+    }
+
     public function canVoid(): bool
     {
         return Gate::allows('invoices.void')
@@ -121,6 +141,12 @@ new #[Title('Invoice')] class extends Component {
     public function void(VoidInvoice $void): void
     {
         $this->clearMessages();
+
+        abort_unless(Gate::allows('invoices.void'), 403);
+
+        if (! $this->confirmRecentPassword()) {
+            return;
+        }
 
         $this->validate(['voidReason' => ['required', 'string', 'min:10', 'max:300']], [
             'voidReason.min' => __('Say why in at least ten characters — a void without a reason is an edit nobody can audit.'),
@@ -141,21 +167,101 @@ new #[Title('Invoice')] class extends Component {
     }
 
     /**
+     * The fiscal act for a hand-raised document: the number is spent here, VAT is computed at the
+     * rate effective today, and the receivable is posted. Everything before this was a draft with no
+     * existence in the books, so this is the one button on the screen that cannot be undone — which is
+     * why it asks for the password again and mirrors nothing.
+     */
+    public function issue(IssueManualInvoice $issue): void
+    {
+        $this->clearMessages();
+
+        abort_unless(Gate::allows('invoices.issue'), 403);
+
+        if (! $this->confirmRecentPassword()) {
+            return;
+        }
+
+        try {
+            $issued = $issue($this->invoice, auth()->id());
+        } catch (\Throwable $refused) {
+            $this->error = $refused->getMessage();
+
+            return;
+        }
+
+        $this->status = __(':number is issued and posted. The receivable is on the ledger and the ageing clock starts today.', [
+            'number' => $issued->reference(),
+        ]);
+
+        unset($this->invoice, $this->allocations);
+    }
+
+    /**
+     * A draft that should not have been raised is discarded: no number was spent and nothing was
+     * posted, so there is no mirror to write and no row to keep (the design refuses a void on a draft for
+     * exactly this reason). The reason is required because the row disappears and the trail is all
+     * that stays.
+     */
+    public function discard(DiscardManualInvoice $discard): void
+    {
+        $this->clearMessages();
+
+        abort_unless(Gate::allows('invoices.draft'), 403);
+
+        $this->validate(['discardReason' => ['required', 'string', 'min:10', 'max:300']], [
+            'discardReason.min' => __('Say why in at least ten characters — a discard with no reason is a document nobody can explain.'),
+        ]);
+
+        try {
+            $discard($this->invoice, $this->discardReason, auth()->id());
+        } catch (\Throwable $refused) {
+            $this->error = $refused->getMessage();
+
+            return;
+        }
+
+        $this->dispatch('toast', message: __('The draft is discarded and its lines with it.'), kind: 'success');
+
+        $this->redirectRoute('invoicing.index');
+    }
+
+    public function isDraft(): bool
+    {
+        return $this->invoice->status === InvoiceLifecycle::Draft;
+    }
+
+    public function isForeign(): bool
+    {
+        return (string) $this->invoice->currency_code !== CurrentCompany::model()->base_currency_code;
+    }
+
+    /**
      * Record the receipt, then apply what the customer owes. The receipt is banked even if allocation is
-     * refused: the money exists whether or not this invoice is the one it was for (§6.8).
+     * refused: the money exists whether or not this invoice is the one it was for.
      */
     public function recordAndApply(RecordPayment $record, AllocatePayment $allocate): void
     {
         $this->clearMessages();
+
+        abort_unless(Gate::allows('payments.allocate'), 403);
+
+        if (! $this->confirmRecentPassword()) {
+            return;
+        }
 
         $validated = $this->validate([
             'receiptAmount' => ['required', 'string', 'max:24'],
             'receiptMethod' => ['required', 'string', 'in:'.implode(',', PaymentMethod::values())],
             'receiptOn' => ['required', 'date'],
             'receiptReference' => ['nullable', 'string', 'max:80'],
+            'receiptRate' => ['nullable', 'string', 'max:20'],
+            'receiptBase' => ['nullable', 'string', 'max:24'],
         ]);
 
         $currency = (string) $this->invoice->currency_code;
+        $baseCurrency = CurrentCompany::model()->base_currency_code;
+        $isForeign = $currency !== $baseCurrency;
         $minor = Money::ofMajor($validated['receiptAmount'], $currency)->minorUnits;
 
         if ($minor <= 0) {
@@ -171,6 +277,16 @@ new #[Title('Invoice')] class extends Component {
                 method: PaymentMethod::from($validated['receiptMethod']),
                 receivedOn: Carbon::parse($validated['receiptOn']),
                 reference: $validated['receiptReference'] === '' ? null : $validated['receiptReference'],
+                // The receipt is banked in the currency the invoice was billed in, and the
+                // desk states the conversion the way the bank gave it — the rate it struck, or the
+                // base it actually took. Neither figure typed on a foreign receipt is a refusal,
+                // not a guess: only the paper says how many Pula arrived.
+                currencyCode: $currency,
+                fxRate: $isForeign && $validated['receiptRate'] !== '' ? $validated['receiptRate'] : null,
+                baseAmountMinor: $isForeign && $validated['receiptBase'] !== ''
+                    ? Money::ofMajor($validated['receiptBase'], $baseCurrency)->minorUnits
+                    : null,
+                fxRateSource: $validated['receiptRate'] !== '' ? FxRateSource::BankStatement->value : FxRateSource::Manual->value,
             ), auth()->id());
         } catch (\Throwable $refused) {
             $this->error = $refused->getMessage();
@@ -194,6 +310,8 @@ new #[Title('Invoice')] class extends Component {
 
         $this->receiptAmount = '';
         $this->receiptReference = '';
+        $this->receiptRate = '';
+        $this->receiptBase = '';
 
         unset($this->invoice, $this->allocations);
     }
@@ -239,8 +357,8 @@ new #[Title('Invoice')] class extends Component {
     }
 
     /**
-     * §10.7's delivery. The PDF is rendered here, while the company is pinned, and travels on the mailable
-     * with every word it prints — a worker has no tenant context (§20.8).
+     * The delivery. The PDF is rendered here, while the company is pinned, and travels on the mailable
+     * with every word it prints — a worker has no tenant context.
      */
     public function email(InvoiceDocuments $documents): void
     {
@@ -296,32 +414,43 @@ new #[Title('Invoice')] class extends Component {
 <div class="grid gap-6">
     @php($invoice = $this->invoice)
 
-    <header class="flex flex-wrap items-start justify-between gap-4">
+    <header class="fg-page-header flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div class="grid gap-1">
             <x-ui.heading size="xl" level="1">{{ $invoice->reference() }}</x-ui.heading>
             <x-ui.text>
                 {{ $invoice->customer?->name ?? '—' }}
                 · {{ $invoice->kind->label() }}
-                · {{ __('issued :date', ['date' => $invoice->issue_date->format('d M Y')]) }}
+                · {{ $invoice->status === InvoiceLifecycle::Draft
+                    ? __('raised :date', ['date' => $invoice->issue_date->format('d M Y')])
+                    : __('issued :date', ['date' => $invoice->issue_date->format('d M Y')]) }}
                 · {{ __('due :date', ['date' => $invoice->due_on->format('d M Y')]) }}
             </x-ui.text>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-            <x-ui.badge :tone="$invoice->status === \App\Domain\Invoicing\InvoiceLifecycle::Void ? 'neutral' : 'info'">
+            <x-ui.badge :tone="$invoice->status === \App\Domain\Invoicing\InvoiceLifecycle::Void ? 'neutral' : ($invoice->status === InvoiceLifecycle::Draft ? 'info' : 'success')">
                 {{ $invoice->status->label() }}
             </x-ui.badge>
-            <x-ui.badge :tone="$invoice->settlementState() === \App\Domain\Invoicing\SettlementState::Paid ? 'success' : ($invoice->balance_amount > 0 ? 'warning' : 'neutral')">
-                {{ $invoice->settlementState()->label() }}
-            </x-ui.badge>
-            <x-ui.badge tone="neutral">{{ $invoice->ageingState()->label() }}</x-ui.badge>
 
-            <x-ui.button variant="outline" :href="route('invoicing.invoices.pdf', ['invoice' => $invoice->id])">
-                {{ __('Download PDF') }}
-            </x-ui.button>
+            {{-- A draft is owed nothing and has no number, so it has no settlement or ageing axis —
+                 printing them would say the books hold a receivable they do not. --}}
+            @if ($invoice->status !== InvoiceLifecycle::Draft)
+                <x-ui.badge :tone="$invoice->settlementState() === \App\Domain\Invoicing\SettlementState::Paid ? 'success' : ($invoice->balance_amount > 0 ? 'warning' : 'neutral')">
+                    {{ $invoice->settlementState()->label() }}
+                </x-ui.badge>
+                <x-ui.badge tone="neutral">{{ $invoice->ageingState()->label() }}</x-ui.badge>
+            @endif
+
+            @if (! $this->isDraft())
+                <x-ui.button variant="outline" :href="route('invoicing.invoices.pdf', ['invoice' => $invoice->id])">
+                    {{ __('Download PDF') }}
+                </x-ui.button>
+            @endif
 
             @can('invoices.issue')
-                <x-ui.button variant="outline" wire:click="email" wire:loading.attr="disabled">{{ __('Email to customer') }}</x-ui.button>
+                @if (! $this->isDraft())
+                    <x-ui.button variant="outline" wire:click="email" wire:loading.attr="disabled">{{ __('Email to customer') }}</x-ui.button>
+                @endif
             @endcan
 
             <x-ui.button variant="ghost" :href="route('invoicing.index')" wire:navigate>{{ __('Back to register') }}</x-ui.button>
@@ -374,8 +503,54 @@ new #[Title('Invoice')] class extends Component {
                     <div class="flex justify-between gap-4"><dt class="text-fg-ink-muted">{{ __('Terms') }}</dt><dd>{{ \App\Domain\Kernel\Commercial\PaymentTerms::label($invoice->terms_snapshot) }}</dd></div>
                     <div class="flex justify-between gap-4"><dt class="text-fg-ink-muted">{{ __('Currency') }}</dt><dd>{{ $invoice->currency_code }}</dd></div>
                     <div class="flex justify-between gap-4"><dt class="text-fg-ink-muted">{{ __('Issued by') }}</dt><dd>{{ $invoice->issued_at?->format('d M Y H:i') ?? '—' }}</dd></div>
+
+                    {{-- the block, printed rather than re-derived: the rate the document froze, and
+                         the base the books carry, which is the pair a realised difference is measured
+                         against when the money lands. --}}
+                    @if ($this->isForeign())
+                        <div class="flex justify-between gap-4"><dt class="text-fg-ink-muted">{{ __('Rate') }}</dt><dd class="fg-numeric">1 {{ $invoice->currency_code }} = {{ $invoice->fx_rate }} {{ $invoice->base_currency_code }}</dd></div>
+                        <div class="flex justify-between gap-4"><dt class="text-fg-ink-muted">{{ __('Rate source') }}</dt><dd>{{ str_replace('_', ' ', (string) $invoice->fx_rate_source) }} · {{ $invoice->fx_rate_date?->format('d M Y') ?? '—' }}</dd></div>
+                        <div class="flex justify-between gap-4"><dt class="text-fg-ink-muted">{{ __('In the books') }}</dt><dd class="fg-numeric">{{ $this->baseMoney($invoice->base_amount) }}</dd></div>
+                        <div class="flex justify-between gap-4"><dt class="text-fg-ink-muted">{{ __('Still owed (books)') }}</dt><dd class="fg-numeric">{{ $this->baseMoney($invoice->balance_base) }}</dd></div>
+                    @endif
                 </dl>
             </x-ui.card>
+
+            @if ($this->isDraft())
+                <x-ui.card :title="__('This is a draft')">
+                    <x-ui.text size="sm" color="muted">
+                        {{ __('No fiscal number is spent and nothing is posted until you issue it. A draft that is wrong is discarded — there is nothing in the books to correct.') }}
+                    </x-ui.text>
+
+                    <dl class="mt-3 grid gap-2 text-sm">
+                        <div class="flex justify-between gap-4"><dt class="text-fg-ink-muted">{{ __('Raised on') }}</dt><dd>{{ $invoice->issue_date->format('d M Y') }}</dd></div>
+                        <div class="flex justify-between gap-4"><dt class="text-fg-ink-muted">{{ __('Lines') }}</dt><dd>{{ $invoice->lines->count() }}</dd></div>
+                    </dl>
+
+                    @can('invoices.issue')
+                        <div class="mt-4">
+                            <x-ui.button
+                                variant="outline"
+                                wire:click="issue"
+                                wire:loading.attr="disabled"
+                                wire:confirm="{{ __('Issue this draft? It spends the next fiscal number and posts the receivable today.') }}"
+                            >{{ __('Issue and post') }}</x-ui.button>
+                        </div>
+                    @endcan
+
+                    @can('invoices.draft')
+                        <form wire:submit="discard" class="mt-4 grid gap-3">
+                            <x-ui.input name="discardReason" :label="__('Why is this draft discarded?')" :hint="__('At least ten characters; the row disappears, the trail does not')" wire:model="discardReason" required />
+
+                            <x-ui.button
+                                type="submit"
+                                variant="danger"
+                                wire:confirm="{{ __('Discard this draft and its lines? Nothing was posted, so there is nothing to reverse.') }}"
+                            >{{ __('Discard draft') }}</x-ui.button>
+                        </form>
+                    @endcan
+                </x-ui.card>
+            @endif
 
             @if ($invoice->status === InvoiceLifecycle::Void)
                 <x-ui.card :title="__('Voided')">
@@ -430,6 +605,30 @@ new #[Title('Invoice')] class extends Component {
                                 @endforeach
                             </x-ui.select>
                         </div>
+
+                        @if ($this->isForeign())
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <x-ui.input
+                                    name="receiptRate"
+                                    :label="__('Rate the bank struck — 1 :code in :base', ['code' => $invoice->currency_code, 'base' => $invoice->base_currency_code])"
+                                    :hint="__('The money was converted at this figure when it landed.')"
+                                    wire:model="receiptRate"
+                                    numeric
+                                />
+
+                                <x-ui.input
+                                    name="receiptBase"
+                                    :label="__('…or the :base the bank took', ['base' => $invoice->base_currency_code])"
+                                    :hint="__('Type this instead of a rate when only the Pula figure is on the statement (ADR-0004 #6).')"
+                                    wire:model="receiptBase"
+                                    numeric
+                                />
+                            </div>
+
+                            <x-ui.text size="xs" color="muted">
+                                {{ __('The difference between this receipt’s rate and the invoice’s own is booked as realised FX when the money is applied.') }}
+                            </x-ui.text>
+                        @endif
 
                         <x-ui.input name="receiptReference" :label="__('Reference')" :hint="__('Bank reference or slip number')" wire:model="receiptReference" />
 

@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * Registers a fuel station — master data, one dialog behind `fuel.record` (§3.2's workshop screens).
+ * Registers a fuel station — master data, one dialog behind `fuel.record` (the workshop screens).
  *
  * No supplier is required: a cutover sheet will name pumps before anyone has raised the supplier
  * rows that bill them, and refusing until the accountant has finished Phase 5's supplier list would
@@ -21,7 +21,7 @@ final class CreateFuelStation
     public function __invoke(string $name, ?string $town = null, string $countryCode = 'BW', ?int $supplierId = null): FuelStation
     {
         if (! Gate::allows('fuel.record')) {
-            throw new InvalidArgumentException('Registering a fuel station is workshop recording (§9.3).');
+            throw new InvalidArgumentException('Registering a fuel station is workshop recording.');
         }
 
         $name = trim($name);

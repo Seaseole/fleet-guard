@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * One signed-in device (§9.2). The row is the application's own record of a session, written by
+ * One signed-in device. The row is the application's own record of a session, written by
  * `TrackUserSessions` on the request that created it and compared against on every request after it.
  *
  * Its primary key is the SHA-256 of the framework session id, never the id itself: a readable table of
@@ -80,7 +80,7 @@ final class UserSession extends Model
     }
 
     /**
-     * The single question the middleware asks. Idle expiry and §9.1's absolute cap are both folded into
+     * The single question the middleware asks. Idle expiry and the absolute cap are both folded into
      * `expires_at` when the row is touched, so there is one clock here rather than two that can disagree.
      */
     public function isUsable(): bool

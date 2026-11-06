@@ -14,14 +14,14 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use RuntimeException;
 
 /**
- * The only door through which an alert comes into existence (§14.1).
+ * The only door through which an alert comes into existence.
  *
- * One door for the reason §7.2 gives for the numbering allocator and slice 7 gives for the audit trail:
+ * One door for the reason the design gives for the numbering allocator and slice 7 gives for the audit trail:
  * the fields that make the row worth reading — the cooldown key, the business day, the first-seen
  * stamp — are the ones a busy call site gets wrong or omits, and an alert with a key nobody derived the
  * same way is a duplicate that looks like a second problem.
  *
- * **Cooldown is a lookup, not a counter.** §14.1 forbids emailing the same expiring licence fourteen
+ * **Cooldown is a lookup, not a counter.** The design forbids emailing the same expiring licence fourteen
  * times, and the naive way to honour that is a `cooldown_until` timestamp a nightly job compares
  * against `now()`. That version silently expires and the fourteenth email arrives anyway, eighteen days
  * later. Here the condition's *identity* is the key: if a live alert already carries that key, there is
@@ -32,7 +32,7 @@ use RuntimeException;
  * occurrence and needs its own row — otherwise the register would show one resolved alert forever while
  * the same digest mismatch quietly returned, and "when did this start?" would have the wrong answer.
  * The episode suffix (`base#2`) is what makes that legal under the unique index. The keys are probed
- * exactly, never with `LIKE`: §14.1's own type names contain underscores, and in a `LIKE` pattern an
+ * exactly, never with `LIKE`: The design's own type names contain underscores, and in a `LIKE` pattern an
  * underscore matches any character, so a prefix search would let `doc_expiry` collide with
  * `docXexpiry` and inflate episode numbers for rows that have nothing to do with each other.
  *
@@ -73,7 +73,7 @@ final class RaiseAlert
 
         throw new RuntimeException(sprintf(
             'The condition %s has been resolved and re-raised %d times. Resolve it properly or mute it with an '
-            .'expiry; a row per occurrence has stopped telling anyone anything (§14.1).',
+            .'expiry; a row per occurrence has stopped telling anyone anything.',
             $base,
             Alert::Episodes,
         ));
@@ -108,7 +108,7 @@ final class RaiseAlert
 
         // The raise is a state event like any other, and it is recorded with the principal that
         // actually made it. A trail whose system-generated rows are attributed to whoever happened to be
-        // signed in is the §20.4 queue-worker leak wearing a different costume.
+        // signed in is the queue-worker leak wearing a different costume.
         $this->audit->operational(
             'alert',
             (string) $alert->id,

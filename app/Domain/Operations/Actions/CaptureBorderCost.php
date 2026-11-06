@@ -16,12 +16,12 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
- * Captures one charge at one gate and posts it, in one transaction (§4.4 BORDER_COST, §6.6).
+ * Captures one charge at one gate and posts it, in one transaction (BORDER_COST).
  *
  * The row and the money are two records of the same act: `border_costs` says what the gate charged
  * and why, and the trip cost says what left the cash box. The order is the accounting one — the
  * crossing row is given its ULID first so its trip cost can name it as `(source_type, source_id)`,
- * then the eight §5.2 columns are **copied from the posted cost** rather than converted a second
+ * then the eight columns are **copied from the posted cost** rather than converted a second
  * time. Two conversions of one amount is two chances to disagree; a copy cannot.
  *
  * Capture is allowed while the truck is still at the gate (`entered`) as well as after it left
@@ -40,7 +40,7 @@ final class CaptureBorderCost
     public function __invoke(BorderCrossing $crossing, BorderCostDto $dto, ?int $actorId = null): BorderCost
     {
         if (! Gate::allows('crossborder.manage')) {
-            throw new InvalidArgumentException('Capturing a border charge is cross-border management (§9.3).');
+            throw new InvalidArgumentException('Capturing a border charge is cross-border management.');
         }
 
         if (! in_array($crossing->status, [BorderCrossingStatus::Entered, BorderCrossingStatus::Exited], true)) {

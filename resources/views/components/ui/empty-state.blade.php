@@ -1,7 +1,7 @@
 @props(['title' => null, 'description' => null, 'icon' => 'hashtag'])
 
 {{--
-    Three distinct empty states, deliberately (DESIGN-SYSTEM.md §5): first-run,
+    Three distinct empty states, deliberately: first-run,
     filtered-no-results and no-permission read differently and act differently.
 --}}
 <div {{ $attributes->class('grid place-items-center gap-3 px-6 py-14 text-center') }}>

@@ -9,7 +9,7 @@ use App\Domain\Kernel\Ledger\Support\LedgerVerifier;
 use Illuminate\Console\Command;
 
 /**
- * Nightly proof that the ledger's header rows still describe their own lines (§6.3 layer 5).
+ * Nightly proof that the ledger's header rows still describe their own lines (layer 5).
  *
  * Exit code 1 on drift so the scheduler alarms instead of logging. This is the layer that
  * replaces the DB-grant control Laravel Cloud does not offer: immutability against someone with
@@ -30,7 +30,7 @@ class LedgerVerify extends Command
 
         if ($findings === []) {
             // A clean run closes the finding it disproved, or the register fills with accurate alerts
-            // about drift that was fixed three weeks ago (§14.6).
+            // about drift that was fixed three weeks ago.
             $resolved = $alerter->clear('ledger:verify', 'The next scheduled ledger:verify run found no drift.');
 
             $this->info("Ledger verified: {$count} posted entr".($count === 1 ? 'y' : 'ies').', no drift.'
@@ -60,7 +60,7 @@ class LedgerVerify extends Command
 
         $this->newLine();
         $this->error(sprintf('%d problem(s) across %d posted entries', count($findings), $count));
-        $this->line('Ledger rows are immutable by design (§6.3): correct one with a reversing entry (§6.4), '
+        $this->line('Ledger rows are immutable by design: correct one with a reversing entry, '
             .'or use LedgerBarrier::withLiftedGuard() from a maintenance migration and leave the reason recorded.');
 
         return self::FAILURE;

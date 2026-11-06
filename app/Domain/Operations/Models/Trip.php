@@ -18,7 +18,7 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.1 TRIP — the hub every other module hangs from.
+ * TRIP — the hub every other module hangs from.
  *
  * The truck, trailer, driver and supercargo are stored as **ids, not relations**: naming another
  * module's model here would break D5, and the read doors
@@ -26,13 +26,13 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
  * already return exactly the fields a trip may need — label, status, capacity, papers. A trip that
  * joined to `Truck` would quietly make Fleet a dependency of every trip query.
  *
- * `route_id` is copied from the job at planning rather than read through it. §6.6's profitability and
+ * `route_id` is copied from the job at planning rather than read through it. The profitability and
  * Phase 8's corridor reports group on the route the trip actually ran, and a master-data edit to the
  * job must not rewrite history.
  *
  * `odometer_start_km` / `odometer_end_km` are the trip's own facts; the truck's projection is a
  * separate row written through Fleet's `RecordOdometerReading`, so the two cannot disagree by
- * construction (§4.3).
+ * construction.
  *
  * @property string $id
  * @property int $company_id
@@ -118,7 +118,7 @@ final class Trip extends Model implements AuditableContract
             'distance_km_10_2' => 'float',
             'exception_flags' => 'array',
             'costs_frozen' => 'boolean',
-            // §6.6's projection. `contribution_base` is signed (a trip can lose money); the five
+            // The projection. `contribution_base` is signed (a trip can lose money); the five
             // buckets are debits and the CHECK refuses a negative one, so they are unsigned here too.
             'revenue_base' => 'integer',
             'fuel_cost_base' => 'integer',
@@ -133,11 +133,11 @@ final class Trip extends Model implements AuditableContract
     }
 
     /**
-     * §10.2's diagram, transcribed.
+     * The diagram, transcribed.
      *
      * Two edges the prose allows but this table does not: nothing returns to `draft` (a wrong draft is
      * deleted or planned again as a new trip, so a trip never loses its identity), and `closed` is
-     * reachable only from `completed` — §10.2's `reopened → completed` rather than `reopened → closed`
+     * reachable only from `completed` — the `reopened → completed` rather than `reopened → closed`
      * is what makes a re-run checklist mandatory after a re-open.
      *
      * @return array<string, list<string>>
@@ -165,11 +165,12 @@ final class Trip extends Model implements AuditableContract
     }
 
     /**
-     * §10.1's destructive set for this aggregate.
+     * The destructive set for this aggregate.
      *
      * `cancelled` and `aborted` are separated on purpose: cancelling pre-departure destroys planned
      * work, aborting post-departure destroys a trip that has already cost money. Both must say which.
      */
+    /** @return list<string> */
     protected function transitionsRequiringReason(): array
     {
         return [
@@ -224,11 +225,11 @@ final class Trip extends Model implements AuditableContract
     /**
      * Tonnes on board, summed from the loads rather than stored.
      *
-     * §10.2's gate and the loading schedule both read this, and a stored total would be a second truth
+     * The gate and the loading schedule both read this, and a stored total would be a second truth
      * about a number the weighbridge checks. It is **not** memoised on the model: the loading schedule
      * adds a load and then asks the same instance what the trip weighs, and a cached sum would answer
      * with the manifest as it was before the row existed. One indexed `SUM` over a handful of loads per
-     * trip is cheaper than that bug; §6.6's denormalised rollups are for money across many cost types,
+     * trip is cheaper than that bug; The denormalised rollups are for money across many cost types,
      * which is a different problem.
      */
     public function tonnes(): float
@@ -247,7 +248,7 @@ final class Trip extends Model implements AuditableContract
     /**
      * The odometer the trip actually covered, or null until the closing reading exists.
      *
-     * Computed rather than stored because §4.3 lets a *suspect* reading be recorded against the trip
+     * Computed rather than stored because lets a *suspect* reading be recorded against the trip
      * without moving the truck; a stored distance would have to pick a side of that rule and be wrong
      * about the other one.
      */
@@ -260,7 +261,7 @@ final class Trip extends Model implements AuditableContract
         return $this->odometer_end_km - $this->odometer_start_km;
     }
 
-    /** §10.2's guard for the kiosk surface: facts may be captured, completion may not be decided. */
+    /** The guard for the kiosk surface: facts may be captured, completion may not be decided. */
     public function mayBeCompletedByKiosk(): bool
     {
         return ! $this->status->requiresOfficeRole();
@@ -271,7 +272,7 @@ final class Trip extends Model implements AuditableContract
         self::creating(function (self $trip): void {
             $trip->id ??= (string) Str::ulid();
 
-            // §10.2's `[*] → draft` is the creation itself. Named here for the same reason as
+            // The `[*] → draft` is the creation itself. Named here for the same reason as
             // `Job`: the transition table reads the model's current state, and a draft that has to be
             // re-read from the database before it can move is a draft that cannot move.
             $trip->status ??= TripStatus::Draft;

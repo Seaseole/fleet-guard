@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
 
 /**
- * Turns an accepted invitation into a staff account (§9.1). This is the only code path that creates
+ * Turns an accepted invitation into a staff account. This is the only code path that creates
  * a `users` row, because public registration is off — there is no controller, form or API route that
  * does it any other way.
  *

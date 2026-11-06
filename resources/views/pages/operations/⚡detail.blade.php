@@ -10,6 +10,7 @@ use App\Domain\Kernel\Money\Currency;
 use App\Domain\Kernel\Money\FxRateSource;
 use App\Domain\Kernel\Money\Money;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
+use App\Domain\Kernel\Identity\ConfirmsRecentPassword;
 use App\Domain\Operations\Actions\AddLoad;
 use App\Domain\Operations\Actions\AdvanceTrip;
 use App\Domain\Operations\Actions\ApprovePod;
@@ -62,26 +63,28 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 
 /*
- * The trip detail (§3.2) — one trip, its schedule, its paper and the state machine it is walking.
+ * The trip detail — one trip, its schedule, its paper and the state machine it is walking.
  *
  * The dispatch board answers "what leaves on Tuesday"; this screen answers "why is *this* trip stuck",
- * so the §10.2 trail is the spine of it: every move with its reason, its actor and its moment, in the
- * order the engine wrote them (§4.4). A trip that has been held, released and re-dispatched is a
+ * so the trail is the spine of it: every move with its reason, its actor and its moment, in the
+ * order the engine wrote them. A trip that has been held, released and re-dispatched is a
  * different conversation with the customer than one that simply left late, and only the trail says which.
  *
  * Two decisions worth recording. The loading schedule lives here rather than on the board because a load
- * is measured against the truck and trailer named on *this* trip (the weaker of the two limits, §10.2),
+ * is measured against the truck and trailer named on *this* trip (the weaker of the two limits),
  * and `MarkLoaded` refuses until every row has its waybill — so the reason a load cannot be confirmed is
  * printed next to the rows that cause it. And the odometer fields are pre-filled from the truck's
  * projection: `departed_has_odometer` and `odometer_ordered` are engine rules, and a form that starts the
  * driver from a blank box is how they get violated at 06:00.
  *
  * Money and gates follow in their own sections. A trip cost is every seat's to raise only if it holds
- * `expenses.create`, the margin is hidden from the dispatcher who opens this screen most often (§9.3),
+ * `expenses.create`, the margin is hidden from the dispatcher who opens this screen most often,
  * and a crossing is readable with `crossborder.view` but moved only with `crossborder.manage`.
  */
 new #[Title('Trip')] class extends Component
 {
+    use ConfirmsRecentPassword;
+
     /** Held as a key, not as a model: the Livewire snapshot is client-readable, and a stale instance would render one trip while acting on another. */
     public string $tripId = '';
 
@@ -109,7 +112,7 @@ new #[Title('Trip')] class extends Component
 
     public string $endHours = '';
 
-    /** One field serves hold, cancel, abort and re-open, because §10.2 asks the same question of each. */
+    /** One field serves hold, cancel, abort and re-open, because the design asks the same question of each. */
     public string $reason = '';
 
     /**
@@ -121,13 +124,13 @@ new #[Title('Trip')] class extends Component
      */
     public string $reasonFor = '';
 
-    /** @var list<string> §9.6's scopes the dispatcher ticks; the Action refuses any this build cannot honour. */
+    /** @var list<string> the scopes the dispatcher ticks; the Action refuses any this build cannot honour. */
     public array $kioskScopes = [TripAccessScope::Pod->value];
 
     public string $podRejectReason = '';
 
     /*
-     * The cost form (§4.1 TRIP_COST). Currency is a string and the amount is typed text, parsed
+     * The cost form (TRIP_COST). Currency is a string and the amount is typed text, parsed
      * exactly once by `Money::ofMajor()` inside `recordCost()` — never by this component's cast.
      */
     public string $costType = TripCostType::Fuel->value;
@@ -146,7 +149,7 @@ new #[Title('Trip')] class extends Component
 
     public string $costDescription = '';
 
-    /* The border section (§4.4, §10.9). One shared charge form, opened for one crossing at a time. */
+    /* The border section. One shared charge form, opened for one crossing at a time. */
     public string $crossingPostId = '';
 
     public string $crossingDirection = BorderCrossingDirection::Entry->value;
@@ -175,7 +178,7 @@ new #[Title('Trip')] class extends Component
 
         $truck = app(FleetDirectory::class)->truck($trip->truck_id);
 
-        // §4.3's projection is the honest starting figure: a departure below it is refused by
+        // The projection is the honest starting figure: a departure below it is refused by
         // `trips_odometer_ordered`, so the form suggests the number that will pass.
         $this->departOdometer = (string) ($truck?->odometerKm ?? '');
 
@@ -194,7 +197,7 @@ new #[Title('Trip')] class extends Component
         ]);
 
         try {
-            $add($this->trip(), new LoadDto(
+            $add($this->trip, new LoadDto(
                 commodity: $this->loadCommodity,
                 tonnes: $this->loadTonnes,
                 consignee: $this->loadConsignee === '' ? null : $this->loadConsignee,
@@ -240,7 +243,7 @@ new #[Title('Trip')] class extends Component
 
     public function markLoaded(MarkLoaded $mark): void
     {
-        $this->run(fn () => $mark($this->trip(), (int) auth()->id()), 'load');
+        $this->run(fn () => $mark($this->trip, (int) auth()->id()), 'load');
     }
 
     public function depart(DepartTrip $depart): void
@@ -252,7 +255,7 @@ new #[Title('Trip')] class extends Component
 
         $this->run(
             fn () => $depart(
-                $this->trip(),
+                $this->trip,
                 (int) $this->departOdometer,
                 $this->departHours === '' ? null : (float) $this->departHours,
                 (int) auth()->id(),
@@ -262,7 +265,7 @@ new #[Title('Trip')] class extends Component
     }
 
     /**
-     * The six fact-free edges of §10.2, through one method.
+     * The six fact-free edges of, through one method.
      *
      * A method per edge would be six places that have to remember the machine only allows these six; the
      * Action already refuses anything else and names the door it belongs to.
@@ -277,7 +280,7 @@ new #[Title('Trip')] class extends Component
             return;
         }
 
-        $this->run(fn () => $advance($this->trip(), $target, (int) auth()->id()), 'advance');
+        $this->run(fn () => $advance($this->trip, $target, (int) auth()->id()), 'advance');
     }
 
     public function complete(CompleteTrip $complete): void
@@ -289,7 +292,7 @@ new #[Title('Trip')] class extends Component
 
         $this->run(
             fn () => $complete(
-                $this->trip(),
+                $this->trip,
                 (int) $this->endOdometer,
                 $this->endHours === '' ? null : (float) $this->endHours,
                 (int) auth()->id(),
@@ -300,28 +303,34 @@ new #[Title('Trip')] class extends Component
 
     public function closeTrip(CloseTrip $close): void
     {
-        $this->run(fn () => $close($this->trip(), (int) auth()->id()), 'close');
+        $this->run(fn () => $close($this->trip, (int) auth()->id()), 'close');
     }
 
     public function reopen(ReopenTrip $reopen): void
     {
+        abort_unless(Gate::allows('reopen', $this->trip), 403);
+
+        if (! $this->confirmRecentPassword()) {
+            return;
+        }
+
         $this->validate(['reason' => ['required', 'string', 'max:255']]);
 
-        $this->run(fn () => $reopen($this->trip(), $this->reason, (int) auth()->id()), 'reason');
+        $this->run(fn () => $reopen($this->trip, $this->reason, (int) auth()->id()), 'reason');
     }
 
     public function stop(StopTrip $stop): void
     {
         $this->validate(['reason' => ['required', 'string', 'max:255']]);
 
-        $this->run(fn () => $stop($this->trip(), $this->reason, (int) auth()->id()), 'reason');
+        $this->run(fn () => $stop($this->trip, $this->reason, (int) auth()->id()), 'reason');
     }
 
     public function hold(HoldTrip $hold): void
     {
         $this->validate(['reason' => ['required', 'string', 'max:255']]);
 
-        $this->run(fn () => $hold($this->trip(), $this->reason, (int) auth()->id()), 'reason');
+        $this->run(fn () => $hold($this->trip, $this->reason, (int) auth()->id()), 'reason');
     }
 
     /** Opens the reason box already knowing which door it is standing in front of. */
@@ -350,7 +359,7 @@ new #[Title('Trip')] class extends Component
     {
         return match ($this->reasonFor) {
             'hold' => __('A hold is a blocker, not a cancellation: the truck keeps its plan and the board keeps showing it. The reason stays on the trip’s trail.'),
-            'stop' => $this->trip()->status->isPreDeparture()
+            'stop' => $this->trip->status->isPreDeparture()
                 ? __('Cancelling before departure frees the truck and the driver, and no cost is claimed. This cannot be undone — the job needs a new trip.')
                 : __('Aborting a trip that has already left ends it where it is. The truck comes back to the fleet and the diesel already bought stays on this trip’s costs.'),
             'reopen' => __('A re-open takes a closed trip back to the ledger’s reach. It is an Owner decision, and the facts on it get re-checked before it closes again.'),
@@ -370,7 +379,7 @@ new #[Title('Trip')] class extends Component
     }
 
     /**
-     * §9.6's link, issued once and printed once.
+     * The link, issued once and printed once.
      *
      * The secret and PIN are put in the **session**, not in a public property: a Livewire property travels
      * back to the browser in the snapshot, and that snapshot is exactly the thing the driver's URL must
@@ -384,7 +393,7 @@ new #[Title('Trip')] class extends Component
             'kioskScopes.*' => ['string'],
         ]);
 
-        $trip = $this->trip();
+        $trip = $this->trip;
 
         if ($trip->driver_id === null) {
             $this->addError('kiosk', __('Name the driver on the trip before handing out a link.'));
@@ -440,7 +449,7 @@ new #[Title('Trip')] class extends Component
         $this->dispatch('toast', message: __('Driver link closed. The row stays as evidence.'), kind: 'warning');
     }
 
-    /** §10.2's `pod_pending → delivered`, made on the evidence the driver sent. */
+    /** The `pod_pending → delivered`, made on the evidence the driver sent. */
     public function approvePod(string $podId, ApprovePod $approve): void
     {
         $pod = ProofOfDelivery::query()->where('trip_id', $this->tripId)->find($podId);
@@ -489,7 +498,7 @@ new #[Title('Trip')] class extends Component
     }
 
     /**
-     * Record a direct cost (§4.1 TRIP_COST). The Action posts the journal entry and moves the §6.6
+     * Record a direct cost (TRIP_COST). The Action posts the journal entry and moves the
      * projection in the same transaction, so the only thing this method does differently from every
      * other door is parse the typed amount — exactly once, through `Money::ofMajor()`.
      */
@@ -511,7 +520,7 @@ new #[Title('Trip')] class extends Component
         $occurredOn = Carbon::parse($this->costOccurredOn);
 
         try {
-            $record($this->trip(), new TripCostDto(
+            $record($this->trip, new TripCostDto(
                 type: TripCostType::from($this->costType),
                 amount: Money::ofMajor($this->costAmount, $currency),
                 rate: $currency === $base ? '1' : (string) $this->costRate,
@@ -538,7 +547,7 @@ new #[Title('Trip')] class extends Component
 
     /* ----------------------------------------------------------- border gates */
 
-    /** §9.3: the Dispatcher reads crossings; only `crossborder.manage` seats move or charge them. */
+    /** The Dispatcher reads crossings; only `crossborder.manage` seats move or charge them. */
     public function canSeeCrossings(): bool
     {
         return Gate::allows('crossborder.view') || $this->canManageCrossings();
@@ -616,7 +625,7 @@ new #[Title('Trip')] class extends Component
         }
 
         try {
-            $crossing = $plan($this->trip(), $post, BorderCrossingDirection::from($this->crossingDirection), (int) auth()->id());
+            $crossing = $plan($this->trip, $post, BorderCrossingDirection::from($this->crossingDirection), (int) auth()->id());
         } catch (Throwable $refused) {
             $this->addError('crossing', $refused->getMessage());
 
@@ -708,7 +717,7 @@ new #[Title('Trip')] class extends Component
     }
 
     /**
-     * Capture one charge at the gate (§4.4). The form parses the amount exactly once and hands the
+     * Capture one charge at the gate. The form parses the amount exactly once and hands the
      * Action a DTO; the Action creates the border cost, posts its trip cost and refreshes the trip's
      * rollup in one transaction, so this method has nothing to reconcile afterwards.
      */
@@ -804,14 +813,14 @@ new #[Title('Trip')] class extends Component
     #[Computed]
     public function loads()
     {
-        return $this->trip()->loads;
+        return $this->trip->loads;
     }
 
-    /** §10.2's `assigned → loaded` answer, printed as the reason rather than as a greyed button. */
+    /** The `assigned → loaded` answer, printed as the reason rather than as a greyed button. */
     #[Computed]
     public function loading(): array
     {
-        return app(LoadingGate::class)->findings($this->trip());
+        return app(LoadingGate::class)->findings($this->trip);
     }
 
     /** @return list<\App\Domain\Kernel\Audit\Models\OperationalEvent> */
@@ -864,14 +873,14 @@ new #[Title('Trip')] class extends Component
     #[Computed]
     public function tripCosts(): array
     {
-        return $this->trip()->tripCosts()->get()->all();
+        return $this->trip->tripCosts()->get()->all();
     }
 
     /** @return list<Chargeable> */
     #[Computed]
     public function chargeables(): array
     {
-        return $this->trip()->chargeables()->get()->all();
+        return $this->trip->chargeables()->get()->all();
     }
 
     /** The money section exists for three different seats, and each half has its own ability. */
@@ -895,10 +904,10 @@ new #[Title('Trip')] class extends Component
         return Gate::allows('invoices.view');
     }
 
-    /** §10.2: a closed trip, or one that never left, has costs that are final rather than editable. */
+    /** A closed trip, or one that never left, has costs that are final rather than editable. */
     public function costsAreFrozen(): bool
     {
-        $trip = $this->trip();
+        $trip = $this->trip;
 
         return $trip->costs_frozen || in_array($trip->status, [TripStatus::Cancelled, TripStatus::Aborted], true);
     }
@@ -937,14 +946,14 @@ new #[Title('Trip')] class extends Component
     public function currencyOptions(): array
     {
         return array_values(array_map(
-            static fn (Currency $currency): array => ['value' => $currency->code, 'label' => $currency->code.' · '.$currency->name],
+            static fn (Currency $currency): array => ['value' => $currency->code, 'label' => $currency->code.'  '.$currency->name],
             Currency::active(),
         ));
     }
 
     /**
      * The rate sources a person may claim, and only those. `opening_balance` and `manual_override`
-     * are written by other doors (§5.2 edit rules) and are not a choice on this form.
+     * are written by other doors (edit rules) and are not a choice on this form.
      *
      * @return list<array{value: string, label: string}>
      */
@@ -978,7 +987,7 @@ new #[Title('Trip')] class extends Component
     /** @return list<array{label: string, amount: int}> */
     public function bucketRows(): array
     {
-        $trip = $this->trip();
+        $trip = $this->trip;
 
         return array_map(
             static fn (TripCostBucket $bucket): array => [
@@ -989,7 +998,7 @@ new #[Title('Trip')] class extends Component
         );
     }
 
-    /** The one-time reveal, read back from the session (§9.6). */
+    /** The one-time reveal, read back from the session. */
     public function driverReveal(): ?array
     {
         $reveal = session()->get('kiosk.reveal.'.$this->tripId);
@@ -998,7 +1007,7 @@ new #[Title('Trip')] class extends Component
     }
 
     /**
-     * The reveal's link, drawn (§9.6).
+     * The reveal's link, drawn.
      *
      * Read off the session here rather than kept in a property: a Livewire property rides back to the
      * browser in every snapshot, and the secret belongs in the page the dispatcher is looking at, not in
@@ -1012,7 +1021,7 @@ new #[Title('Trip')] class extends Component
     }
 
     /**
-     * The hand-off §9.6 assumes: an office with the link, a driver at a gate with a phone.
+     * The hand-off assumes: an office with the link, a driver at a gate with a phone.
      *
      * WhatsApp opens with the message already typed so neither the 48-character secret nor the PIN is
      * re-keyed on a small screen. The PIN goes in the text and deliberately not in the QR: the page asks
@@ -1028,7 +1037,7 @@ new #[Title('Trip')] class extends Component
         }
 
         $body = implode("\n", array_filter([
-            __('Fleet Guard :no', ['no' => $this->trip()->trip_no]),
+            __('Fleet Guard :no', ['no' => $this->trip->trip_no]),
             $reveal['url'],
             __('PIN :pin — the page asks for it on every submission.', ['pin' => $reveal['pin']]),
             __('Opens until :at', ['at' => $reveal['expires_at'] ?? __('—')]),
@@ -1056,7 +1065,7 @@ new #[Title('Trip')] class extends Component
         return Gate::allows('pod.approve');
     }
 
-    /** §10.2: only a submitted proof has a decision left to make, and only an office seat may make it. */
+    /** Only a submitted proof has a decision left to make, and only an office seat may make it. */
     public function podAwaitingDecision(ProofOfDelivery $pod): bool
     {
         return $pod->status === PodStatus::Submitted && $this->canApprovePod();
@@ -1087,7 +1096,7 @@ new #[Title('Trip')] class extends Component
 
     public function truckLabel(): string
     {
-        $trip = $this->trip();
+        $trip = $this->trip;
 
         return $trip->truck_id === null
             ? __('(no truck named)')
@@ -1096,7 +1105,7 @@ new #[Title('Trip')] class extends Component
 
     public function trailerLabel(): string
     {
-        $trip = $this->trip();
+        $trip = $this->trip;
 
         if ($trip->trailer_id === null) {
             return __('truck only');
@@ -1108,23 +1117,23 @@ new #[Title('Trip')] class extends Component
             return '#'.$trip->trailer_id;
         }
 
-        // §10.2 measures the load against the weaker of the two, so the board says which one binds.
+        // Measures the load against the weaker of the two, so the board says which one binds.
         return $trailer->label.($trailer->capacityTonnes === null ? '' : ' · '.$trailer->capacityTonnes.' t');
     }
 
     public function driverLabel(): string
     {
-        $trip = $this->trip();
+        $trip = $this->trip;
 
         return $trip->driver_id === null
             ? __('(no driver named)')
             : (app(DriverDirectory::class)->find($trip->driver_id)?->name ?? '#'.$trip->driver_id);
     }
 
-    /** The edges this trip may take from here through the fact-free door (§10.2). */
+    /** The edges this trip may take from here through the fact-free door. */
     public function nextEdges(): array
     {
-        $from = $this->trip()->status;
+        $from = $this->trip->status;
 
         $allowed = match ($from) {
             TripStatus::Departed => [TripStatus::InTransit],
@@ -1146,66 +1155,66 @@ new #[Title('Trip')] class extends Component
      *
      * Blade cannot see this class's `use` lines, so a status comparison written in the template would have
      * to name `TripStatus::` by its full namespace and repeat the policy call inline — three places to
-     * disagree with §10.2 instead of one.
+     * disagree with instead of one.
      */
 
     public function canDispatchElsewhere(): bool
     {
-        return $this->trip()->status === TripStatus::Planned && Gate::allows('dispatch', $this->trip());
+        return $this->trip->status === TripStatus::Planned && Gate::allows('dispatch', $this->trip);
     }
 
     public function canDepart(): bool
     {
-        return in_array($this->trip()->status, [TripStatus::Assigned, TripStatus::Loaded], true)
-            && Gate::allows('dispatch', $this->trip());
+        return in_array($this->trip->status, [TripStatus::Assigned, TripStatus::Loaded], true)
+            && Gate::allows('dispatch', $this->trip);
     }
 
     public function canMarkLoaded(): bool
     {
-        return $this->trip()->status === TripStatus::Assigned
-            && $this->loading() === []
-            && Gate::allows('dispatch', $this->trip());
+        return $this->trip->status === TripStatus::Assigned
+            && $this->loading === []
+            && Gate::allows('dispatch', $this->trip);
     }
 
     public function loadingIsRefused(): bool
     {
-        return $this->trip()->status === TripStatus::Assigned && $this->loading() !== [];
+        return $this->trip->status === TripStatus::Assigned && $this->loading !== [];
     }
 
     public function canAdvance(): bool
     {
-        return $this->nextEdges() !== [] && Gate::allows('advance', $this->trip());
+        return $this->nextEdges() !== [] && Gate::allows('advance', $this->trip);
     }
 
     /**
      * The hold door, read from the trip's own transition table rather than from "is it before departure".
      *
-     * §10.2 lets `planned` and `assigned` go on hold and stops there — a loaded trip has committed its
+     * Lets `planned` and `assigned` go on hold and stops there — a loaded trip has committed its
      * manifest, and `loaded` has only one edge out. Asking the table instead of the prose keeps the button
      * and the machine agreeing, which they did not: the old test offered hold on a loaded trip and the
      * Action refused the click.
      */
     public function canHold(): bool
     {
-        $trip = $this->trip();
+        $trip = $this->trip;
 
         return $trip->canTransitionTo(TripStatus::OnHold) && Gate::allows('hold', $trip);
     }
 
     public function canStop(): bool
     {
-        $trip = $this->trip();
+        $trip = $this->trip;
 
         // Two different doors, one control: before the truck leaves this is a cancellation, after it is an
-        // abort — and the abort is a decision about money, so §9.3 gives it to a different seat.
+        // abort — and the abort is a decision about money, so the design gives it to a different seat.
         return ($trip->canTransitionTo(TripStatus::Cancelled) && Gate::allows('cancel', $trip))
             || ($trip->canTransitionTo(TripStatus::Aborted) && Gate::allows('abort', $trip));
     }
 
-    /** What stopping this trip actually does, in the words §10.2 uses for the edge. */
+    /** What stopping this trip actually does, in the words the design uses for the edge. */
     public function stopLabel(): string
     {
-        return $this->trip()->status->isPreDeparture() ? __('Cancel this trip') : __('Abort this trip');
+        return $this->trip->status->isPreDeparture() ? __('Cancel this trip') : __('Abort this trip');
     }
 
     /**
@@ -1217,7 +1226,7 @@ new #[Title('Trip')] class extends Component
      */
     public function stopIsRefused(): bool
     {
-        $trip = $this->trip();
+        $trip = $this->trip;
 
         if ($trip->status->isTerminal() || $trip->status === TripStatus::Closed) {
             return false;
@@ -1228,7 +1237,7 @@ new #[Title('Trip')] class extends Component
 
     public function canComplete(): bool
     {
-        $trip = $this->trip();
+        $trip = $this->trip;
 
         // `CompleteTrip`'s two doors, both of them: the normal one from `delivered`, and a re-run after an
         // Owner re-opened. `pod_pending` was offered here but never accepted there, so the button on a proof
@@ -1240,25 +1249,25 @@ new #[Title('Trip')] class extends Component
     /** The trip is waiting on a signature, not on the desk: the completion door has a reason. */
     public function completionIsRefused(): bool
     {
-        return $this->trip()->status === TripStatus::PodPending && Gate::allows('complete', $this->trip());
+        return $this->trip->status === TripStatus::PodPending && Gate::allows('complete', $this->trip);
     }
 
     public function canClose(): bool
     {
-        return $this->trip()->status === TripStatus::Completed && Gate::allows('close', $this->trip());
+        return $this->trip->status === TripStatus::Completed && Gate::allows('close', $this->trip);
     }
 
     public function canReopen(): bool
     {
-        return $this->trip()->status === TripStatus::Closed && Gate::allows('reopen', $this->trip());
+        return $this->trip->status === TripStatus::Closed && Gate::allows('reopen', $this->trip);
     }
 
     public function canEditLoads(): bool
     {
-        return $this->trip()->status->isPreDeparture() && Gate::allows('update', $this->trip());
+        return $this->trip->status->isPreDeparture() && Gate::allows('update', $this->trip);
     }
 
-    /** A moment in the company's clock (§2), or the em dash the register uses for "has not happened". */
+    /** A moment in the company's clock, or the em dash the register uses for "has not happened". */
     public function at(?CarbonInterface $moment): string
     {
         return $moment === null ? '—' : Carbon::instance($moment)->timezone(CurrentCompany::timezone())->format('d M Y H:i');
@@ -1268,184 +1277,54 @@ new #[Title('Trip')] class extends Component
 <div class="grid gap-6">
     @php($trip = $this->trip)
 
-    <header class="grid gap-2">
+    <header class="fg-page-header grid gap-4">
         <div class="flex flex-wrap items-center gap-3">
             <x-ui.heading size="xl" level="1">{{ $trip->trip_no }}</x-ui.heading>
             <x-ui.badge :tone="$trip->status->tone()">{{ $trip->status->label() }}</x-ui.badge>
-            <a href="{{ route('operations.dispatch') }}" class="text-sm text-accent">{{ __('Back to the board') }}</a>
+            <a href="{{ route('operations.dispatch') }}" class="ms-auto text-sm text-accent-ink underline-offset-4 transition duration-(--t-fast) ease-(--ease-standard) hover:text-accent-hover hover:underline">{{ __('Back to the board') }}</a>
         </div>
 
-        <p class="text-sm text-fg-ink-secondary">
-            {{ $trip->job?->job_no ?? __('No job') }}
-            · {{ $trip->route?->code ?? __('no corridor') }}
-            · {{ $trip->tonnageLabel() }}
+        {{-- The identity, named rather than dotted: a run of middle dots is how a template joins
+             facts, and a ledger gives each one a head. --}}
+        <dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <div class="flex items-baseline gap-2">
+                <dt class="text-fg-ink-muted">{{ __('Job') }}</dt>
+                <dd class="fg-identifier text-fg-ink">{{ $trip->job?->job_no ?? __('—') }}</dd>
+            </div>
+            <div class="flex items-baseline gap-2">
+                <dt class="text-fg-ink-muted">{{ __('Corridor') }}</dt>
+                <dd class="fg-identifier text-fg-ink">{{ $trip->route?->code ?? __('—') }}</dd>
+            </div>
+            <div class="flex items-baseline gap-2">
+                <dt class="text-fg-ink-muted">{{ __('Load') }}</dt>
+                <dd class="fg-numeric text-fg-ink">{{ $trip->tonnageLabel() }}</dd>
+            </div>
             @if ($trip->distanceCoveredKm() !== null)
-                · {{ __(':km km covered', ['km' => rtrim(rtrim(number_format($trip->distanceCoveredKm(), 1, '.', ' '), '0'), '.')]) }}
+                <div class="flex items-baseline gap-2">
+                    <dt class="text-fg-ink-muted">{{ __('Covered') }}</dt>
+                    <dd class="fg-numeric text-fg-ink">{{ __(':km km', ['km' => rtrim(rtrim(number_format($trip->distanceCoveredKm(), 1, '.', ' '), '0'), '.')]) }}</dd>
+                </div>
             @endif
-        </p>
+        </dl>
     </header>
 
-    <div class="grid gap-6 lg:grid-cols-2">
-        {{-- The plan: what was committed, and the facts gathered on the road. --}}
-        <section class="grid gap-4 rounded-fg-lg border border-fg-line bg-fg-surface p-5">
-            <x-ui.subheading>{{ __('Plan') }}</x-ui.subheading>
-
-            <dl class="grid gap-3 text-sm sm:grid-cols-2">
-                <div>
-                    <dt class="text-xs text-fg-ink-muted">{{ __('Truck') }}</dt>
-                    <dd class="text-fg-ink">{{ $this->truckLabel() }}</dd>
-                </div>
-                <div>
-                    <dt class="text-xs text-fg-ink-muted">{{ __('Trailer') }}</dt>
-                    <dd class="text-fg-ink">{{ $this->trailerLabel() }}</dd>
-                </div>
-                <div>
-                    <dt class="text-xs text-fg-ink-muted">{{ __('Driver') }}</dt>
-                    <dd class="text-fg-ink">{{ $this->driverLabel() }}</dd>
-                </div>
-                <div>
-                    <dt class="text-xs text-fg-ink-muted">{{ __('Planned departure') }}</dt>
-                    <dd class="text-fg-ink">{{ $trip->planned_departure_at?->timezone(App\Domain\Kernel\Tenancy\CurrentCompany::timezone())->format('d M Y H:i') ?? __('unscheduled') }}</dd>
-                </div>
-                <div>
-                    <dt class="text-xs text-fg-ink-muted">{{ __('Departed') }}</dt>
-                    <dd class="text-fg-ink">
-                        {{ $trip->departed_at?->format('d M Y H:i') ?? __('—') }}
-                        @if ($trip->odometer_start_km !== null)
-                            <span class="text-fg-ink-muted">· {{ number_format($trip->odometer_start_km) }} km</span>
-                        @endif
-                    </dd>
-                </div>
-                <div>
-                    <dt class="text-xs text-fg-ink-muted">{{ __('Completed') }}</dt>
-                    <dd class="text-fg-ink">
-                        {{ $trip->completed_at?->format('d M Y H:i') ?? __('—') }}
-                        @if ($trip->odometer_end_km !== null)
-                            <span class="text-fg-ink-muted">· {{ number_format($trip->odometer_end_km) }} km</span>
-                        @endif
-                    </dd>
-                </div>
-            </dl>
-        </section>
-
-        {{-- The state machine's own record, in the order it was written (§4.4). --}}
-        <section class="grid gap-4 rounded-fg-lg border border-fg-line bg-fg-surface p-5">
-            <x-ui.subheading>{{ __('Trail') }}</x-ui.subheading>
-
-            @if ($this->trail === [])
-                <x-ui.text>{{ __('Nothing has been recorded against this trip yet.') }}</x-ui.text>
-            @else
-                <ol class="grid gap-3">
-                    @foreach ($this->trail as $event)
-                        <li class="grid gap-0.5 border-l-2 border-fg-line pl-3">
-                            <span class="text-sm text-fg-ink">
-                                {{ $event->from_state === null ? __('Opened') : __('{from} →', ['from' => $event->from_state]) }}
-                                <span class="font-medium">{{ $event->to_state }}</span>
-                            </span>
-                            <span class="text-xs text-fg-ink-muted">
-                                {{ $event->occurred_at->timezone(App\Domain\Kernel\Tenancy\CurrentCompany::timezone())->format('d M Y H:i') }}
-                                · {{ $event->actor_kind }}
-                            </span>
-                            @if ($event->reason !== null)
-                                <span class="text-xs text-fg-ink-secondary">{{ $event->reason }}</span>
-                            @endif
-                        </li>
-                    @endforeach
-                </ol>
-            @endif
-        </section>
-    </div>
-
-    {{-- The loading schedule: §10.2's gate measured against the truck AND the trailer. --}}
-    <section class="grid gap-4 rounded-fg-lg border border-fg-line bg-fg-surface p-5">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <x-ui.subheading>{{ __('Loading schedule') }}</x-ui.subheading>
-
-            @if ($this->canEditLoads())
-                <x-ui.button size="sm" variant="outline" x-on:click="$dispatch('open-trip-load')">{{ __('Add a load') }}</x-ui.button>
-            @endif
-        </div>
-
-        @if ($this->loads->isEmpty())
-            <x-ui.empty-state
-                icon="cube"
-                title="{{ __('Nothing on it') }}"
-                description="{{ __('An empty manifest is refused at loaded — add what the truck is carrying, each line with its waybill.') }}"
-            />
-        @else
-            <x-ui.table :caption="__('What this trip is carrying, one line per stop')">
-                <x-slot name="head">
-                    <x-ui.table.th>{{ __('Stop') }}</x-ui.table.th>
-                    <x-ui.table.th>{{ __('Commodity') }}</x-ui.table.th>
-                    <x-ui.table.th numeric>{{ __('Tonnes') }}</x-ui.table.th>
-                    <x-ui.table.th numeric>{{ __('Cubic') }}</x-ui.table.th>
-                    <x-ui.table.th>{{ __('Consignee') }}</x-ui.table.th>
-                    <x-ui.table.th>{{ __('Waybill') }}</x-ui.table.th>
-                    <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
-                </x-slot>
-
-                @foreach ($this->loads as $load)
-                    <tr wire:key="load-{{ $load->id }}">
-                        <x-ui.table.td nowrap>{{ $load->stop_sequence ?? '—' }}</x-ui.table.td>
-                        <x-ui.table.td>{{ $load->commodity }}</x-ui.table.td>
-                        <x-ui.table.td numeric>{{ rtrim(rtrim((string) $load->tonnes_10_2, '0'), '.') }}</x-ui.table.td>
-                        <x-ui.table.td numeric>{{ $load->cubic_meters_10_2 === null ? '—' : rtrim(rtrim((string) $load->cubic_meters_10_2, '0'), '.') }}</x-ui.table.td>
-                        <x-ui.table.td>{{ $load->consignee ?? '—' }}</x-ui.table.td>
-                        <x-ui.table.td>
-                            @if ($load->waybill_document_id === null)
-                                <span class="text-danger">{{ __('missing') }}</span>
-                            @else
-                                <span class="fg-identifier text-xs">{{ $load->waybill_document_id }}</span>
-                            @endif
-                        </x-ui.table.td>
-                        <x-ui.table.td numeric>
-                            @if ($this->canEditLoads())
-                                <x-ui.button size="xs" variant="ghost" wire:click="removeLoad({{ $load->id }})">{{ __('Remove') }}</x-ui.button>
-                            @endif
-                        </x-ui.table.td>
-                    </tr>
-                @endforeach
-            </x-ui.table>
-
-            <p class="text-sm text-fg-ink-secondary">{{ $trip->tonnageLabel() }}</p>
-        @endif
-
-        {{-- The gate, printed as the reason instead of as a disabled control. --}}
-        @if ($this->canMarkLoaded())
-            <div>
-                <x-ui.button wire:click="markLoaded" wire:loading.attr="disabled" wire:target="markLoaded">
-                    <span wire:loading.remove wire:target="markLoaded">{{ __('Mark this trip loaded') }}</span>
-                    <span wire:loading wire:target="markLoaded">{{ __('Closing the manifest…') }}</span>
-                </x-ui.button>
-            </div>
-        @elseif ($this->loadingIsRefused())
-            <x-ui.alert tone="warning" :title="__('Not yet loadable')">
-                <ul class="grid gap-1 text-sm">
-                    @foreach ($this->loading as $finding)
-                        <li>· {{ $finding }}</li>
-                    @endforeach
-                </ul>
-            </x-ui.alert>
-        @endif
-
-        @error('load')
-            <x-ui.alert tone="danger" :title="__('That did not go through')">{{ $message }}</x-ui.alert>
-        @enderror
-    </section>
-
+    {{-- Action first, the way the design system opens a detail page: the doors this trip still
+         walks are first in the source, and ride in the right column at ≥1024px. --}}
+    <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+    <div class="lg:order-last lg:sticky lg:top-16 lg:self-start">
     {{-- The doors this trip may still walk, and the facts each one asks for. --}}
-    <section class="grid gap-5 rounded-fg-lg border border-fg-line bg-fg-surface p-5">
+    <section class="grid gap-5 fg-panel p-5">
         <x-ui.subheading>{{ __('Move it on') }}</x-ui.subheading>
 
         @if ($this->canDispatchElsewhere())
             <p class="text-sm text-fg-ink-secondary">
-                {{ __('Dispatch happens on the board, where the other trucks and the week are visible (§10.2).') }}
-                <a href="{{ route('operations.dispatch') }}" class="text-accent">{{ __('Open the board') }}</a>
+                {{ __('Dispatch happens on the board, where the other trucks and the week are visible.') }}
+                <a href="{{ route('operations.dispatch') }}" class="text-accent-ink underline-offset-4 transition duration-(--t-fast) ease-(--ease-standard) hover:text-accent-hover hover:underline">{{ __('Open the board') }}</a>
             </p>
         @endif
 
         @if ($this->canDepart())
-            {{-- ui-scope: departure (canDepart and canComplete are disjoint §10.2 states, so these two forms never share a screen) --}}
+            {{-- ui-scope: departure (canDepart and canComplete are disjoint the design states, so these two forms never share a screen) --}}
             <form class="grid gap-3 sm:grid-cols-2" wire:submit="depart">
                     <x-ui.input name="departOdometer" wire:model="departOdometer" :label="__('Odometer at departure (km)')" type="number" />
                     <x-ui.input name="departHours" wire:model="departHours" :label="__('Engine hours at departure')" type="number" step="0.1" />
@@ -1480,7 +1359,7 @@ new #[Title('Trip')] class extends Component
         @endif
 
         @if ($this->canComplete())
-            {{-- ui-scope: completion (the closing reading only appears once the POD is approved, so this form and the departure form are disjoint §10.2 states) --}}
+            {{-- ui-scope: completion (the closing reading only appears once the POD is approved, so this form and the departure form are disjoint the design states) --}}
             <form class="grid gap-3 sm:grid-cols-2" wire:submit="complete">
                     <x-ui.input name="endOdometer" wire:model="endOdometer" :label="__('Odometer on arrival (km)')" type="number" />
                     <x-ui.input name="endHours" wire:model="endHours" :label="__('Engine hours at the end')" type="number" step="0.1" />
@@ -1546,18 +1425,168 @@ new #[Title('Trip')] class extends Component
 
         @error('reason') <x-ui.alert tone="danger" :title="__('That did not go through')">{{ $message }}</x-ui.alert> @enderror
     </section>
+    </div>
+    <div class="grid gap-6">
+    <div class="grid gap-6 lg:grid-cols-2">
+        {{-- The plan: what was committed, and the facts gathered on the road. --}}
+        <section class="grid gap-4 fg-panel p-5">
+            <x-ui.subheading>{{ __('Plan') }}</x-ui.subheading>
+
+            <dl class="grid gap-3 text-sm sm:grid-cols-2">
+                <div>
+                    <dt class="text-xs text-fg-ink-muted">{{ __('Truck') }}</dt>
+                    <dd class="text-fg-ink">{{ $this->truckLabel() }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-fg-ink-muted">{{ __('Trailer') }}</dt>
+                    <dd class="text-fg-ink">{{ $this->trailerLabel() }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-fg-ink-muted">{{ __('Driver') }}</dt>
+                    <dd class="text-fg-ink">{{ $this->driverLabel() }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-fg-ink-muted">{{ __('Planned departure') }}</dt>
+                    <dd class="text-fg-ink">{{ $trip->planned_departure_at?->timezone(App\Domain\Kernel\Tenancy\CurrentCompany::timezone())->format('d M Y H:i') ?? __('unscheduled') }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-fg-ink-muted">{{ __('Departed') }}</dt>
+                    <dd class="text-fg-ink">
+                        {{ $trip->departed_at?->format('d M Y H:i') ?? __('—') }}
+                        @if ($trip->odometer_start_km !== null)
+                            <span class="text-fg-ink-muted">· {{ number_format($trip->odometer_start_km) }} km</span>
+                        @endif
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-fg-ink-muted">{{ __('Completed') }}</dt>
+                    <dd class="text-fg-ink">
+                        {{ $trip->completed_at?->format('d M Y H:i') ?? __('—') }}
+                        @if ($trip->odometer_end_km !== null)
+                            <span class="text-fg-ink-muted">· {{ number_format($trip->odometer_end_km) }} km</span>
+                        @endif
+                    </dd>
+                </div>
+            </dl>
+        </section>
+
+        {{-- The state machine's own record, in the order it was written. --}}
+        <section class="grid gap-4 fg-panel p-5">
+            <x-ui.subheading>{{ __('Trail') }}</x-ui.subheading>
+
+            @if ($this->trail === [])
+                <x-ui.text>{{ __('Nothing has been recorded against this trip yet.') }}</x-ui.text>
+            @else
+                <ol class="grid gap-3">
+                    @foreach ($this->trail as $event)
+                        <li class="grid gap-0.5 border-l-2 border-fg-line pl-3">
+                            <span class="text-sm text-fg-ink">
+                                {{ $event->from_state === null ? __('Opened') : __('{from} →', ['from' => $event->from_state]) }}
+                                <span class="font-medium">{{ $event->to_state }}</span>
+                            </span>
+                            <time class="text-xs text-fg-ink-muted" datetime="{{ $event->occurred_at->toIso8601String() }}">
+                                {{ $event->occurred_at->timezone(App\Domain\Kernel\Tenancy\CurrentCompany::timezone())->format('d M Y H:i') }}
+                            </time>
+                            <span class="text-xs text-fg-ink-muted">{{ $event->actor_kind }}</span>
+                            @if ($event->reason !== null)
+                                <span class="text-xs text-fg-ink-secondary">{{ $event->reason }}</span>
+                            @endif
+                        </li>
+                    @endforeach
+                </ol>
+            @endif
+        </section>
+    </div>
+
+    {{-- The loading schedule: The gate measured against the truck AND the trailer. --}}
+    <section class="grid gap-4 fg-panel p-5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <x-ui.subheading>{{ __('Loading schedule') }}</x-ui.subheading>
+
+            @if ($this->canEditLoads())
+                <x-ui.button size="sm" variant="outline" x-on:click="$dispatch('open-trip-load')">{{ __('Add a load') }}</x-ui.button>
+            @endif
+        </div>
+
+        @if ($this->loads->isEmpty())
+            <x-ui.empty-state
+                icon="cube"
+                title="{{ __('Nothing on it') }}"
+                description="{{ __('An empty manifest is refused at loaded — add what the truck is carrying, each line with its waybill.') }}"
+            />
+        @else
+            <x-ui.table :caption="__('What this trip is carrying, one line per stop')">
+                <x-slot name="head">
+                    <x-ui.table.th>{{ __('Stop') }}</x-ui.table.th>
+                    <x-ui.table.th>{{ __('Commodity') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Tonnes') }}</x-ui.table.th>
+                    <x-ui.table.th numeric hideBelow="lg">{{ __('Cubic') }}</x-ui.table.th>
+                    <x-ui.table.th>{{ __('Consignee') }}</x-ui.table.th>
+                    <x-ui.table.th hideBelow="lg">{{ __('Waybill') }}</x-ui.table.th>
+                    <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
+                </x-slot>
+
+                @foreach ($this->loads as $load)
+                    <tr wire:key="load-{{ $load->id }}">
+                        <x-ui.table.td nowrap>{{ $load->stop_sequence ?? '—' }}</x-ui.table.td>
+                        <x-ui.table.td>{{ $load->commodity }}</x-ui.table.td>
+                        <x-ui.table.td numeric>{{ rtrim(rtrim((string) $load->tonnes_10_2, '0'), '.') }}</x-ui.table.td>
+                        <x-ui.table.td numeric hideBelow="lg">{{ $load->cubic_meters_10_2 === null ? '—' : rtrim(rtrim((string) $load->cubic_meters_10_2, '0'), '.') }}</x-ui.table.td>
+                        <x-ui.table.td>{{ $load->consignee ?? '—' }}</x-ui.table.td>
+                        <x-ui.table.td hideBelow="lg">
+                            @if ($load->waybill_document_id === null)
+                                <span class="text-danger">{{ __('missing') }}</span>
+                            @else
+                                <span class="fg-identifier text-xs">{{ $load->waybill_document_id }}</span>
+                            @endif
+                        </x-ui.table.td>
+                        <x-ui.table.td numeric>
+                            @if ($this->canEditLoads())
+                                <x-ui.button size="xs" variant="ghost" wire:click="removeLoad({{ $load->id }})">{{ __('Remove') }}</x-ui.button>
+                            @endif
+                        </x-ui.table.td>
+                    </tr>
+                @endforeach
+            </x-ui.table>
+
+            <p class="text-sm text-fg-ink-secondary">{{ $trip->tonnageLabel() }}</p>
+        @endif
+
+        {{-- The gate, printed as the reason instead of as a disabled control. --}}
+        @if ($this->canMarkLoaded())
+            <div>
+                <x-ui.button wire:click="markLoaded" wire:loading.attr="disabled" wire:target="markLoaded">
+                    <span wire:loading.remove wire:target="markLoaded">{{ __('Mark this trip loaded') }}</span>
+                    <span wire:loading wire:target="markLoaded">{{ __('Closing the manifest…') }}</span>
+                </x-ui.button>
+            </div>
+        @elseif ($this->loadingIsRefused())
+            <x-ui.alert tone="warning" :title="__('Not yet loadable')">
+                <ul class="grid gap-1 text-sm">
+                    @foreach ($this->loading as $finding)
+                        <li>· {{ $finding }}</li>
+                    @endforeach
+                </ul>
+            </x-ui.alert>
+        @endif
+
+        @error('load')
+            <x-ui.alert tone="danger" :title="__('That did not go through')">{{ $message }}</x-ui.alert>
+        @enderror
+    </section>
+
 
     {{--
-        §10.9's gates on this trip. Three facts shape the section: the crossing is planned before the
+        The gates on this trip. Three facts shape the section: the crossing is planned before the
         truck arrives (or backfilled from the paper), the money is captured while it is at the barrier
         or after it left, and finishing is a person saying the gate is done being charged. The section
         is readable by every seat with `crossborder.view`; the buttons ask `crossborder.manage`.
     --}}
     @if ($this->canSeeCrossings())
-        <section class="grid gap-5 rounded-fg-lg border border-fg-line bg-fg-surface p-5">
+        <section class="grid gap-5 fg-panel p-5">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <x-ui.subheading>{{ __('Border gates') }}</x-ui.subheading>
-                <a href="{{ route('crossborder.index') }}" class="text-sm text-accent">{{ __('The gate register') }}</a>
+                <a href="{{ route('crossborder.index') }}" class="text-sm text-accent-ink underline-offset-4 transition duration-(--t-fast) ease-(--ease-standard) hover:text-accent-hover hover:underline">{{ __('The gate register') }}</a>
             </div>
 
             @if ($this->crossings === [])
@@ -1713,7 +1742,7 @@ new #[Title('Trip')] class extends Component
                     </div>
 
                     <p class="text-xs text-fg-ink-muted">
-                        {{ __('The charge posts to the ledger in this step, as a border cost on the trip — the eight §5.2 columns are copied from that posting, so the gate and the books cannot disagree.') }}
+                        {{ __('The charge posts to the ledger in this step, as a border cost on the trip — the eight columns are copied from that posting, so the gate and the books cannot disagree.') }}
                     </p>
 
                     @error('charge')
@@ -1733,13 +1762,13 @@ new #[Title('Trip')] class extends Component
     @endif
 
     {{--
-        §6.6's money on one screen. Three abilities shape it and none of them widens another: raising a
+        The money on one screen. Three abilities shape it and none of them widens another: raising a
         cost is `expenses.create`, seeing what the trip earned is `trips.margin.view`, and the rows a
         customer will be billed for are `invoices.view`. A dispatcher holding only the last one sees the
         billing rows and no margin at all.
     --}}
     @if ($this->canSeeMoney())
-        <section class="grid gap-5 rounded-fg-lg border border-fg-line bg-fg-surface p-5">
+        <section class="grid gap-5 fg-panel p-5">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <x-ui.subheading>{{ __('Money') }}</x-ui.subheading>
 
@@ -1749,7 +1778,7 @@ new #[Title('Trip')] class extends Component
             </div>
 
             @if ($this->canSeeMargin())
-                @php($money = $this->trip())
+                @php($money = $this->trip)
 
                 <dl class="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
                     <div>
@@ -1782,7 +1811,7 @@ new #[Title('Trip')] class extends Component
                         @endforeach
                     </div>
 
-                    <p class="text-xs text-fg-ink-muted">{{ __('Revenue stays at zero until Phase 4 raises the invoice, so this contribution is costs alone — not a margin yet (§20.17).') }}</p>
+                    <p class="text-xs text-fg-ink-muted">{{ __('Revenue is what this trip\'s ready and billed chargeables earn — before the consolidated run bills them the contribution reads as costs alone, and that is the honest state, not a missing number.') }}</p>
                 </div>
             @endif
 
@@ -1822,7 +1851,7 @@ new #[Title('Trip')] class extends Component
 
                 @if ($this->costsAreFrozen())
                     <x-ui.alert tone="info" :title="__('Costs are final')">
-                        {{ __('This trip is closed, cancelled or aborted, so no cost may be added. Re-open it, or correct the ledger with a reversing entry (§6.4).') }}
+                        {{ __('This trip is closed, cancelled or aborted, so no cost may be added. Re-open it, or correct the ledger with a reversing entry.') }}
                     </x-ui.alert>
                 @endif
             @endif
@@ -1832,7 +1861,7 @@ new #[Title('Trip')] class extends Component
                     <x-ui.subheading>{{ __('Ready to bill') }}</x-ui.subheading>
 
                     @if ($this->chargeables === [])
-                        <x-ui.text>{{ __('Nothing has been earned yet — a chargeable is built when the delivery proof is accepted (§16).') }}</x-ui.text>
+                        <x-ui.text>{{ __('Nothing has been earned yet — a chargeable is built when the delivery proof is accepted.') }}</x-ui.text>
                     @else
                         <x-ui.table :caption="__('What this trip has earned and whether each chargeable can go on an invoice yet')">
                             <x-slot name="head">
@@ -1858,7 +1887,7 @@ new #[Title('Trip')] class extends Component
             @endif
         </section>
 
-        {{-- The cost form. A foreign amount asks for its rate; the base currency is rate 1, always (§5.2). --}}
+        {{-- The cost form. A foreign amount asks for its rate; the base currency is rate 1, always. --}}
         @if ($this->canAddCosts())
             <x-ui.dialog name="trip-cost" :title="__('Record a trip cost')">
                 <form wire:submit="recordCost" class="grid gap-4 p-5">
@@ -1928,16 +1957,16 @@ new #[Title('Trip')] class extends Component
         @endif
     @endif
 
-    {{-- Fuel is a module of its own (§4.3): the trip names the truck and the tank, the panel does the rest. --}}
-    <livewire:pages::fuel.trip-panel :trip="$this->trip()" />
+    {{-- Fuel is a module of its own: the trip names the truck and the tank, the panel does the rest. --}}
+    <livewire:pages::fuel.trip-panel :trip="$this->trip" />
 
     {{--
-        §9.6's two halves on one screen: the door the dispatcher opens for the driver, and the decision the
+        The two halves on one screen: the door the dispatcher opens for the driver, and the decision the
         office makes on what came back. Both are behind their own permission so a seat that can plan a trip
         but not hand out a link still sees the trip and nothing else.
     --}}
     @if ($this->canIssueDriverLink() || $this->canApprovePod())
-        <section class="grid gap-5 rounded-fg-lg border border-fg-line bg-fg-surface p-5">
+        <section class="grid gap-5 fg-panel p-5">
             <x-ui.subheading>{{ __('Driver access and delivery evidence') }}</x-ui.subheading>
 
             @if ($this->canIssueDriverLink())
@@ -1960,7 +1989,7 @@ new #[Title('Trip')] class extends Component
                                         : window.prompt('Copy the link', @js($reveal['url']))"
                                     role="button"
                                     tabindex="0"
-                                    class="cursor-pointer rounded-fg-sm border border-fg-line-strong px-2 py-1 text-xs text-accent"
+                                    class="cursor-pointer rounded-fg-sm border border-fg-line-strong px-2 py-1 text-xs text-accent-ink"
                                 >
                                     <span x-text="copied ? 'Copied' : 'Copy link'">Copy link</span>
                                 </span>
@@ -1970,7 +1999,7 @@ new #[Title('Trip')] class extends Component
                             <p class="text-xs">{{ __('Opens until :at', ['at' => $reveal['expires_at'] ?? __('—')]) }}</p>
 
                             {{--
-                                §9.6's link is 48 hex characters, which is not something a driver keys on a
+                                The link is 48 hex characters, which is not something a driver keys on a
                                 phone at a gate. The code is the same URL the line above prints, and the PIN
                                 is deliberately kept out of it: the kiosk asks for it on every submission,
                                 so a code that carried it would hand anyone who photographed the screen the
@@ -1982,11 +2011,13 @@ new #[Title('Trip')] class extends Component
                                     than this box. Left alone it overflows to the right and the column the
                                     buttons live in paints over it, so the code loses a third of its modules
                                     to the very button meant to carry the link. Constraining it to the box
-                                    scales the viewBox instead; the box is 10rem so the code stays legible to
-                                    a phone camera held at a gate.
+                                    scales the viewBox instead, and the box is what a phone camera actually
+                                    resolves: the error correction the brand ink is paid for widens the
+                                    matrix, so 12rem keeps every module above the three CSS pixels the plain
+                                    code managed at 10rem.
                                 --}}
                                 <div
-                                    class="w-40 shrink-0 rounded-fg-sm border border-fg-line bg-white p-2 [&>svg]:block [&>svg]:h-auto [&>svg]:w-full"
+                                    class="w-48 shrink-0 rounded-fg-sm border border-fg-line bg-fg-surface p-2 [&>svg]:block [&>svg]:h-auto [&>svg]:w-full"
                                     role="img"
                                     aria-label="{{ __('QR code of the driver link') }}"
                                 >
@@ -2106,7 +2137,7 @@ new #[Title('Trip')] class extends Component
                     <x-ui.subheading>{{ __('Proof of delivery') }}</x-ui.subheading>
 
                     @if ($this->proofs === [])
-                        <x-ui.text>{{ __('The driver has not sent a proof yet — §10.2 will not let this trip be delivered without one.') }}</x-ui.text>
+                        <x-ui.text>{{ __('The driver has not sent a proof yet — this will not let this trip be delivered without one.') }}</x-ui.text>
                     @else
                         @foreach ($this->proofs as $pod)
                             <div wire:key="pod-{{ $pod->id }}" class="grid gap-2 rounded-fg-md border border-fg-line p-3">
@@ -2200,7 +2231,7 @@ new #[Title('Trip')] class extends Component
         </form>
     </x-ui.dialog>
 
-    {{-- The reason form: hold, cancel/abort and re-open each ask for one (§10.2, §4.4), and the box now
+    {{-- The reason form: hold, cancel/abort and re-open each ask for one, and the box now
          knows which of them it was opened for. --}}
     <x-ui.dialog name="trip-reason" :title="$this->reasonTitle()">
         <div class="grid gap-4 p-5">
@@ -2230,4 +2261,6 @@ new #[Title('Trip')] class extends Component
             </div>
         </div>
     </x-ui.dialog>
+    </div>
+    </div>
 </div>

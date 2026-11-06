@@ -10,20 +10,20 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.2 — one billed line, and the leg of the fleet it earned money on.
+     * One billed line, and the leg of the fleet it earned money on.
      *
      * A line carries `chargeable_id`, `trip_id` and `truck_id` because account `4100 Haulage revenue`
-     * requires all of truck, trip and customer (§6.1's mask), so a consolidated invoice cannot post one
+     * requires all of truck, trip and customer (the mask), so a consolidated invoice cannot post one
      * lump credit to it — the block would name a customer and no leg. The line is the granularity where
-     * the dimension survives, which is also what makes revenue-per-truck an ordinary `GROUP BY` (§6.2)
+     * the dimension survives, which is also what makes revenue-per-truck an ordinary `GROUP BY`
      * rather than a pivot.
      *
-     * `revenue_account_code` is the account this line credited, **copied at write time**. §6.8's mapping
+     * `revenue_account_code` is the account this line credited, **copied at write time**. The mapping
      * from a chargeable type to an account is the design's answer today; if the accountant re-codes the
      * chart next year, the rows already posted must keep saying what they actually posted to. The
      * ledger's own line points at the account id; this column is the document's statement of intent.
      *
-     * VAT is per line and rounded once (§5.5: "sum of rounded line amounts, never round-of-sum"), so
+     * VAT is per line and rounded once ("sum of rounded line amounts, never round-of-sum"), so
      * `tax_amount` is stored rather than derived at print time — an invoice whose VAT is recomputed by a
      * report is an invoice that can disagree with the return filed from it.
      *
@@ -47,7 +47,7 @@ return new class extends Migration
 
             $table->string('revenue_account_code', 8);
 
-            // quantity_x100 × unit_price_minor is §5.5's scale again: 27.55 t at P350.00/t is
+            // quantity_x100 × unit_price_minor is the scale again: 27.55 t at P350.00/t is
             // 2755 × 35000 ÷ 100 minor units, with no float in the path.
             $table->unsignedBigInteger('quantity_x100')->default(100);
             $table->unsignedBigInteger('unit_price_minor');
@@ -62,7 +62,7 @@ return new class extends Migration
 
             $table->unsignedInteger('position')->default(0);
 
-            // A line is released, never deleted, when its invoice is voided (§10.4: the document keeps its
+            // A line is released, never deleted, when its invoice is voided (the document keeps its
             // own record even when the money is unposted). `live_chargeable_id` is the stored projection the
             // uniqueness rule below is really about.
             $table->timestamp('released_at')->nullable();
@@ -78,10 +78,10 @@ return new class extends Migration
 
         /*
          * A line is billed **once at a time**: one chargeable cannot fund two live lines, which is the
-         * invoice-side mirror of `BuildChargeablesFromPod`'s idempotency key (§20.17).
+         * invoice-side mirror of `BuildChargeablesFromPod`'s idempotency key.
          *
          * "At a time" is the part a plain unique on `chargeable_id` got wrong — it made a voided delivery
-         * permanently unbillable, because a re-issue has to reference the same chargeable again (§20.33).
+         * permanently unbillable, because a re-issue has to reference the same chargeable again.
          * The generated column is the uniqueness subject: present while the line is live, NULL once it is
          * released, and MySQL treats NULLs as distinct, so a released line stops competing with its
          * replacement. InnoDB cannot express a partial index, so this is the dialect's own way of saying
@@ -100,7 +100,7 @@ return new class extends Migration
 
         DB::statement('alter table `invoice_lines` add constraint `invoice_lines_amount_positive` check (amount > 0 and base_amount > 0 and unit_price_minor > 0 and quantity_x100 > 0)');
 
-        // The line's own arithmetic, restated as a band one minor unit wide around the product (§20.28's
+        // The line's own arithmetic, restated as a band one minor unit wide around the product (the
         // lesson: pin the rounding, not the multiply).
         DB::statement('alter table `invoice_lines` add constraint `invoice_lines_amount_is_rounded_product` check (
             amount * 100 >= quantity_x100 * unit_price_minor - 49

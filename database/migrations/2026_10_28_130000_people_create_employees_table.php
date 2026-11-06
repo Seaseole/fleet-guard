@@ -10,12 +10,12 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 EMPLOYEE — the payroll-boundary person record (§14.7): who is on the books, in what
+     * EMPLOYEE — the payroll-boundary person record: who is on the books, in what
      * grade, at what gross cost, without pretending to be statutory payroll.
      *
-     * The national ID follows the §9.5 trio (`national_id_masked` / `national_id_encrypted` /
+     * The national ID follows the trio (`national_id_masked` / `national_id_encrypted` /
      * `key_version`) rather than a plain column. Unlike a bank number there is no field gate that
-     * reveals it — §9.4 names five gates and national identity is not one of them — so the mask is
+     * reveals it — the design names five gates and national identity is not one of them — so the mask is
      * the display form and nothing in phase 1 decrypts. The ciphertext exists so the day a gate is
      * justified the plaintext is already stored safely, not in a spreadsheet.
      *

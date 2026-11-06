@@ -19,11 +19,11 @@ use App\Domain\Operations\TripStatus;
 use Illuminate\Support\Facades\DB;
 
 /**
- * §9.6 — the driver's capture, written through the same door the office uses.
+ * The driver's capture, written through the same door the office uses.
  *
  * The kiosk is not a second data path. This Action is what the office screen would call too: one trip, one
  * manifest, one set of rules, so a POD typed on a phone at a border post and a POD keyed in by a clerk
- * cannot become two different shapes of fact. §9.6 says exactly that, and the reason is §10.2 — the states
+ * cannot become two different shapes of fact. The design says exactly that, and the reason is the states
  * have gate conditions, and a second implementation is a second place to forget one.
  *
  * **The offline retry is the normal case.** A `client_uuid` that has been seen returns the row it created,
@@ -32,7 +32,7 @@ use Illuminate\Support\Facades\DB;
  * never signed for, and de-duplicating after the write would already have doubled the paperwork.
  *
  * `arrived → pod_pending` is the only trip move a capture may make. `pod_pending → delivered` is an office
- * decision (§10.2: "a driver may never transition to delivered"), and {@see AdvanceTrip} is the thing that
+ * decision ("a driver may never transition to delivered"), and {@see AdvanceTrip} is the thing that
  * enforces it — this Action asks for the move and does not reach around the guard to avoid it.
  */
 final class CaptureProofOfDelivery
@@ -80,7 +80,7 @@ final class CaptureProofOfDelivery
                 ));
             }
 
-            // Everything §10.2 will ask for is checked **before** the first row or byte is written: a
+            // Everything will ask for is checked **before** the first row or byte is written: a
             // refusal after the uploads would leave a signed note on the disk that no POD points at.
             $this->assertComplete($facts, $files);
 
@@ -141,7 +141,7 @@ final class CaptureProofOfDelivery
     }
 
     /**
-     * §10.2's gate, asked of the facts as they arrive rather than after the uploads.
+     * The gate, asked of the facts as they arrive rather than after the uploads.
      *
      * Signature and photo, a receiver, a quantity, and an answered exceptions question — the same list
      * {@see ProofOfDelivery::approvalFindings()} re-checks on the stored row. Asking it twice is the
@@ -189,7 +189,7 @@ final class CaptureProofOfDelivery
         }
 
         if ($exceptions === [] && ($facts['none_declared'] ?? false) !== true) {
-            throw new \InvalidArgumentException('Say that there were no exceptions, or list what went wrong — an empty answer is not the same as "nothing" (§10.2).');
+            throw new \InvalidArgumentException('Say that there were no exceptions, or list what went wrong — an empty answer is not the same as "nothing".');
         }
     }
 }

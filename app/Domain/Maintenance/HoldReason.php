@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Maintenance;
 
 /**
- * §4.3's four reasons a work order stops (§10.6's `in_progress → on_hold`).
+ * The four reasons a work order stops (the `in_progress → on_hold`).
  *
  * A free-text reason would make the register impossible to count ("how many jobs are waiting on
  * parts" is the question the stores clerk asks every Monday), and the migration's CHECK holds this

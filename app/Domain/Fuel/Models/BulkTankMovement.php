@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * One change to a bulk tank's book, with the figures the tank held immediately afterwards (§4.3).
+ * One change to a bulk tank's book, with the figures the tank held immediately afterwards.
  *
  * Written only by {@see BulkTank::recordMovement()} inside the same transaction as the receipt's or
  * the issue's journal entry, so the book, the tank row and the ledger move together or not at all.
@@ -39,7 +39,7 @@ final class BulkTankMovement extends Model
 {
     use BelongsToCompany;
 
-    /** ULID key (§2): a movement can be cited from outside the tank it belongs to. */
+    /** ULID key: a movement can be cited from outside the tank it belongs to. */
     protected $keyType = 'string';
 
     public $incrementing = false;

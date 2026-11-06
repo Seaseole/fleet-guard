@@ -16,7 +16,7 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.3 BREAKDOWN — a truck stopped at the roadside, and what came of it.
+ * BREAKDOWN — a truck stopped at the roadside, and what came of it.
  *
  * The row exists before the repair does: `work_order_id` is null until someone raises a job from it,
  * because a breakdown's first job is to record that the truck is down and where, not to wait for a

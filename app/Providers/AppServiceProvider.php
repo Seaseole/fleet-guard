@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
+use App\Domain\Security\Backup\BackupCipher;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +20,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Lazy on purpose: the key is read when a backup command runs, not when a request boots. A
+        // deployment that has not yet escrowed FLEET_BACKUP_KEY must still serve every other screen,
+        // and the export is where a missing key has to be loud.
+        $this->app->bind(BackupCipher::class, static fn (): BackupCipher => BackupCipher::fromConfig());
     }
 
     /**
@@ -31,7 +36,7 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * §9.6's rate limit on redemption.
+     * The rate limit on redemption.
      *
      * Keyed by IP *and* the secret rather than IP alone: a yard on one NAT address dispatches many
      * drivers at once, and a shared counter would lock the whole office out because one phone kept
@@ -52,6 +57,14 @@ class AppServiceProvider extends ServiceProvider
     protected function configureDefaults(): void
     {
         Date::use(CarbonImmutable::class);
+
+        /*
+         * The N+1 guard: outside production a missing eager load throws instead of quietly
+         * costing a query per row. Off in production by design — an uncaught violation there would
+         * be an outage, not a slower page, and the local sweeps and `performance:audit` are where the
+         * rule is enforced.
+         */
+        Model::preventLazyLoading(! app()->isProduction());
 
         DB::prohibitDestructiveCommands(
             app()->isProduction(),

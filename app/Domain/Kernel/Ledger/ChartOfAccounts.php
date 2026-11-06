@@ -20,13 +20,24 @@ final class ChartOfAccounts
     /** @return array<string, ChartAccount> keyed by account code */
     public function byCode(): array
     {
+        $rows = Account::query()->get(['id', 'code', 'name', 'type', 'is_postable', 'is_active', 'allowed_dimension_mask', 'parent_id']);
+
+        // parent_id resolves to a code, not an id: the projection stays id-free on purpose so a
+        // caller can name a section ("under Current assets") without holding a model handle.
+        $codeById = [];
+
+        foreach ($rows as $row) {
+            $codeById[$row->id] = $row->code;
+        }
+
         $accounts = [];
 
-        foreach (Account::query()->get(['id', 'code', 'name', 'is_postable', 'is_active', 'allowed_dimension_mask']) as $account) {
+        foreach ($rows as $account) {
             $accounts[$account->code] = new ChartAccount(
                 id: (int) $account->id,
                 code: $account->code,
                 name: $account->name,
+                type: $account->type,
                 isPostable: $account->is_postable,
                 isActive: $account->is_active,
                 requiredDimensions: array_map(
@@ -39,6 +50,7 @@ final class ChartOfAccounts
                     },
                     $account->requiredDimensions(),
                 ),
+                parentCode: $account->parent_id === null ? null : ($codeById[$account->parent_id] ?? null),
             );
         }
 

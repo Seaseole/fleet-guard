@@ -10,9 +10,9 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.1 ROUTE — the corridor a job prices against, e.g. GBE-WDH.
+     * ROUTE — the corridor a job prices against, e.g. GBE-WDH.
      *
-     * `code` is required and unique per company because §4.1 makes it the reference ("GBE-WDH-JNB"):
+     * `code` is required and unique per company because the design makes it the reference ("GBE-WDH-JNB"):
      * it is what dispatch says out loud and what a rate card is filed under. The endpoints are
      * stored as names *and* ISO country codes; the codes are what a cross-border summary groups by
      * in Phase 6, and deriving them from free-text place names later is not a reliable operation.

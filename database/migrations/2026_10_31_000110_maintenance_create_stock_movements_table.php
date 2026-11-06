@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 STOCK_MOVEMENT — every receipt, issue and physical count against a part, with the figures
-     * the shelf held immediately afterwards (§15.2 phase 3).
+     * STOCK_MOVEMENT — every receipt, issue and physical count against a part, with the figures
+     * the shelf held immediately afterwards.
      *
      * The after-snapshots are stored, not derived: a later receipt changes the moving average, and a
      * movement read at report time would answer with today's average for units that left last month.

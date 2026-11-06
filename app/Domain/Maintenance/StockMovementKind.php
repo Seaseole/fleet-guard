@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Maintenance;
 
 /**
- * The three ways a part's book changes (§15.2 phase 3): a purchase arriving on the shelf, a part
+ * The three ways a part's book changes: a purchase arriving on the shelf, a part
  * leaving it for a job, and a physical count that says what is really there.
  *
  * A count is kept even when it agrees — "the book is right for once" is a fact with a date, and the

@@ -6,7 +6,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
 /**
- * §4.4's closed list gains `settings_changed`: §9.3 marks `settings.manage` ⚑, and a changed
+ * The closed list gains `settings_changed`: Marks `settings.manage` ⚑, and a changed
  * approval threshold or kiosk horizon is policy — the question "who lowered the approval limit
  * last Tuesday" has to be answerable from the security trail.
  *

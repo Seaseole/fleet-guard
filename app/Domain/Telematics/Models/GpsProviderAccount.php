@@ -9,11 +9,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
- * §4.4 GPS_PROVIDER_ACCOUNT — the feed a company ingests from.
+ * GPS_PROVIDER_ACCOUNT — the feed a company ingests from.
  *
  * The simulator and a Phase 7 gateway are the same row with a different `adapter`. Nothing here
  * decrypts the credential: a provider key is a secret like a bank number, and the screen that needs
- * it will call `FieldCipher` behind its own gate rather than letting a map read expose it (§9.5).
+ * it will call `FieldCipher` behind its own gate rather than letting a map read expose it.
  *
  * @property int $id
  * @property int $company_id

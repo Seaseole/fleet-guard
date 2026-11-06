@@ -12,13 +12,13 @@ use InvalidArgumentException;
  * A work order as the "raise" dialog hands it to {@see RaiseWorkOrder}
  * (D1).
  *
- * At least one line is required. That is not tidiness: §10.6's threshold is computed from the
+ * At least one line is required. That is not tidiness: The threshold is computed from the
  * estimate, and an order with no estimate is one whose price was never considered — the control the
  * design calls "the single control that matters in a trucking workshop" would have nothing to compare.
  * A breakdown discovered on the road still gets a line ("diagnosis, 2 hours"), so the row says what
  * somebody thought it would cost.
  *
- * `tripId` is a ULID string rather than an int for §2's reason; a breakdown names the trip it stopped,
+ * `tripId` is a ULID string rather than an int for the reason; a breakdown names the trip it stopped,
  * which is what makes a workshop cost attach to the run that needed it.
  */
 final readonly class WorkOrderDto
@@ -50,7 +50,7 @@ final readonly class WorkOrderDto
         }
 
         if ($lines === []) {
-            throw new InvalidArgumentException('A work order needs at least one cost line — the estimate is what the approval threshold is measured against (§10.6).');
+            throw new InvalidArgumentException('A work order needs at least one cost line — the estimate is what the approval threshold is measured against.');
         }
 
         if ($estimatedHours !== null && $estimatedHours < 0) {

@@ -9,7 +9,7 @@ use App\Domain\Fleet\Models\Trailer;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The only path a trailer's status moves through (§10.1, D1); disposal clears `active` with it.
+ * The only path a trailer's status moves through (D1); disposal clears `active` with it.
  */
 final class ChangeTrailerStatus
 {

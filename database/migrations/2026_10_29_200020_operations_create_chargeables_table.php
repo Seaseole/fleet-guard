@@ -10,10 +10,10 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.1 CHARGEABLE — what a trip earns before it becomes an invoice line.
+     * CHARGEABLE — what a trip earns before it becomes an invoice line.
      *
-     * Billing is Phase 4, so `status` stops at `ready` here; the table exists now because §16 puts
-     * `BuildChargeablesFromPod` on the POD approval and §6.9's tie-out needs the row to exist before
+     * Billing is Phase 4, so `status` stops at `ready` here; the table exists now because the design puts
+     * `BuildChargeablesFromPod` on the POD approval and the tie-out needs the row to exist before
      * the invoice does. `source_uuid` is the idempotency key: approving a proof twice (a retry, a raced
      * click) must not bill the customer twice.
      *

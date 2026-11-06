@@ -12,11 +12,11 @@ use App\Domain\Kernel\Documents\Models\Document;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Taking a document out of use: `superseded`, `archived` or `voided` (§10.8, §4.4).
+ * Taking a document out of use: `superseded`, `archived` or `voided`.
  *
  * One action for the three targets, because the rules are the same three rules asked in a different
  * order — is the move legal, does it need a reason, what timestamp does it date itself with. Three
- * near-identical classes would each have to remember the §4.4 destructive-reason rule, and a rule
+ * near-identical classes would each have to remember the destructive-reason rule, and a rule
  * remembered in three places is a rule that drifts in two.
  *
  * `draft → archived` is not offered: a document with no bytes and no decision taken on it is deleted
@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\DB;
  * The reason is checked **before** the update, and the DB CHECK then refuses the event that follows.
  * That order is not belt-and-braces: without the first check the document would move and the trail
  * would fail, leaving the state changed with nothing saying who did it — the precise shape of the
- * hole §10.1 closes.
+ * hole the design closes.
  */
 final class TransitionDocument
 {
@@ -40,7 +40,7 @@ final class TransitionDocument
         if (! in_array($to, self::Targets, true)) {
             throw new \InvalidArgumentException(sprintf(
                 '%s is not a transition this action makes. A document becomes current by having a version published — '
-                .'%s is {@see UploadDocumentVersion}, not a state to be set (§10.8).',
+                .'%s is {@see UploadDocumentVersion}, not a state to be set.',
                 $to->value,
                 Lifecycle::Current->value,
             ));
@@ -77,7 +77,7 @@ final class TransitionDocument
             ], actorId: $byUserId);
 
             if ($to === Lifecycle::Voided) {
-                // Voiding is on the security trail as well as the state trail: §4.4 lists it as a
+                // Voiding is on the security trail as well as the state trail: The design lists it as a
                 // kind of its own because "who denied this document" is a question with a different
                 // answer from "who closed the record".
                 $this->audit->security(SecurityEventKind::DocumentVoided, [

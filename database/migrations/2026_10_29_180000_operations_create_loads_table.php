@@ -10,12 +10,12 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.1 LOAD — the loading schedule behind §15.2 Phase 2.
+     * LOAD — the loading schedule behind Phase 2.
      *
      * A trip carries loads rather than one load, because the corridor that pays is the one with a
-     * return load on the same truck: §4.1's rule is that multi-leg and return work is more trips
+     * return load on the same truck: The rule is that multi-leg and return work is more trips
      * against the same job, and each of those legs picks up its own tonnes. The tonnage total is what
-     * §10.2's `assigned → loaded` gate measures against the truck **and** the trailer.
+     * The `assigned → loaded` gate measures against the truck **and** the trailer.
      *
      * `waybill_document_id` is the piece of evidence, and it is a ULID FK to `documents.id` — the
      * document module owns the bytes and the retention class, so a load never stores a file path. The
@@ -23,7 +23,7 @@ return new class extends Migration
      * document as a waybill is a data-entry problem the register's subject link makes visible rather
      * than something a `CHECK` can decide.
      *
-     * The trip reference is **composite** (`trip_id`, `company_id`) for the same reason §8 makes
+     * The trip reference is **composite** (`trip_id`, `company_id`) for the same reason the design makes
      * `trips.job_id` composite: a bare ULID FK accepts a cross-tenant pair, and a load that belongs to
      * another company's trip is exactly the row a dispatch board would show twice.
      */

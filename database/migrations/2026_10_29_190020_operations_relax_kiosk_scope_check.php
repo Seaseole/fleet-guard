@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 return new class extends Migration
 {
     /**
-     * §9.6 — `pod` is a complete scope list, and the first constraint said otherwise.
+     * `pod` is a complete scope list, and the first constraint said otherwise.
      *
      * `trip_access_tokens_scopes_not_blank` asked for `char_length(trim(scopes)) between 4 and 64`,
      * written on the assumption that a token always carries at least two scopes. The first verification

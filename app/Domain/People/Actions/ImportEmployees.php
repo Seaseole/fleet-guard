@@ -18,10 +18,10 @@ use App\Domain\Security\DataGovernance\SecretMask;
 use InvalidArgumentException;
 
 /**
- * §15.2 Phase 1 — the employee master file.
+ * Phase 1 — the employee master file.
  *
  * The national ID never waits in the batch as plaintext. A CSV file on an accountant's laptop is
- * exactly the copy §9.5 exists to retire, so the cell is encrypted with {@see FieldCipher} as the
+ * exactly the copy exists to retire, so the cell is encrypted with {@see FieldCipher} as the
  * row is validated; only the mask is printable, and the ciphertext is decrypted for the moment the
  * row is handed to {@see CreateEmployee}/{@see UpdateEmployee}.
  */

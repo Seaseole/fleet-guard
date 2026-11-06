@@ -18,11 +18,11 @@ use function Laravel\Prompts\password;
 use function Laravel\Prompts\text;
 
 /**
- * First-run setup (§9.1 owner-first): the company row, its role set, the Owner account, and the
+ * First-run setup (owner-first): the company row, its role set, the Owner account, and the
  * document sequence rows — in that order, because each step depends on the one before it.
  *
  * One command rather than a documented checklist, because a checklist is how a deploy ends up with a
- * company and no roles, and every screen then renders empty (the fail-closed scope in §8 does exactly
+ * company and no roles, and every screen then renders empty (the fail-closed scope in the design does exactly
  * what it should and shows nothing). The steps are already ordered in code, so the command is the
  * honest interface.
  */
@@ -48,7 +48,7 @@ final class SetupFleetOwner extends Command
 
         // The company row itself is seeded, not typed here: its fiscal year, currency and numbering
         // settings are the Production\CompanySeeder's shape, and two definitions of "what a company
-        // row contains" is how §8's single source of truth becomes two.
+        // row contains" is how the single source of truth becomes two.
         if (Company::query()->find($companyId) === null) {
             Artisan::call('db:seed', ['--class' => 'Database\\Seeders\\Production\\CompanySeeder', '--force' => true]);
             $this->components->info('Company row created.');
@@ -67,7 +67,7 @@ final class SetupFleetOwner extends Command
             $this->components->info("Owner ready: {$owner->email} as {$owner->roles->pluck('name')->join(', ')}");
 
             // Sequence rows are created here rather than left to the schedule, so the first invoice
-            // on a new box cannot fail in the allocator (§7.2: allocation never creates a row).
+            // on a new box cannot fail in the allocator (allocation never creates a row).
             Artisan::call('numbering:ensure', ['--company' => $companyId]);
             $progressBar?->finish();
             $this->newLine(2);
@@ -93,7 +93,7 @@ final class SetupFleetOwner extends Command
         $this->components->twoColumnDetail('Company', (string) $companyId);
         $this->components->twoColumnDetail('Permissions in the catalogue', (string) count(PermissionCatalogue::names()));
         $this->components->twoColumnDetail(
-            'Roles requiring MFA (§9.1)',
+            'Roles requiring MFA',
             implode(', ', array_map(fn (RoleKey $r): string => $r->label(), $mfa))
         );
 
@@ -101,7 +101,7 @@ final class SetupFleetOwner extends Command
             $this->components->twoColumnDetail('Owner password (shown once)', OutputFormatter::escape($secret));
         }
 
-        $this->components->warn('Next: sign in, enrol TOTP, and invite staff from the Users & roles screen. There is no sign-up form (§9.1).');
+        $this->components->warn('Next: sign in, enrol TOTP, and invite staff from the Users & roles screen. There is no sign-up form.');
     }
 
     private function ownerEmail(): string
@@ -124,7 +124,7 @@ final class SetupFleetOwner extends Command
 
     /**
      * Never echoed and never written to a file. An option is accepted for unattended runs, the
-     * environment second, and a hidden prompt last (§9.1: secrets are not repository content).
+     * environment second, and a hidden prompt last (secrets are not repository content).
      *
      * `getenv()` rather than the `env()` helper Larastan asks for, because `env()` is meant to be
      * read through config — and config is the one place a secret must not be written, since
@@ -144,7 +144,7 @@ final class SetupFleetOwner extends Command
         }
 
         if (! $this->input->isInteractive()) {
-            throw new \RuntimeException('A non-interactive setup needs --password= or FLEET_OWNER_PASSWORD (§9.1).');
+            throw new \RuntimeException('A non-interactive setup needs --password= or FLEET_OWNER_PASSWORD.');
         }
 
         return password('Owner password');

@@ -3,12 +3,21 @@
 declare(strict_types=1);
 
 use App\Domain\Invoicing\Actions\CreateCustomer;
+use App\Domain\Invoicing\Actions\RecordPayment;
 use App\Domain\Invoicing\Actions\UpdateCustomer;
 use App\Domain\Invoicing\Data\CustomerDto;
+use App\Domain\Invoicing\Data\PaymentDto;
 use App\Domain\Invoicing\Models\Customer;
+use App\Domain\Invoicing\Models\Payment;
+use App\Domain\Invoicing\PaymentMethod;
 use App\Domain\Kernel\Commercial\PaymentTerms;
+use App\Domain\Kernel\Identity\ConfirmsRecentPassword;
 use App\Domain\Kernel\Identity\FieldGate;
+use App\Domain\Kernel\Money\Currency;
+use App\Domain\Kernel\Money\FxRateSource;
+use App\Domain\Kernel\Money\Money;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
+use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -19,18 +28,20 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /*
- * The customer register (§3.2, §4.1): the parties an invoice is addressed to.
+ * The customer register: the parties an invoice is addressed to.
  *
- * Two §9.4 fields are gated here and one is not. Payment terms are the customer's *credit* terms,
- * which §9.4 puts behind `seeCustomerTerms` along with agreed rates — a Dispatcher may learn who
+ * Two fields are gated here and one is not. Payment terms are the customer's *credit* terms,
+ * which the design puts behind `seeCustomerTerms` along with agreed rates — a Dispatcher may learn who
  * the customer is without learning whether the company waits 30 days to be paid. The contact block
  * and VAT number are ordinary business facts and stay readable to anyone who may see the register.
  *
- * Writing is `customers.manage` (Owner and Accountant, §9.3). The form preserves a stored term when
+ * Writing is `customers.manage` (Owner and Accountant). The form preserves a stored term when
  * the seat cannot read terms, because a hidden input that saved blank would silently move every
  * customer to "cash".
  */
-new #[Title('Customers')] class extends Component {
+new #[Title('Customers')] class extends Component
+{
+    use ConfirmsRecentPassword;
     use WithPagination;
 
     #[Url]
@@ -57,6 +68,24 @@ new #[Title('Customers')] class extends Component {
 
     public bool $active = true;
 
+    public ?string $depositCustomerId = null;
+
+    public string $depositAmount = '';
+
+    public string $depositCurrency = '';
+
+    public string $depositMethod = 'bank';
+
+    public string $depositOn = '';
+
+    public string $depositRate = '';
+
+    public string $depositBase = '';
+
+    public string $depositReference = '';
+
+    public ?string $depositError = null;
+
     public function updated(string $property): void
     {
         if (in_array($property, ['search', 'statusFilter'], true)) {
@@ -75,6 +104,13 @@ new #[Title('Customers')] class extends Component {
     public function hasFilters(): bool
     {
         return $this->search !== '' || $this->statusFilter !== '';
+    }
+
+    public function openCreate(): void
+    {
+        $this->clearForm();
+
+        $this->dispatch('open-customer-form');
     }
 
     public function edit(int $id): void
@@ -97,6 +133,8 @@ new #[Title('Customers')] class extends Component {
         // Only when the seat may read terms: the property is part of the Livewire snapshot, so
         // holding a term this seat cannot see would be the leak the gate exists to prevent.
         $this->paymentTerms = $this->canSeeTerms() ? $customer->payment_terms : '';
+
+        $this->dispatch('open-customer-form');
     }
 
     public function clearForm(): void
@@ -160,6 +198,7 @@ new #[Title('Customers')] class extends Component {
         }
 
         $this->clearForm();
+        $this->dispatch('close-customer-form');
         unset($this->customers);
 
         $this->dispatch('toast', message: __('Saved.'), kind: 'success');
@@ -212,6 +251,140 @@ new #[Title('Customers')] class extends Component {
         return Gate::allows(FieldGate::SeeCustomerTerms->value);
     }
 
+    /**
+     * Money the customer sent with no invoice named — phase 4's deposit, and the reason `2150
+     * Unapplied customer cash` exists. Recorded here rather than from an invoice screen,
+     * because an overpayment and a prepayment have no document to be born on yet.
+     */
+    public function openDeposit(int $customerId): void
+    {
+        abort_unless(Gate::allows('payments.allocate'), 403);
+
+        $this->clearDeposit();
+
+        $this->depositCustomerId = (string) $customerId;
+        $this->depositOn = Carbon::now()->toDateString();
+
+        $this->dispatch('open-deposit-form');
+    }
+
+    public function clearDeposit(): void
+    {
+        $this->reset(['depositCustomerId', 'depositAmount', 'depositRate', 'depositBase', 'depositReference', 'depositError']);
+
+        $this->depositMethod = 'bank';
+        $this->depositCurrency = CurrentCompany::model()->base_currency_code;
+
+        $this->resetValidation();
+    }
+
+    public function takeDeposit(RecordPayment $record): void
+    {
+        abort_unless(Gate::allows('payments.allocate'), 403);
+
+        // Moving money is a ⑂ re-auth ability, and a deposit is money moving even when no
+        // invoice has claimed it yet — the same door a receipt on an invoice stands behind.
+        if (! $this->confirmRecentPassword()) {
+            return;
+        }
+
+        $this->depositError = null;
+
+        $validated = $this->validate([
+            'depositCustomerId' => ['required', 'integer'],
+            'depositAmount' => ['required', 'string', 'max:24'],
+            'depositCurrency' => ['required', 'string', 'size:3', 'exists:currencies,code'],
+            'depositMethod' => ['required', 'string', 'in:'.implode(',', PaymentMethod::values())],
+            'depositOn' => ['required', 'date'],
+            'depositRate' => ['nullable', 'string', 'max:20'],
+            'depositBase' => ['nullable', 'string', 'max:24'],
+            'depositReference' => ['nullable', 'string', 'max:80'],
+        ], [
+            'depositAmount.required' => __('How much arrived? The bank statement says, and the ledger has to be told.'),
+        ]);
+
+        $baseCurrency = CurrentCompany::model()->base_currency_code;
+        $isForeign = $validated['depositCurrency'] !== $baseCurrency;
+        $minor = Money::ofMajor($validated['depositAmount'], $validated['depositCurrency'])->minorUnits;
+
+        try {
+            $payment = $record(new PaymentDto(
+                customerId: (int) $validated['depositCustomerId'],
+                amountMinor: $minor,
+                method: PaymentMethod::from($validated['depositMethod']),
+                receivedOn: Carbon::parse($validated['depositOn']),
+                reference: $validated['depositReference'] === '' ? null : $validated['depositReference'],
+                // A deposit in a corridor currency needs the same two figures a receipt on an invoice
+                // needs; the pile stays in its own currency until an invoice of that currency spends
+                // it, and only the base figure reaches the ledger.
+                currencyCode: $validated['depositCurrency'],
+                fxRate: $isForeign && $validated['depositRate'] !== '' ? $validated['depositRate'] : null,
+                baseAmountMinor: $isForeign && $validated['depositBase'] !== ''
+                    ? Money::ofMajor($validated['depositBase'], $baseCurrency)->minorUnits
+                    : null,
+                fxRateSource: $validated['depositRate'] !== '' ? FxRateSource::BankStatement->value : FxRateSource::Manual->value,
+            ), auth()->id());
+        } catch (\Throwable $refused) {
+            $this->depositError = $refused->getMessage();
+
+            return;
+        }
+
+        $this->clearDeposit();
+        $this->dispatch('close-deposit-form');
+        unset($this->customers, $this->onAccountByCustomer);
+
+        $this->dispatch('toast', message: __('Receipt :number banked — :unapplied sits on the account until an invoice claims it.', [
+            'number' => $payment->number,
+            'unapplied' => Money::ofMinor((int) $payment->unapplied_base, $baseCurrency)->format($baseCurrency),
+        ]), kind: 'success');
+    }
+
+    /**
+     * What each customer has sitting unapplied on their account, in **base** minor units — the figure
+     * `2150` carries for them. One grouped read for the page, keyed by customer, so a register
+     * of fifty customers is still two queries; a customer absent from the map simply holds nothing.
+     *
+     * @return array<int, int>
+     */
+    #[Computed]
+    public function onAccountByCustomer(): array
+    {
+        $rows = Payment::query()
+            ->where('status', \App\Domain\Invoicing\PaymentStatus::Recorded->value)
+            ->where('unapplied_base', '>', 0)
+            ->groupBy('customer_id')
+            ->selectRaw('customer_id, sum(unapplied_base) as held')
+            ->get();
+
+        $held = [];
+
+        foreach ($rows as $row) {
+            $held[(int) $row->customer_id] = (int) $row->held;
+        }
+
+        return $held;
+    }
+
+    /** @return \Illuminate\Support\Collection<int, Currency> */
+    #[Computed]
+    public function currencies(): \Illuminate\Support\Collection
+    {
+        return Currency::query()->where('is_active', true)->orderBy('code')->get();
+    }
+
+    public function baseMoney(int $minor): string
+    {
+        $currency = CurrentCompany::model()->base_currency_code;
+
+        return Money::ofMinor($minor, $currency)->format($currency);
+    }
+
+    public function isDepositForeign(): bool
+    {
+        return $this->depositCurrency !== CurrentCompany::model()->base_currency_code;
+    }
+
     private function like(): string
     {
         return '%'.str_replace(['%', '_'], ['\%', '\_'], $this->search).'%';
@@ -219,7 +392,7 @@ new #[Title('Customers')] class extends Component {
 }; ?>
 
 <div class="grid gap-6">
-    <header class="grid gap-1">
+    <header class="fg-page-header grid gap-1.5">
         <x-ui.heading size="xl" level="1">{{ __('Customers') }}</x-ui.heading>
         <x-ui.text>
             {{ __('The parties the fleet hauls for. A customer is who a job is quoted for and who an invoice is addressed to; the prices agreed with them live on the route cards.') }}
@@ -227,6 +400,16 @@ new #[Title('Customers')] class extends Component {
     </header>
 
     <x-ui.card :title="__('Customer register')">
+        @can('customers.manage')
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <x-ui.text size="sm" color="muted">
+                    {{ __('Every job and invoice names one of these. The terms are a price question, so only seats that may read them see or set them.') }}
+                </x-ui.text>
+
+                <x-ui.button size="sm" variant="outline" wire:click="openCreate">{{ __('Add a customer') }}</x-ui.button>
+            </div>
+        @endcan
+
         <div class="mb-4 grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]">
             <x-ui.input wire:model.live.debounce.400ms="search" name="search" :label="__('Search')" :hint="__('Name, code, contact or email')" />
 
@@ -252,6 +435,7 @@ new #[Title('Customers')] class extends Component {
                     <x-ui.table.th>{{ __('Contact') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('VAT number') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Payment terms') }}</x-ui.table.th>
+                    <x-ui.table.th numeric hideBelow="md">{{ __('On account') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                 </tr>
@@ -283,9 +467,19 @@ new #[Title('Customers')] class extends Component {
                         </x-ui.table.td>
                         <x-ui.table.td identifier>{{ $customer->vat_number ?: '—' }}</x-ui.table.td>
                         <x-ui.table.td>
-                            <x-ui.gated gate="seeCustomerTerms" :label="__('payment terms')">
+                            <x-ui.gated :can="auth()->user()->can('seeCustomerTerms')" :label="__('payment terms')">
                                 {{ $customer->paymentTermsLabel() }}
                             </x-ui.gated>
+                        </x-ui.table.td>
+                        <x-ui.table.td numeric hideBelow="md">
+                            @php($held = $this->onAccountByCustomer[$customer->id] ?? 0)
+
+                            @if ($held > 0)
+                                <span class="fg-numeric text-fg-ink">{{ $this->baseMoney($held) }}</span>
+                                <div class="text-xs text-fg-ink-muted">{{ __('unapplied') }}</div>
+                            @else
+                                <span class="text-xs text-fg-ink-muted">—</span>
+                            @endif
                         </x-ui.table.td>
                         <x-ui.table.td>
                             @if ($customer->active)
@@ -297,6 +491,12 @@ new #[Title('Customers')] class extends Component {
                         <x-ui.table.td numeric>
                             @can('update', $customer)
                                 <x-ui.button variant="ghost" size="sm" wire:click="edit({{ $customer->id }})">{{ __('Edit') }}</x-ui.button>
+                            @endcan
+
+                            {{-- A deposit is banked money with no invoice yet, so its door is the party's
+                                 own row rather than a document that does not exist. --}}
+                            @can('payments.allocate')
+                                <x-ui.button variant="ghost" size="sm" wire:click="openDeposit({{ $customer->id }})">{{ __('Take a deposit') }}</x-ui.button>
                             @endcan
                         </x-ui.table.td>
                     </tr>
@@ -331,10 +531,12 @@ new #[Title('Customers')] class extends Component {
         @endif
     </x-ui.card>
 
+    {{-- The customer form opens over the register: the page stays the register and the dialog
+         carries the draft, whichever row or button opened it. --}}
     @can('customers.manage')
-        <x-ui.card :title="$editingId === null ? __('Add a customer') : __('Edit customer')">
-            <form class="grid gap-4" wire:submit="save">
-                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <x-ui.dialog name="customer-form" maxWidth="2xl" :title="$editingId === null ? __('Add a customer') : __('Edit customer')" x-on:dialog-closed="$wire.call('clearForm')">
+            <form class="grid gap-4 p-5" wire:submit="save">
+                <div class="grid gap-4 sm:grid-cols-2">
                     <x-ui.input wire:model="name" name="name" :label="__('Name')" required />
                     <x-ui.input wire:model="code" name="code" :label="__('Code (optional)')" :hint="__('A stable reference for statements and imports.')" />
                     <x-ui.input wire:model="vatNumber" name="vatNumber" :label="__('VAT number (optional)')" />
@@ -366,11 +568,80 @@ new #[Title('Customers')] class extends Component {
                 <div class="flex items-center gap-3">
                     <x-ui.button type="submit">{{ $editingId === null ? __('Save') : __('Update') }}</x-ui.button>
 
-                    @if ($editingId !== null)
-                        <x-ui.button variant="ghost" type="button" wire:click="clearForm">{{ __('Cancel') }}</x-ui.button>
-                    @endif
+                    <x-ui.button variant="ghost" type="button" x-on:click="$dispatch('close-customer-form')">{{ __('Cancel') }}</x-ui.button>
                 </div>
             </form>
-        </x-ui.card>
+        </x-ui.dialog>
+    @endcan
+
+    {{-- Phase 4's deposit door: the money is banked on the day it arrives, and which invoice it was
+         for is answered later by AllocatePayment from the invoice's own screen (the two seams). --}}
+    @can('payments.allocate')
+        <x-ui.dialog name="deposit-form" maxWidth="2xl" :title="__('Take a deposit')">
+            <form class="grid gap-4 p-5" wire:submit="takeDeposit">
+                <x-ui.text size="sm" color="muted">
+                    {{ __('Money that arrives with no invoice named sits on the account as unapplied cash — it is real money in the bank, and the ledger says so the same day.') }}
+                </x-ui.text>
+
+                @if ($depositError)
+                    <x-ui.alert tone="danger" :title="__('That receipt was not banked')">{{ $depositError }}</x-ui.alert>
+                @endif
+
+                <x-ui.input name="depositAmount" :label="__('Amount received')" :hint="__('Major units, in the currency that arrived')" wire:model="depositAmount" required numeric />
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div class="grid gap-1.5">
+                        <label for="deposit-currency" class="text-xs font-medium text-fg-ink-secondary">{{ __('Currency') }}</label>
+
+                        <x-ui.select name="depositCurrency" id="deposit-currency" wire:model.live="depositCurrency">
+                            @foreach ($this->currencies as $currency)
+                                <option value="{{ $currency->code }}">{{ $currency->code }}</option>
+                            @endforeach
+                        </x-ui.select>
+                    </div>
+
+                    <div class="grid gap-1.5">
+                        <label for="deposit-method" class="text-xs font-medium text-fg-ink-secondary">{{ __('Method') }}</label>
+
+                        <x-ui.select name="depositMethod" id="deposit-method" wire:model="depositMethod">
+                            @foreach (PaymentMethod::options() as $option)
+                                <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
+                            @endforeach
+                        </x-ui.select>
+                    </div>
+                </div>
+
+                @if ($this->isDepositForeign())
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <x-ui.input
+                            name="depositRate"
+                            :label="__('Rate the bank struck — 1 :code in :base', ['code' => $depositCurrency, 'base' => CurrentCompany::model()->base_currency_code])"
+                            :hint="__('What the conversion actually was.')"
+                            wire:model="depositRate"
+                            numeric
+                        />
+
+                        <x-ui.input
+                            name="depositBase"
+                            :label="__('…or the :base that arrived', ['base' => CurrentCompany::model()->base_currency_code])"
+                            :hint="__('Type this instead when only the base figure is on the statement (ADR-0004 #6).')"
+                            wire:model="depositBase"
+                            numeric
+                        />
+                    </div>
+                @endif
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <x-ui.input type="date" name="depositOn" :label="__('Received on')" wire:model="depositOn" required />
+                    <x-ui.input name="depositReference" :label="__('Reference')" :hint="__('Bank reference or slip number')" wire:model="depositReference" />
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <x-ui.button type="submit">{{ __('Bank the receipt') }}</x-ui.button>
+
+                    <x-ui.button variant="ghost" type="button" x-on:click="$dispatch('close-deposit-form')">{{ __('Cancel') }}</x-ui.button>
+                </div>
+            </form>
+        </x-ui.dialog>
     @endcan
 </div>

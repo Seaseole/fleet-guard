@@ -8,10 +8,10 @@ use App\Domain\Accounting\Models\Supplier;
 use App\Models\User;
 
 /**
- * Who may see and change a supplier (§9.3 "Accounting").
+ * Who may see and change a supplier ("Accounting").
  *
  * `suppliers.view` is held by the Workshop Manager and the Stores Clerk as well as the money seats:
- * both of them raise expenses that name a supplier, and §9.3 gives them "C" on the expense row.
+ * both of them raise expenses that name a supplier, and the design gives them "C" on the expense row.
  * Editing the master record is the Accountant's and the Owner's job (`suppliers.manage`).
  */
 final class SupplierPolicy

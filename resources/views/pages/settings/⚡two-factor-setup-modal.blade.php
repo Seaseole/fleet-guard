@@ -245,7 +245,7 @@ new class extends Component
                             <div class="flex items-center justify-center h-full p-4">
                                 {{-- Dark-mode inversion is a CSS rule (app.css .fg-qr-invert),
                                      not a JS binding on the removed Flux appearance object. --}}
-                                <div class="fg-qr-invert rounded bg-white p-3">
+                                <div class="fg-qr-invert rounded bg-fg-surface p-3">
                                     {!! $qrCodeSvg !!}
                                 </div>
                             </div>

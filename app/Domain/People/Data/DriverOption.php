@@ -10,7 +10,7 @@ use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 
 /**
- * A driver as another module may see one — §13 D5's read model.
+ * A driver as another module may see one — D5's read model.
  *
  * Fleet needs to name a driver on an assignment and to know whether their papers are valid on the
  * trip's start date. It may not import `Driver`, so People answers with ids, words and dates. The

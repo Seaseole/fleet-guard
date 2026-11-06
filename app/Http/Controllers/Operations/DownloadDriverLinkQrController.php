@@ -9,15 +9,15 @@ use App\Domain\Operations\Support\DriverLinkCode;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * §9.6's driver link, drawn as a code the gate or the pump can scan.
+ * The driver link, drawn as a code the gate or the pump can scan.
  *
  * A route rather than a Livewire action because the answer is a file — a printed dispatch sheet needs a URL
  * a browser can name — and because drawing it here keeps the bytes out of the snapshot that travels with
  * every Livewire request.
  *
  * What it draws comes from the session, which is the only place the secret still exists: the row keeps
- * `hash('sha256', …)` (§4.1 TRIP_ACCESS_TOKEN), so a dismissed reveal is a 404 rather than a second door.
- * The code carries the link alone. The PIN stays with the dispatcher, because §9.6 asks for it on every
+ * `hash('sha256', …)` (TRIP_ACCESS_TOKEN), so a dismissed reveal is a 404 rather than a second door.
+ * The code carries the link alone. The PIN stays with the dispatcher, because the design asks for it on every
  * submission — a code that contained it would turn "the phone is in the driver's hand" into "whoever
  * photographed the screen has it".
  */

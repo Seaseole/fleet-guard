@@ -47,23 +47,45 @@
         x-on:keydown.tab.window="trapMobileTab($event)"
     >
 
+@php
+            /* The shell's composition reads (docs/component-ui.md rule 7): the topbar components are presentational, so the Gate matrix, the unread count, the session flashes and the site name are gathered here, not inside a component. */
+            $shellUser = auth()->user();
+            $shellSiteName = \App\Domain\Kernel\Tenancy\SiteName::current();
+            $shellAlertsHref = \Illuminate\Support\Facades\Route::has('alerts.index') ? route('alerts.index') : null;
+            $shellUnread = $shellUser?->unread_alerts_count ?? 0;
+            $shellCreateActions = collect([
+                ['label' => __('Register document'), 'route' => 'documents.register', 'permission' => 'documents.upload', 'icon' => 'folder'],
+                ['label' => __('New journal'), 'route' => 'accounting.journal.create', 'permission' => 'ledger.journal.manual', 'icon' => 'calculator'],
+                ['label' => __('New job'), 'route' => 'jobs.create', 'permission' => 'jobs.create', 'icon' => 'clipboard-document-list'],
+                ['label' => __('Dispatch trip'), 'route' => 'trips.create', 'permission' => 'trips.create', 'icon' => 'map'],
+                ['label' => __('Record fuel'), 'route' => 'fuel.index', 'permission' => 'fuel.record', 'icon' => 'circle-stack'],
+                ['label' => __('New work order'), 'route' => 'maintenance.index', 'permission' => 'work_orders.create', 'icon' => 'wrench'],
+                ['label' => __('New invoice'), 'route' => 'invoices.create', 'permission' => 'invoices.create', 'icon' => 'receipt-percent'],
+            ])->filter(fn (array $a) => \Illuminate\Support\Facades\Route::has($a['route']) && \Illuminate\Support\Facades\Gate::allows($a['permission']))->map(fn (array $a): array => ['label' => $a['label'], 'href' => route($a['route']), 'icon' => $a['icon']])->values()->all();
+            $shellFlashes = collect(session()->get('flash_toasts', []))->concat(session('status') ? [['message' => session('status'), 'kind' => 'success']] : [])->values()->all();
+            session()->forget('flash_toasts');
+        @endphp
+
         <a
             href="#main"
-            class="sr-only focus:not-sr-only focus:absolute focus:start-4 focus:top-4 focus:z-100 focus:rounded-fg-md focus:bg-accent focus:px-3 focus:py-2 focus:text-sm focus:text-on-accent"
+            class="sr-only focus:not-sr-only focus:absolute focus:start-4 focus:top-4 focus:z-(--z-toast) focus:rounded-fg-md focus:bg-accent focus:px-3 focus:py-2 focus:text-sm focus:text-on-accent"
         >{{ __('Skip to content') }}</a>
 
-        {{-- Desktop sidebar: 256px expanded, 72px icon rail collapsed. --}}
+        {{-- Desktop sidebar: 256px expanded, 72px icon rail collapsed.
+             The swap carries no width transition: animating `width` reflows the whole page, and
+             every other collapse in the app (the mobile drawer, the table pins) is a snap too. --}}
         <aside
-            class="fixed inset-y-0 start-0 z-40 hidden w-64 flex-col border-e border-fg-line bg-fg-surface transition-[width] duration-(--t-base) ease-(--ease-standard) lg:flex"
+            class="fixed inset-y-0 start-0 z-(--z-header) hidden w-64 flex-col border-e border-fg-line bg-fg-canvas lg:flex"
             :class="collapsed ? 'w-[72px]' : 'w-64'"
         >
-            <div class="flex h-14 items-center gap-2 border-b border-fg-line px-4">
-                <x-app-logo :href="route('dashboard')" collapsible wire:navigate />
+            <div class="flex h-16 items-center gap-2 border-b border-fg-line px-4" :class="collapsed ? 'justify-center' : ''">
+                <x-app-logo :name="$shellSiteName" :href="route('dashboard')" collapsible wire:navigate />
 
                 <button
                     type="button"
                     x-on:click="toggleCollapsed()"
                     class="ms-auto grid size-8 shrink-0 place-items-center rounded-fg-sm text-fg-ink-muted hover:bg-fg-surface-sunk hover:text-fg-ink"
+                    :class="collapsed ? 'ms-0' : ''"
                     :aria-label="collapsed ? '{{ __('Expand sidebar') }}' : '{{ __('Collapse sidebar') }}'"
                 >
                     <x-ui.icon name="chevron-left" size="4" class="rtl:rotate-180" x-show="! collapsed" x-cloak />
@@ -76,7 +98,7 @@
             </nav>
 
             <div class="border-t border-fg-line p-3">
-                <x-desktop-user-menu collapsible />
+                <x-desktop-user-menu :name="$shellUser?->name" :email="$shellUser?->email" :initials="$shellUser?->initials()" :settings-href="route('profile.edit')" :logout-href="route('logout')" collapsible />
             </div>
         </aside>
 
@@ -84,33 +106,54 @@
         <div
             x-show="mobileOpen"
             x-cloak
-            class="fixed inset-0 z-50 lg:hidden"
+            class="fixed inset-0 z-(--z-menu) lg:hidden"
             role="dialog"
             aria-modal="true"
             aria-label="{{ __('Main navigation') }}"
             x-on:keydown.escape.window="mobileOpen && closeMenu()"
         >
+            {{-- Both halves of the drawer are one gesture, so they are on one clock. `x-transition.opacity`
+                 would have faded the scrim on Alpine's own default duration and easing while the panel ran on
+                 the app's tokens — two timelines for one interaction, which is exactly the seam a seat feels
+                 even when they cannot name it. --}}
             <div
                 class="absolute inset-0 bg-fg-ink/45"
                 x-on:click="closeMenu()"
-                x-transition.opacity
+                x-transition:enter="transition duration-(--t-drawer) ease-(--ease-drawer)"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+                x-transition:leave="transition duration-(--t-base) ease-(--ease-standard)"
+                x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0"
             ></div>
 
+            {{--
+                The one surface allowed past the UI duration ceiling. 180 ms is right for a menu that travels
+                4 px; a panel crossing 85 % of a phone in the same time reads as a teleport with extra steps,
+                because the eye cannot follow it. The curve is `--ease-drawer` rather than `--ease-emphasis`
+                for the same reason: it decelerates hard into the screen edge, so the panel settles against the
+                boundary it belongs to instead of floating to a stop in the middle of the viewport.
+
+                Closing is faster than opening on purpose. Opening is the app showing the seat what it asked
+                for; closing is the app getting out of the way of what they asked next.
+            --}}
             <aside
                 class="absolute inset-y-0 start-0 flex w-72 max-w-[85vw] flex-col border-e border-fg-line bg-fg-surface shadow-fg-3"
                 data-mobile-nav
-                x-transition:enter="transition duration-(--t-base) ease-(--ease-emphasis)"
+                x-transition:enter="transition duration-(--t-drawer) ease-(--ease-drawer)"
                 x-transition:enter-start="-translate-x-full"
-                x-transition:leave="transition duration-(--t-fast)"
+                x-transition:enter-end="translate-x-0"
+                x-transition:leave="transition duration-(--t-base) ease-(--ease-standard)"
+                x-transition:leave-start="translate-x-0"
                 x-transition:leave-end="-translate-x-full"
             >
-                <div class="flex h-14 items-center justify-between border-b border-fg-line px-4">
-                    <x-app-logo :href="route('dashboard')" wire:navigate />
+                <div class="flex h-16 items-center justify-between border-b border-fg-line px-4">
+                    <x-app-logo :name="$shellSiteName" :href="route('dashboard')" wire:navigate />
 
                     <button
                         type="button"
                         x-on:click="closeMenu()"
-                        class="grid size-8 place-items-center rounded-fg-sm text-fg-ink-muted hover:bg-fg-surface-sunk"
+                        class="grid size-8 touch:size-11 place-items-center rounded-fg-sm text-fg-ink-muted hover:bg-fg-surface-sunk"
                         aria-label="{{ __('Close menu') }}"
                     >
                         <x-ui.icon name="x-mark" />
@@ -122,17 +165,23 @@
                 </nav>
 
                 <div class="border-t border-fg-line p-3">
-                    <x-desktop-user-menu :collapsed="false" />
+                    <x-desktop-user-menu :name="$shellUser?->name" :email="$shellUser?->email" :initials="$shellUser?->initials()" :settings-href="route('profile.edit')" :logout-href="route('logout')" :collapsed="false" />
                 </div>
             </aside>
         </div>
 
-        {{-- Top bar: search, notifications, quick actions, theme toggle, user menu. --}}
-        <div class="lg:ps-64" :class="collapsed ? 'lg:ps-[72px]' : 'lg:ps-64'" style="transition: padding-inline-start 180ms cubic-bezier(.2,0,.1,1)">
-            <header class="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-fg-line bg-fg-surface/95 px-4 backdrop-blur">
+        {{-- Top bar: search, notifications, quick actions, theme toggle, user menu.
+             Solid surface rather than a translucent one: a blur over a light page is the single detail that
+             reads as a template, and the seam the bar needs is its hairline. Search sits on the left because
+             it is where you go *to*, and the action group on the right is where you go *from*. --}}
+        {{-- The offset and the rail's width are the same measurement, so they move on the same clock. An
+             inline `style` carried its own literal 180 ms and its own curve, which is how a token change in
+             palette.css silently left this element behind. --}}
+        <div class="lg:ps-64 transition-[padding-inline-start] duration-(--t-base) ease-(--ease-standard)" :class="collapsed ? 'lg:ps-[72px]' : 'lg:ps-64'">
+            <header class="sticky top-0 z-(--z-sticky) flex h-16 items-center gap-2 border-b border-fg-line bg-fg-surface px-4">
                 <button
                     type="button"
-                    class="grid size-9 place-items-center rounded-fg-sm text-fg-ink-secondary hover:bg-fg-surface-sunk lg:hidden"
+                    class="grid size-9 touch:size-11 shrink-0 place-items-center rounded-fg-sm text-fg-ink-secondary hover:bg-fg-surface-sunk lg:hidden"
                     x-on:click="openMenu($el)"
                     data-test="mobile-menu-button"
                     aria-label="{{ __('Open menu') }}"
@@ -140,11 +189,16 @@
                     <x-ui.icon name="bars-2" size="5" />
                 </button>
 
+                <x-search-button class="max-sm:hidden" />
+
                 <div class="ms-auto flex items-center gap-1">
-                    <x-quick-actions />
-                    <x-notifications-button />
+                    <x-quick-actions :actions="$shellCreateActions" />
+                    <x-notifications-button :href="$shellAlertsHref" :count="$shellUnread" />
                     <x-theme-toggle />
-                    <x-desktop-user-menu :collapsed="false" position="bottom" class="lg:hidden" />
+                    {{-- Avatar only: the name and email are already in the drawer's footer, and the full
+                         trigger measured 224 px in a 390 px top bar, which pushed the row 2 px past the
+                         viewport and squeezed the menu button down to a 20 px square. --}}
+                    <x-desktop-user-menu :name="$shellUser?->name" :email="$shellUser?->email" :initials="$shellUser?->initials()" :settings-href="route('profile.edit')" :logout-href="route('logout')" :collapsed="true" position="bottom" class="lg:hidden" />
                 </div>
             </header>
 
@@ -154,6 +208,6 @@
         </div>
 
         <x-ui.toast.group />
-        <x-flash-toasts />
+        <x-flash-toasts :flashes="$shellFlashes" />
     </body>
 </html>

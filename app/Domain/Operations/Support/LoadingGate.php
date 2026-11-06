@@ -13,20 +13,20 @@ use App\Domain\Operations\Models\Trip;
 use Illuminate\Support\Collection;
 
 /**
- * §10.2's `assigned → loaded` gate: the tonnage a truck can lawfully carry, and the paper that says
+ * The `assigned → loaded` gate: the tonnage a truck can lawfully carry, and the paper that says
  * what it is carrying.
  *
- * Two limits are checked, not one. §10.2 words it as "truck **and** trailer capacity" because the
+ * Two limits are checked, not one. Words it as "truck **and** trailer capacity" because the
  * weaker of the pair is the law: a 34 t tractor behind a 28 t flatbed crosses a weighbridge at 28 t,
  * and a board that measured only the truck would dispatch an overload every time the trailer was the
  * limiting item.
  *
- * An unrecorded capacity **refuses** rather than passing. It is the same call §4.3 makes about a null
+ * An unrecorded capacity **refuses** rather than passing. It is the same call the design makes about a null
  * licence date — a missing fact is not a permission — and the message names the register to fix. The
  * alternative is a fleet of trucks whose capacity was never typed in silently carrying anything.
  *
  * The waybill is asked per load. A trip with six loads and paper for five has five verified tonnes and
- * one that will be argued about at the far end, which is exactly the state §10.2 refuses to let a
+ * one that will be argued about at the far end, which is exactly the state the design refuses to let a
  * truck depart into.
  *
  * @see LoadingRefused for the words a dispatcher reads

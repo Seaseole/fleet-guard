@@ -19,12 +19,12 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.3 SERVICE_SCHEDULE — the rule that says when a truck is due, and when it was last seen.
+ * SERVICE_SCHEDULE — the rule that says when a truck is due, and when it was last seen.
  *
- * The due state is **derived here and stored nowhere** (§10.8's rule for a derived fact): the answer
+ * The due state is **derived here and stored nowhere** (the rule for a derived fact): the answer
  * is a function of this row, the truck's odometer/hours and today's date, and three of those four
  * change without this row being touched. A stored `state` would be a snapshot of the last time a job
- * ran, printed as though it were the present — the exact defect §10.8's "`expired` is not a
+ * ran, printed as though it were the present — the exact defect the "`expired` is not a
  * transition" sentence exists to prevent.
  *
  * The "last done" figures are written by the work order that does the service (a `km` schedule takes

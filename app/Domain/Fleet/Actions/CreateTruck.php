@@ -9,10 +9,10 @@ use App\Domain\Fleet\Models\Truck;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Adds a truck to the fleet (§4.3, D1).
+ * Adds a truck to the fleet (D1).
  *
  * The initial state is assigned, not filled: `status` is not fillable, so a form cannot post its way
- * into a state the §10.1 table would have refused.
+ * into a state the table would have refused.
  */
 final class CreateTruck
 {

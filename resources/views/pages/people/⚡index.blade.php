@@ -1,7 +1,9 @@
 <?php
 
+use App\Domain\Kernel\Documents\Validity;
 use App\Domain\Kernel\Identity\FieldGate;
 use App\Domain\Kernel\Money\Money;
+use App\Domain\Kernel\Settings\CompanySettings;
 use App\Domain\Kernel\State\IllegalTransition;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\People\Actions\ChangeDriverStatus;
@@ -15,6 +17,7 @@ use App\Domain\People\DriverStatus;
 use App\Domain\People\Models\Driver;
 use App\Domain\People\Models\Employee;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -25,21 +28,32 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /*
- * The staff register (§3.2, §4.3): everyone on the books, and the subset who drive.
+ * The staff register: everyone on the books, and the subset who drive.
  *
  * Two rows about one person, on one screen, because the questions arrive together: "who is on the
  * books" and "who can take a truck tomorrow". The second answer is not a column — it is the driver's
  * status plus two dates, and this screen evaluates it the same way dispatch will.
  *
- * Three fields are gated rather than permission-filtered (§9.4): salary and the default allowance
- * behind `seePayroll`, and the national ID and licence number are §9.5 masked columns with no
+ * Three fields are gated rather than permission-filtered: salary and the default allowance
+ * behind `seePayroll`, and the national ID and licence number are masked columns with no
  * decrypt path in this phase. A seat without the payroll gate sees the person and not the pay, and an
  * ordinary edit by that seat preserves the stored figure it never saw.
  *
  * Driver status moves only through `ChangeDriverStatus`; suspension and leaving require a reason, and
- * the form cannot post its way around that because the Action asks the §10.1 guard.
+ * the form cannot post its way around that because the Action asks the guard.
+ *
+ * The two paper columns are read through {@see Validity::derive()} against the company's own
+ * `documents.expiry_warning_days` — the same derivation, the same window and the same three bands
+ * the alert ladder uses, which is what makes "Expiring soon" here mean what it means in the reminder mail.
+ * The ladder's rows are filed documents, though, not these two columns: a licence date that lives only on
+ * the driver record is planned from this screen and not emailed from anywhere.
+ * `licenceValidOn()` alone could only ever say *already expired*; the window is what turns the register
+ * into a planning screen rather than an obituary. A row's left edge takes the worse of its two papers,
+ * which is how a page of twenty is actually scanned, and the Papers filter is the same question asked the
+ * other way round: "who is going to be stood down this month".
  */
-new #[Title('People')] class extends Component {
+new #[Title('People')] class extends Component
+{
     use WithPagination;
 
     #[Url]
@@ -50,6 +64,10 @@ new #[Title('People')] class extends Component {
 
     #[Url('status')]
     public string $statusFilter = '';
+
+    /** '' | soon | expired | missing — the drivers tab's paper question. */
+    #[Url('papers')]
+    public string $papersFilter = '';
 
     public ?int $editingEmployeeId = null;
 
@@ -102,7 +120,7 @@ new #[Title('People')] class extends Component {
             $this->closeStatus();
         }
 
-        if (in_array($property, ['tab', 'search', 'statusFilter'], true)) {
+        if (in_array($property, ['tab', 'search', 'statusFilter', 'papersFilter'], true)) {
             $this->resetPage();
             unset($this->employees, $this->drivers);
         }
@@ -114,18 +132,42 @@ new #[Title('People')] class extends Component {
         if (! in_array($this->tab, ['employees', 'drivers'], true)) {
             $this->tab = 'employees';
         }
+
+        if (! in_array($this->papersFilter, self::PAPER_FILTERS, true)) {
+            $this->papersFilter = '';
+        }
+    }
+
+    /** The three answers the Papers filter offers, in the order a foreman asks them. */
+    public const PAPER_FILTERS = ['soon', 'expired', 'missing'];
+
+    /** The same three bands in words, so the select, its counts and the empty state say one thing. */
+    public function paperFilterLabels(): array
+    {
+        return [
+            'soon' => __('Expiring soon'),
+            'expired' => __('Already lapsed'),
+            'missing' => __('No date on file'),
+        ];
     }
 
     public function clearFilters(): void
     {
-        $this->reset(['search', 'statusFilter']);
+        $this->reset(['search', 'statusFilter', 'papersFilter']);
         $this->resetPage();
         unset($this->employees, $this->drivers);
     }
 
     public function hasFilters(): bool
     {
-        return $this->search !== '' || $this->statusFilter !== '';
+        return $this->search !== '' || $this->statusFilter !== '' || $this->papersFilter !== '';
+    }
+
+    public function openCreate(): void
+    {
+        $this->clearForm();
+
+        $this->dispatch('open-person-form');
     }
 
     public function editEmployee(int $id): void
@@ -148,6 +190,8 @@ new #[Title('People')] class extends Component {
 
         // Never the mask: a form field that round-trips `••••0123` would store the mask as the ID.
         $this->nationalId = '';
+
+        $this->dispatch('open-person-form');
     }
 
     public function editDriver(int $id): void
@@ -167,6 +211,8 @@ new #[Title('People')] class extends Component {
         $this->fuelEfficiency = $driver->fuel_efficiency_baseline_10_2 === null ? '' : (string) $driver->fuel_efficiency_baseline_10_2;
         $this->kioskEnabled = $driver->kiosk_enabled;
         $this->licenceNo = '';
+
+        $this->dispatch('open-person-form');
     }
 
     public function clearForm(): void
@@ -193,6 +239,7 @@ new #[Title('People')] class extends Component {
         }
 
         $this->clearForm();
+        $this->dispatch('close-person-form');
         unset($this->employees, $this->drivers, $this->driverCandidates);
 
         $this->dispatch('toast', message: __('Saved.'), kind: 'success');
@@ -272,19 +319,115 @@ new #[Title('People')] class extends Component {
     #[Computed]
     public function drivers(): LengthAwarePaginator
     {
+        return $this->driversQuery()
+            ->when($this->papersFilter !== '', fn (Builder $query): Builder => $this->papersBand($query, $this->papersFilter))
+            ->orderByRaw("case status when 'active' then 0 when 'standby' then 1 when 'suspended' then 2 else 3 end")
+            ->orderBy(Employee::select('name')->whereColumn('employees.id', 'drivers.employee_id'))
+            ->paginate(25);
+    }
+
+    /**
+     * The register's drivers before the paper question — search and status only.
+     *
+     * Shared with {@see paperCounts()} so the number beside a filter option counts exactly the rows
+     * that option would leave on the page; two builders written separately drift, and a count that
+     * disagrees with its own filter is worse than no count.
+     */
+    private function driversQuery(): Builder
+    {
         return Driver::query()
             ->with('employee')
-            ->when($this->search !== '', function ($query): void {
+            ->when($this->search !== '', function (Builder $query): void {
                 $like = $this->like();
 
                 $query->whereHas('employee', fn ($employee) => $employee
                     ->where('name', 'like', $like)
                     ->orWhere('employee_no', 'like', $like));
             })
-            ->when($this->statusFilter !== '', fn ($query) => $query->where('status', $this->statusFilter))
-            ->orderByRaw("case status when 'active' then 0 when 'standby' then 1 when 'suspended' then 2 else 3 end")
-            ->orderBy(Employee::select('name')->whereColumn('employees.id', 'drivers.employee_id'))
-            ->paginate(25);
+            ->when($this->statusFilter !== '', fn (Builder $query) => $query->where('status', $this->statusFilter));
+    }
+
+    /**
+     * One paper band, asked of the SQL instead of the row.
+     *
+     * Compared as calendar dates against the company's own today, which is the same pair of strings
+     * {@see Validity::derive()} gets and the same inclusive boundaries it uses — a filter that
+     * disagreed with the badge printed beside it would be a filter nobody uses twice.
+     */
+    private function papersBand(Builder $query, string $band): Builder
+    {
+        $today = $this->today()->toDateString();
+        $horizon = $this->today()->addDays($this->warningDays)->toDateString();
+
+        return match ($band) {
+            'soon' => $query->where(fn (Builder $inner) => $inner
+                ->whereBetween('licence_expires_on', [$today, $horizon])
+                ->orWhereBetween('permit_expires_on', [$today, $horizon])),
+            'expired' => $query->where(fn (Builder $inner) => $inner
+                ->where(fn (Builder $lapsed) => $lapsed->whereNotNull('licence_expires_on')->where('licence_expires_on', '<', $today))
+                ->orWhere(fn (Builder $lapsed) => $lapsed->whereNotNull('permit_expires_on')->where('permit_expires_on', '<', $today))),
+            default => $query->where(fn (Builder $inner) => $inner
+                ->whereNull('licence_expires_on')
+                ->orWhereNull('permit_expires_on')),
+        };
+    }
+
+    /**
+     * The company's own warning window (the knob), so "expiring soon" means one thing in the
+     * register, the alert ladder and the filter.
+     */
+    #[Computed]
+    public function warningDays(): int
+    {
+        return (int) app(CompanySettings::class)->get('documents.expiry_warning_days');
+    }
+
+    /** One paper's derived state — the same call the reminder engine makes, not a second definition. */
+    public function validity(?Carbon\CarbonInterface $expiresOn): Validity
+    {
+        return Validity::on($expiresOn, $this->today());
+    }
+
+    /**
+     * The row's own highlight: the worse of its two papers. A driver whose licence lapsed and whose
+     * permit has forty days left is a danger row, not a half-green one — the question the screen is
+     * answering is "can this person be sent", and one lapsed paper answers it.
+     */
+    public function rowEdge(Driver $driver): string
+    {
+        return match (Validity::worstOf([
+            $this->validity($driver->licence_expires_on),
+            $this->validity($driver->permit_expires_on),
+        ])->tone()) {
+            'danger' => 'border-danger',
+            'warning' => 'border-warning',
+            default => 'border-transparent',
+        };
+    }
+
+    /** "in 12 days" / "14 days ago" — the figure shows what the badge's word alone cannot. */
+    public function daysText(?\Carbon\CarbonInterface $expiresOn): string
+    {
+        return Validity::distance($expiresOn, $this->today());
+    }
+
+    /**
+     * The counts the register owes an Owner before anyone filters: how many drivers are inside the
+     * window, how many have already lapsed, and how many have no date on file at all.
+     * These counts are used to show the filter badges with the actual numbers.
+     *
+     * @return array<string, int> keyed by {@see self::PAPER_FILTERS}
+     */
+    #[Computed]
+    public function paperCounts(): array
+    {
+        $counts = [];
+
+        foreach (self::PAPER_FILTERS as $band) {
+            $counts[$band] = (int) $this->papersBand($this->driversQuery(), $band)->count();
+        }
+
+        return $counts;
     }
 
     /** @return Collection<int, Employee> */
@@ -440,7 +583,7 @@ new #[Title('People')] class extends Component {
     }
 
     /**
-     * Pay figures are a field gate (§9.4). A form that hid the input but wrote `0` on save would
+     * Pay figures are a field gate. A form that hid the input but wrote `0` on save would
      * quietly erase the salary of everyone it was hidden from, so the stored figure is carried
      * forward when the seat cannot read the field.
      */
@@ -483,19 +626,18 @@ new #[Title('People')] class extends Component {
 }; ?>
 
 <div class="grid gap-6">
-    <header class="grid gap-1">
-        <x-ui.heading size="xl" level="1">{{ __('People') }}</x-ui.heading>
-        <x-ui.text>
-            {{ __('The staff register and the drivers on it. A driver’s licence and permit dates are what dispatch reads before it names one.') }}
-        </x-ui.text>
-    </header>
+    <x-shell.nameplate
+        :title="__('People')"
+        :stamped="true"
+        :description="__('The staff register and the drivers on it. A driver’s licence and permit dates are what dispatch reads before it names one.')"
+    />
 
     {{-- Links, not a `role="tablist"` that promised a tab pattern it did not implement (no tabpanel, no
          aria-controls, no arrow keys) — the same demotion the fleet register got. --}}
     <nav class="flex flex-wrap items-center gap-2" aria-label="{{ __('People registers') }}">
         @foreach (['employees' => __('Employees'), 'drivers' => __('Drivers')] as $key => $label)
             <a
-                href="{{ route('people.index', array_filter(['tab' => $key, 'search' => $search, 'status' => $statusFilter])) }}"
+                href="{{ route('people.index', array_filter(['tab' => $key, 'search' => $search, 'status' => $statusFilter, 'papers' => $key === 'drivers' ? $papersFilter : ''])) }}"
                 @if ($tab === $key) aria-current="true" @endif
                 wire:navigate
                 class="rounded-fg-md border px-3 py-1.5 text-sm font-medium transition duration-(--t-fast) ease-(--ease-standard) {{ $tab === $key ? 'border-fg-line-strong bg-fg-surface text-fg-ink shadow-fg-1' : 'border-transparent text-fg-ink-secondary hover:bg-fg-surface-sunk hover:text-fg-ink' }}"
@@ -536,7 +678,7 @@ new #[Title('People')] class extends Component {
                 <div class="flex items-center gap-3">
                     @if ($this->statusTarget['allowed'] !== [])
                         {{-- Outline, matching the fleet register: a status move explains itself, the employee
-                             editor below is the filled action of this page (§5). --}}
+                             editor below is the filled action of this page. --}}
                         <x-ui.button variant="outline" type="submit">{{ __('Move status') }}</x-ui.button>
                     @endif
 
@@ -547,7 +689,21 @@ new #[Title('People')] class extends Component {
     @endif
 
     <x-ui.card :title="$tab === 'employees' ? __('Employees') : __('Drivers')">
-        <div class="mb-4 grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]">
+        @can('people.manage')
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <x-ui.text size="sm" color="muted">
+                    @if ($tab === 'drivers')
+                        {{ __('A driver is an employee dispatch can name on a trip, with the licence and permit dates that decision reads.') }}
+                    @else
+                        {{ __('The staff the fleet pays. A driver is one of these, so the two registers share a person, not a row.') }}
+                    @endif
+                </x-ui.text>
+
+                <x-ui.button size="sm" variant="outline" wire:click="openCreate">{{ $this->formTitle() }}</x-ui.button>
+            </div>
+        @endcan
+
+        <div class="mb-4 grid gap-3 {{ $tab === 'drivers' ? 'sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]' : 'sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]' }}">
             <x-ui.input wire:model.live.debounce.400ms="search" name="search" :label="__('Search')" :hint="$tab === 'employees' ? __('Name, employee number or role') : __('Driver name or employee number')" />
 
             <div class="grid gap-1.5">
@@ -567,6 +723,24 @@ new #[Title('People')] class extends Component {
                 </x-ui.select>
             </div>
 
+            @if ($tab === 'drivers')
+                {{-- The paper question, beside the employment one, because the two together are what
+                     dispatch acts on. Each option carries the number of drivers behind it, counted on the
+                     rows this screen is already showing — a filter whose count disagreed with its own
+                     result would be a filter nobody trusts. --}}
+                <div class="grid gap-1.5">
+                    <label for="people-papers-filter" class="text-xs font-medium text-fg-ink-secondary">{{ __('Papers') }}</label>
+
+                    <x-ui.select name="papersFilter" id="people-papers-filter" wire:model.live="papersFilter">
+                        <option value="">{{ __('Every paper') }}</option>
+
+                        @foreach ($this->paperFilterLabels() as $band => $label)
+                            <option value="{{ $band }}">{{ $label }} ({{ $this->paperCounts[$band] }})</option>
+                        @endforeach
+                    </x-ui.select>
+                </div>
+            @endif
+
             <x-ui.button variant="ghost" size="sm" wire:click="clearFilters" class="self-end" :disabled="! $this->hasFilters()">
                 {{ __('Clear') }}
             </x-ui.button>
@@ -578,9 +752,9 @@ new #[Title('People')] class extends Component {
                     <tr>
                         <x-ui.table.th>{{ __('Employee') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Role or grade') }}</x-ui.table.th>
-                        <x-ui.table.th>{{ __('Hired') }}</x-ui.table.th>
+                        <x-ui.table.th hideBelow="lg">{{ __('Hired') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
-                        <x-ui.table.th>{{ __('National ID') }}</x-ui.table.th>
+                        <x-ui.table.th hideBelow="lg">{{ __('National ID') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Gross salary') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                     </tr>
@@ -593,7 +767,7 @@ new #[Title('People')] class extends Component {
                                 <div class="fg-identifier text-xs text-fg-ink-muted">{{ $employee->employee_no }}</div>
                             </x-ui.table.td>
                             <x-ui.table.td class="text-fg-ink-secondary">{{ $employee->role_or_grade ?: '—' }}</x-ui.table.td>
-                            <x-ui.table.td nowrap>{{ $employee->hired_on?->format('d M Y') ?? '—' }}</x-ui.table.td>
+                            <x-ui.table.td nowrap hideBelow="lg">{{ $employee->hired_on?->format('d M Y') ?? '—' }}</x-ui.table.td>
                             <x-ui.table.td>
                                 @if ($employee->active)
                                     <x-ui.badge tone="success" icon="check">{{ __('on the books') }}</x-ui.badge>
@@ -601,9 +775,9 @@ new #[Title('People')] class extends Component {
                                     <x-ui.badge tone="neutral">{{ __('left') }}</x-ui.badge>
                                 @endif
                             </x-ui.table.td>
-                            <x-ui.table.td identifier>{{ $employee->maskedNationalId() }}</x-ui.table.td>
+                            <x-ui.table.td identifier hideBelow="lg">{{ $employee->maskedNationalId() }}</x-ui.table.td>
                             <x-ui.table.td numeric>
-                                <x-ui.gated gate="seePayroll" :label="__('salary')">
+                                <x-ui.gated :can="auth()->user()->can('seePayroll')" :label="__('salary')">
                                     {{ $employee->gross_salary_base === 0
                                         ? '—'
                                         : \App\Domain\Kernel\Money\Money::ofMinor($employee->gross_salary_base, $this->currencyCode)->format($this->currencyCode) }}
@@ -649,7 +823,7 @@ new #[Title('People')] class extends Component {
                 <thead>
                     <tr>
                         <x-ui.table.th>{{ __('Driver') }}</x-ui.table.th>
-                        <x-ui.table.th>{{ __('Licence') }}</x-ui.table.th>
+                        <x-ui.table.th hideBelow="lg">{{ __('Licence') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Licence expires') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Permit expires') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
@@ -659,13 +833,22 @@ new #[Title('People')] class extends Component {
                 </thead>
                 <tbody>
                     @forelse ($this->drivers as $driver)
-                        @php($today = $this->today())
-                        <tr wire:key="driver-{{ $driver->id }}">
+                        @php
+                            $today = $this->today();
+                            $licence = $this->validity($driver->licence_expires_on);
+                            $permit = $this->validity($driver->permit_expires_on);
+                        @endphp
+
+                        {{-- The row's own left edge takes the worse of its two papers, so a page of twenty
+                             is scanned in one pass: danger for a lapsed paper, warning for one inside the
+                             company's window. Every row carries the border, transparent when both papers
+                             are current, so the columns do not shift as the filter changes. --}}
+                        <tr wire:key="driver-{{ $driver->id }}" class="border-l-2 {{ $this->rowEdge($driver) }}">
                             <x-ui.table.td>
                                 <span class="font-medium text-fg-ink">{{ $driver->employee?->name ?? __('Driver #:id', ['id' => $driver->id]) }}</span>
                                 <div class="fg-identifier text-xs text-fg-ink-muted">{{ $driver->employee?->employee_no }}</div>
                             </x-ui.table.td>
-                            <x-ui.table.td identifier>
+                            <x-ui.table.td identifier hideBelow="lg">
                                 {{ $driver->maskedLicenceNo() }}
                                 @if ($driver->licence_code)
                                     <div class="text-fg-ink-muted">{{ $driver->licence_code }}</div>
@@ -675,14 +858,28 @@ new #[Title('People')] class extends Component {
                                 @if ($driver->licence_expires_on === null)
                                     <span class="text-xs text-fg-ink-muted">{{ __('none on file') }}</span>
                                 @else
-                                    <span class="{{ $driver->licenceValidOn($today) ? 'text-fg-ink' : 'text-danger' }}">{{ $driver->licence_expires_on->format('d M Y') }}</span>
+                                    <span class="{{ $licence === Validity::Expired ? 'text-danger' : ($licence === Validity::ExpiringSoon ? 'text-warning' : 'text-fg-ink') }}">{{ $driver->licence_expires_on->format('d M Y') }}</span>
+
+                                    @if ($licence !== Validity::Valid)
+                                        <div class="mt-1 flex items-center gap-1.5">
+                                            <x-ui.badge size="xs" :tone="$licence->tone()">{{ $licence->label() }}</x-ui.badge>
+                                            <span class="text-xs text-fg-ink-muted">{{ $this->daysText($driver->licence_expires_on) }}</span>
+                                        </div>
+                                    @endif
                                 @endif
                             </x-ui.table.td>
                             <x-ui.table.td nowrap>
                                 @if ($driver->permit_expires_on === null)
                                     <span class="text-xs text-fg-ink-muted">{{ __('none on file') }}</span>
                                 @else
-                                    <span class="{{ $driver->permitValidOn($today) ? 'text-fg-ink' : 'text-danger' }}">{{ $driver->permit_expires_on->format('d M Y') }}</span>
+                                    <span class="{{ $permit === Validity::Expired ? 'text-danger' : ($permit === Validity::ExpiringSoon ? 'text-warning' : 'text-fg-ink') }}">{{ $driver->permit_expires_on->format('d M Y') }}</span>
+
+                                    @if ($permit !== Validity::Valid)
+                                        <div class="mt-1 flex items-center gap-1.5">
+                                            <x-ui.badge size="xs" :tone="$permit->tone()">{{ $permit->label() }}</x-ui.badge>
+                                            <span class="text-xs text-fg-ink-muted">{{ $this->daysText($driver->permit_expires_on) }}</span>
+                                        </div>
+                                    @endif
                                 @endif
                             </x-ui.table.td>
                             <x-ui.table.td>
@@ -714,7 +911,7 @@ new #[Title('People')] class extends Component {
                                     icon="identification"
                                     :title="$this->hasFilters() ? __('No drivers match these filters') : __('No drivers yet')"
                                     :description="$this->hasFilters()
-                                        ? __('Clear the search or status filter to see the rest of the register.')
+                                        ? __('Clear the search, status or papers filter to see the rest of the register.')
                                         : __('Make an employee a driver to record their licence and permit dates.')"
                                 />
                             </td>
@@ -739,11 +936,13 @@ new #[Title('People')] class extends Component {
         @endif
     </x-ui.card>
 
+    {{-- The employee/driver editor opens over the register it belongs to. Closing without saving
+         discards the draft, so the next Add starts empty rather than holding the last person. --}}
     @can('people.manage')
-        <x-ui.card :title="$this->formTitle()">
-            <form class="grid gap-4" wire:submit="save">
+        <x-ui.dialog name="person-form" maxWidth="2xl" :title="$this->formTitle()" x-on:dialog-closed="$wire.call('clearForm')">
+            <form class="grid gap-4 p-5" wire:submit="save">
                 @if ($tab === 'employees')
-                    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="grid gap-4 sm:grid-cols-2">
                         <x-ui.input wire:model="employeeNo" name="employeeNo" :label="__('Employee number')" required />
                         <x-ui.input wire:model="name" name="name" :label="__('Full name')" required />
                         <x-ui.input wire:model="roleOrGrade" name="roleOrGrade" :label="__('Role or grade (optional)')" />
@@ -776,7 +975,7 @@ new #[Title('People')] class extends Component {
 
                     <x-ui.checkbox name="active" wire:model="active" :label="__('On the books')" />
                 @else
-                    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="grid gap-4 sm:grid-cols-2">
                         @if ($editingDriverId === null)
                             <div class="grid gap-1.5">
                                 <label for="driver-employee" class="text-xs font-medium text-fg-ink-secondary">{{ __('Employee') }}</label>
@@ -811,7 +1010,7 @@ new #[Title('People')] class extends Component {
                             autocomplete="off"
                         />
                         <x-ui.input wire:model="licenceExpiresOn" name="licenceExpiresOn" type="date" :label="__('Licence expires on (optional)')" />
-                        <x-ui.input wire:model="permitExpiresOn" name="permitExpiresOn" type="date" :label="__('PDP permit expires on (optional)')" :hint="__('Both dates drive the expiry reminders and the dispatch check.')" />
+                        <x-ui.input wire:model="permitExpiresOn" name="permitExpiresOn" type="date" :label="__('PRDP permit expires on (optional)')" :hint="__('Both dates drive the expiry reminders and the dispatch check.')" />
                         <x-ui.input wire:model="fuelEfficiency" name="fuelEfficiency" type="number" step="0.01" numeric :label="__('Fuel baseline, l/100 km (optional)')" />
 
                         @if ($this->canSeePay())
@@ -838,11 +1037,9 @@ new #[Title('People')] class extends Component {
                 <div class="flex items-center gap-3">
                     <x-ui.button type="submit">{{ ($editingEmployeeId ?? $editingDriverId) === null ? __('Save') : __('Update') }}</x-ui.button>
 
-                    @if (($editingEmployeeId ?? $editingDriverId) !== null)
-                        <x-ui.button variant="ghost" type="button" wire:click="clearForm">{{ __('Cancel') }}</x-ui.button>
-                    @endif
+                    <x-ui.button variant="ghost" type="button" x-on:click="$dispatch('close-person-form')">{{ __('Cancel') }}</x-ui.button>
                 </div>
             </form>
-        </x-ui.card>
+        </x-ui.dialog>
     @endcan
 </div>

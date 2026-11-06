@@ -15,7 +15,7 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.4 BORDER_COST — one charge paid at one gate (duty, agent, road-user fee, scanning).
+ * BORDER_COST — one charge paid at one gate (duty, agent, road-user fee, scanning).
  *
  * The FX block is a copy of the trip cost this row posted. Storing it twice is deliberate: the
  * crossing screen must show what the gate charged without joining through the ledger, and copying
@@ -45,7 +45,7 @@ final class BorderCost extends Model implements AuditableContract
 {
     use Auditable, BelongsToCompany;
 
-    /** ULID key (§2): the row names itself as the `source_id` of the trip cost it posts. */
+    /** ULID key: the row names itself as the `source_id` of the trip cost it posts. */
     protected $keyType = 'string';
 
     public $incrementing = false;

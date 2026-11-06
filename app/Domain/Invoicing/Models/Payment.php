@@ -15,15 +15,15 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.2 PAYMENT — money the customer sent, before anyone decided which invoice it was for.
+ * PAYMENT — money the customer sent, before anyone decided which invoice it was for.
  *
  * `unapplied_amount` is the column that makes the receipt bankable on its own day: a payment that no
  * invoice has claimed is still real money, and the ledger's credit to `2150 Unapplied customer cash` has to
- * balance against something on this row (§6.8). Allocating it moves that money from `2150` to `1150`
+ * balance against something on this row. Allocating it moves that money from `2150` to `1150`
  * without touching the receipt.
  *
  * The receipt number is allocated **at creation**, not at issue — there is no draft for money that has
- * already arrived, and §7.4's rule exists to stop drafts spending fiscal numbers. A void keeps the number,
+ * already arrived, and the rule exists to stop drafts spending fiscal numbers. A void keeps the number,
  * because a bank fact that was recorded is not un-recorded by changing a status.
  *
  * @property string $id

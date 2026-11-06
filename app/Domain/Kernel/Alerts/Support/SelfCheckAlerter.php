@@ -20,7 +20,7 @@ use Illuminate\Support\Collection;
 use InvalidArgumentException;
 
 /**
- * §14.6's last line: "Every one is scheduled; every failure raises an alert."
+ * The last line: "Every one is scheduled; every failure raises an alert."
  *
  * Before this class, `ledger:verify` and the two document sweeps answered drift by exiting 1 — which is
  * correct for a scheduler that alarms and wrong for a human, because nobody watches `schedule:run`'s
@@ -40,7 +40,7 @@ use InvalidArgumentException;
  * Findings arrive keyed by company because `alerts.company_id` is NOT NULL and a row that cannot name
  * its tenant is a row that will be read by the wrong person. Every finding in the two verifiers *is*
  * attributable: a drift names an entry, and an orphan byte names its company in the storage path
- * `company/{id}/…` (§14.4). A finding that cannot be attributed is a bug in the caller, and it throws
+ * `company/{id}/…`. A finding that cannot be attributed is a bug in the caller, and it throws
  * here rather than being filed under whichever company happened to be pinned last.
  */
 final class SelfCheckAlerter
@@ -222,7 +222,7 @@ final class SelfCheckAlerter
             subjectId: null,
             occurredOn: $today,
             // The check's own name, not a date: a digest mismatch that is still there tomorrow is the
-            // same finding, and §14.1's cooldown is about not saying it twice.
+            // same finding, and the cooldown is about not saying it twice.
             bucket: $check,
             title: $title,
             payload: [
@@ -244,7 +244,7 @@ final class SelfCheckAlerter
      *
      * Config rather than a `reminder_thresholds` row, because the row's shape is "N days before a date"
      * and an integrity drift has no such date. A default of `['owner']` is the honest one: these are the
-     * findings that mean a number or a file cannot be trusted, and §9.1 makes the Owner the person who
+     * findings that mean a number or a file cannot be trusted, and the design makes the Owner the person who
      * cannot delegate that.
      *
      * @return list<string>

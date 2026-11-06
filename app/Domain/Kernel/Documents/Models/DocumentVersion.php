@@ -14,13 +14,13 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
- * §4.4 DOCUMENT_VERSION — immutable bytes with exactly one mutable fact about them: whether they
- * are the current copy (§10.8).
+ * DOCUMENT_VERSION — immutable bytes with exactly one mutable fact about them: whether they
+ * are the current copy.
  *
  * The split is the design. Uploading a new scan creates another row instead of overwriting the old
  * one, which is what lets anyone later ask "what did we hold on 14 March" — a question an overwrite
  * makes unanswerable. So the columns that describe the bytes are refused in code (the same layer-1
- * role §6.3 gives the ledger), and only the pointer, the scan result and the supersede reason are
+ * role the design gives the ledger), and only the pointer, the scan result and the supersede reason are
  * writable.
  *
  * `current_slot` is a STORED generated column and this class never writes it: the database computes
@@ -51,7 +51,7 @@ final class DocumentVersion extends Model
 
     /**
      * The columns that describe the bytes. An update that dirties any of them is refused, because
-     * it would be editing history rather than appending a version (§10.8).
+     * it would be editing history rather than appending a version.
      *
      * @var list<string>
      */
@@ -60,7 +60,7 @@ final class DocumentVersion extends Model
     protected $table = 'document_versions';
 
     /**
-     * No timestamps on a version (§4.4): `uploaded_at` and `scanned_at` are the two dated facts that
+     * No timestamps on a version: `uploaded_at` and `scanned_at` are the two dated facts that
      * matter, and a `updated_at` on an immutable row would suggest it gets edited.
      */
     public $timestamps = false;
@@ -139,8 +139,8 @@ final class DocumentVersion extends Model
      * Whether these bytes may be served here.
      *
      * `infected` never is. `pending` depends on whether this environment actually has a scanner:
-     * with one, the download waits for the queue; without one, §14.4's strict type allowlist is the
-     * substituted control and the file serves. {@see ScanVerdict::isServable()} carries the §17 Q8
+     * with one, the download waits for the queue; without one, the strict type allowlist is the
+     * substituted control and the file serves. {@see ScanVerdict::isServable()} carries the Q8
      * reasoning — the point of passing the flag here is that no call site may decide for itself.
      */
     public function isServable(): bool

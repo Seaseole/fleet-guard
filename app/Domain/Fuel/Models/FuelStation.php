@@ -11,8 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * §4.3 FUEL_STATION — a pump the fleet buys from, usually also a supplier (§3 draws no edge here,
- * so the supplier is named by id and the relation is the read the register needs; §3.1 D5's
+ * FUEL_STATION — a pump the fleet buys from, usually also a supplier (draws no edge here,
+ * so the supplier is named by id and the relation is the read the register needs; D5's
  * allowlist gains `Fuel => Accounting` for it).
  *
  * @property int $id

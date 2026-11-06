@@ -13,10 +13,10 @@ use stdClass;
 
 /**
  * Fuel's read door for slice 5b: the bulk deliveries that already posted `Cr 2110` at the movement
- * (§20.26) and are still waiting for the supplier's paper.
+ * and are still waiting for the supplier's paper.
  *
  * Accounting asks rather than reaches: the rows are Fuel's, the projection is Accounting's vocabulary
- * (`UnbilledObligation`), and §3.1's D5 stays intact — the picker on the bills screen and the link
+ * (`UnbilledObligation`), and the D5 stays intact — the picker on the bills screen and the link
  * check in `RecordBill` both read through this one door. Raw columns rather than an Eloquent row: a
  * read door owes a projection, so nothing can be written back through it.
  */

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Domain\Fleet\Models\Truck;
+use App\Domain\Kernel\Documents\Validity;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Maintenance\Actions\RecordInspection;
 use App\Domain\Maintenance\Data\InspectionDto;
@@ -25,10 +26,10 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /*
- * The inspection register (§3.2, §4.3): the pre-trip walk-around, the periodic workshop check and the
+ * The inspection register: the pre-trip walk-around, the periodic workshop check and the
  * tachograph check, kept as evidence rather than as a form.
  *
- * The checklist is the kind's own (§{@see InspectionKind}), so the form cannot ask yesterday's
+ * The checklist is the kind's own, so the form cannot ask yesterday's
  * questions tomorrow. A pass must have every item answered yes and no complaint; a fail must name the
  * item that failed; an advisory may go with a note. The DTO enforces that, and this page only turns the
  * form into it — a screen that decided a verdict would be a second definition of `result`.
@@ -300,6 +301,37 @@ new #[Title('Inspections')] class extends Component {
         return $driver->employee?->name ?? __('Driver #:id', ['id' => $driver->id]);
     }
 
+    /**
+     * The day the check is dated, which is the day the attributed driver's papers are read against.
+     *
+     * An inspection names who walked the truck, so the question a picker has to answer is "could this
+     * person hold the paper on that day", not today — the same anchor the assignment card uses.
+     */
+    #[Computed]
+    public function inspectionDay(): Carbon
+    {
+        return $this->inspDoneAt === ''
+            ? Carbon::now(CurrentCompany::timezone())
+            : Carbon::parse($this->inspDoneAt, CurrentCompany::timezone());
+    }
+
+    /** @return list<array{paper: string, tone: string, state: string, days: string, on: string}> */
+    public function driverPapers(Driver $driver): array
+    {
+        return Validity::paperFlags([
+            ['label' => __('licence'), 'date' => $driver->licence_expires_on],
+            ['label' => __('PRDP permit'), 'date' => $driver->permit_expires_on],
+        ], $this->inspectionDay);
+    }
+
+    /** The class one `<option>` carries — a select cannot hold a badge, so the text takes the tone. */
+    public function driverOptionClass(Driver $driver): string
+    {
+        $tone = Validity::optionTone($this->driverPapers($driver));
+
+        return $tone === '' ? '' : 'text-'.$tone;
+    }
+
     private function like(): string
     {
         return '%'.str_replace(['%', '_'], ['\%', '\_'], $this->search).'%';
@@ -307,7 +339,7 @@ new #[Title('Inspections')] class extends Component {
 }; ?>
 
 <div class="grid gap-6">
-    <header class="flex flex-wrap items-end justify-between gap-3">
+    <header class="fg-page-header flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div class="grid gap-1">
             <x-ui.heading size="xl" level="1">{{ __('Inspections') }}</x-ui.heading>
             <x-ui.text>
@@ -358,11 +390,11 @@ new #[Title('Inspections')] class extends Component {
                 <tr>
                     <x-ui.table.th>{{ __('Done') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Truck') }}</x-ui.table.th>
-                    <x-ui.table.th>{{ __('Kind') }}</x-ui.table.th>
+                    <x-ui.table.th hideBelow="lg">{{ __('Kind') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Result') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Defects') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Driver') }}</x-ui.table.th>
-                    <x-ui.table.th>{{ __('Against') }}</x-ui.table.th>
+                    <x-ui.table.th hideBelow="lg">{{ __('Against') }}</x-ui.table.th>
                 </tr>
             </thead>
             <tbody>
@@ -371,12 +403,12 @@ new #[Title('Inspections')] class extends Component {
                         <x-ui.table.td nowrap>{{ $inspection->done_at->format('d M Y H:i') }}</x-ui.table.td>
                         <x-ui.table.td>
                             @if ($inspection->truck)
-                                <a href="{{ route('fleet.show', ['truck' => $inspection->truck->id]) }}" wire:navigate class="text-fg-ink hover:text-accent">{{ $inspection->truck->label() }}</a>
+                                <a href="{{ route('fleet.show', ['truck' => $inspection->truck->id]) }}" wire:navigate class="text-fg-ink underline-offset-4 hover:text-accent-ink hover:underline">{{ $inspection->truck->label() }}</a>
                             @else
                                 <span class="text-xs text-fg-ink-muted">{{ __('Truck #:id', ['id' => $inspection->truck_id]) }}</span>
                             @endif
                         </x-ui.table.td>
-                        <x-ui.table.td nowrap>{{ $inspection->kind->label() }}</x-ui.table.td>
+                        <x-ui.table.td nowrap hideBelow="lg">{{ $inspection->kind->label() }}</x-ui.table.td>
                         <x-ui.table.td>
                             <x-ui.badge :tone="$inspection->result->tone()">{{ $inspection->result->label() }}</x-ui.badge>
                         </x-ui.table.td>
@@ -401,14 +433,14 @@ new #[Title('Inspections')] class extends Component {
                             @endif
                         </x-ui.table.td>
                         <x-ui.table.td>{{ $inspection->driver?->employee?->name ?? '—' }}</x-ui.table.td>
-                        <x-ui.table.td>
+                        <x-ui.table.td hideBelow="lg">
                             <div class="grid gap-0.5 text-xs">
                                 @if ($inspection->trip)
-                                    <a href="{{ route('operations.trip', ['trip' => $inspection->trip->id]) }}" wire:navigate class="text-fg-ink hover:text-accent">{{ $inspection->trip->trip_no }}</a>
+                                    <a href="{{ route('operations.trip', ['trip' => $inspection->trip->id]) }}" wire:navigate class="text-fg-ink underline-offset-4 hover:text-accent-ink hover:underline">{{ $inspection->trip->trip_no }}</a>
                                 @endif
 
                                 @if ($inspection->workOrder)
-                                    <a href="{{ route('maintenance.work_order', ['workOrder' => $inspection->workOrder->id]) }}" wire:navigate class="text-fg-ink hover:text-accent">{{ $inspection->workOrder->wo_no }}</a>
+                                    <a href="{{ route('maintenance.work_order', ['workOrder' => $inspection->workOrder->id]) }}" wire:navigate class="text-fg-ink underline-offset-4 hover:text-accent-ink hover:underline">{{ $inspection->workOrder->wo_no }}</a>
                                 @endif
 
                                 @if ($inspection->trip === null && $inspection->workOrder === null)
@@ -471,16 +503,40 @@ new #[Title('Inspections')] class extends Component {
                     <div class="grid gap-1.5">
                         <label for="inspection-driver" class="text-xs font-medium text-fg-ink-secondary">{{ __('Driver (optional)') }}</label>
 
-                        <x-ui.select name="inspDriverId" id="inspection-driver" wire:model="inspDriverId">
+                        <x-ui.select name="inspDriverId" id="inspection-driver" wire:model.live="inspDriverId" template="fg-paper" template-selection="fg-name">
                             <option value="">{{ __('Not a named driver') }}</option>
 
                             @foreach ($this->drivers as $driver)
-                                <option value="{{ $driver->id }}">{{ $this->driverLabel($driver) }}</option>
+                                @php($papers = $this->driverPapers($driver))
+                                <option value="{{ $driver->id }}"
+                                    class="{{ $this->driverOptionClass($driver) }}"
+                                    data-name="{{ $this->driverLabel($driver) }}"
+                                    data-note="{{ Validity::optionNote($papers) }}"
+                                    data-tone="{{ Validity::optionTone($papers) }}">
+                                    {{ $this->driverLabel($driver) }}
+                                    @if (($note = Validity::optionNote($papers)) !== '')
+                                        — {{ $note }}
+                                    @endif
+                                </option>
                             @endforeach
                         </x-ui.select>
+
+                        @php($attributed = $this->inspDriverId === '' ? null : $this->drivers->firstWhere('id', (int) $this->inspDriverId))
+
+                        @if ($attributed !== null && ($flags = $this->driverPapers($attributed)) !== [])
+                            <div class="flex flex-wrap items-center gap-1.5 pt-1" role="status">
+                                <span class="text-xs text-fg-ink-secondary">{{ $this->driverLabel($attributed) }}</span>
+
+                                @foreach ($flags as $flag)
+                                    <x-ui.badge size="xs" :tone="$flag['tone']">
+                                        {{ $flag['paper'] }} · {{ $flag['state'] }}@if ($flag['days'] !== '') · {{ $flag['days'] }}@endif
+                                    </x-ui.badge>
+                                @endforeach
+                            </div>
+                        @endif
                     </div>
 
-                    <x-ui.input name="inspDoneAt" wire:model="inspDoneAt" type="datetime-local" :label="__('Done at')" required />
+                    <x-ui.input name="inspDoneAt" wire:model.live.debounce.500ms="inspDoneAt" type="datetime-local" :label="__('Done at')" required />
                 </div>
 
                 <div class="grid gap-3 sm:grid-cols-2">

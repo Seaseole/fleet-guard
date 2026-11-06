@@ -76,26 +76,26 @@ use Illuminate\Support\Str;
 
 /**
  * Phase 3 slice 3a verification — the fuel spine: stations, tanks, purchases and trip issues
- * (DESIGN.md §4.3, §5.2, §6.8, §6.9, §10.9).
+ *.
  *
  * The sentences this slice turns on:
  *
- * - a slip ties to itself: litres × price is the amount under §5.5's HALF_UP, and the table's CHECK
+ * - a slip ties to itself: litres × price is the amount under the HALF_UP, and the table's CHECK
  *   states the same rule the DTO checks — including the slip whose product lands between cents,
  *   which is carried rather than refused — so a hand-written row cannot slip past either;
  * - an issue is fuel **onto a trip**: the tank must be that trip's truck's, the slip must still have
  *   litres on it, and the resulting cost is the issue's own frozen figure;
  * - the issue posts through Phase 2's doors — a trip cost of type `fuel` (account 5100, truck and
- *   trip dimensions) and an odometer reading whose source says where it came from — and the §6.6
+ *   trip dimensions) and an odometer reading whose source says where it came from — and the
  *   rollup's fuel bucket equals the cost that was posted;
- * - §10.9's machine is real: `recorded → posted` on the trail, and a source the other door owns
+ * - The machine is real: `recorded → posted` on the trail, and a source the other door owns
  *   (a kiosk issue, written by the driver's phone in slice 3g) is refused **by name** rather than
  *   silently accepted;
- * - the slip is NOT posted to the ledger in this slice (`posted_to_ledger` false) because §6.8's
+ * - the slip is NOT posted to the ledger in this slice (`posted_to_ledger` false) because the
  *   payable needs Phase 5's bills — the seam is asserted, not assumed.
  *
  * It writes to the development database on the live MySQL 9.1 instance inside the `XFL` fixture
- * namespace, lifts the §6.3 barrier only to delete its own journal entries, and asserts that
+ * namespace, lifts the barrier only to delete its own journal entries, and asserts that
  * everything it created is gone and the barrier is down again.
  *
  * Run: php scripts/verify-fuel.php
@@ -285,6 +285,24 @@ $alignCounters = static function (string $when): void {
 
 $alignCounters('before the run');
 
+/*
+ * A development database that has had fixtures deleted by earlier sweeps carries real gaps in the
+ * `job`/`trip` counters, and re-aligning cannot close a gap somebody else burned. What this run must
+ * prove is that *it* added none, so the integrity assertion compares the post-run drift set with this
+ * baseline rather than demanding a globally clean register.
+ *
+ * @return list<string>
+ */
+$driftScopes = static function (): array {
+    Artisan::call('documents:number-integrity');
+
+    preg_match_all('/^\s*DRIFT\s+company=(\d+)\s+(\S+)/m', Artisan::output(), $matches, PREG_SET_ORDER);
+
+    return array_map(static fn (array $match): string => 'company='.$match[1].' '.$match[2], $matches);
+};
+
+$driftBefore = $driftScopes();
+
 $checks = 0;
 $failures = 0;
 
@@ -331,9 +349,13 @@ function refuses(string $what, callable $fn, string $expectClass, ?string $messa
 }
 
 $runStartedAt = Carbon::now();
-$owner = User::query()->findOrFail(1);
+
+// The Owner seat is the one the deployment names, not row 1: on a development database row 1 may have
+// been re-seated, and a harness that signs in the wrong seat fails at the first gated write before it
+// tests anything. `FLEET_OWNER_EMAIL` is the documented override (config/fleet.php identity.owner_email).
+$owner = User::query()->where('email', config('fleet.identity.owner_email'))->firstOrFail();
 Auth::login($owner);
-CurrentCompany::force(1);
+CurrentCompany::force((int) $owner->company_id);
 
 $created = [
     'truck_ids' => [], 'employee_ids' => [], 'driver_ids' => [],
@@ -345,7 +367,7 @@ $created = [
 $baseCurrency = CurrentCompany::model()->base_currency_code;
 
 /* ------------------------------------------------------------------------- */
-echo "== §4.3 the schema keeps the promises the docs make (live MySQL 9.1) ==\n";
+echo "== the schema keeps the promises the docs make (live MySQL 9.1) ==\n";
 
 $tankDdl = (string) ((array) DB::select('show create table fuel_tanks')[0])['Create Table'];
 check(str_contains($tankDdl, 'fuel_tanks_company_truck_kind_unique'), 'a truck has one tank of each kind, not two rows that split its fuel');
@@ -369,8 +391,8 @@ foreach ([
     check(str_contains($purchaseDdl, $name), "fuel_purchases carries {$name}");
 }
 
-check(Schema::hasColumns('fuel_purchases', ['currency_code', 'amount', 'fx_rate', 'fx_rate_source', 'fx_rate_date', 'fx_rate_ref', 'base_currency_code', 'base_amount']), 'fuel_purchases carries §5.2\'s eight columns');
-check(Schema::hasColumn('fuel_purchases', 'posted_to_ledger'), '...and §6.8\'s posting seam is a column, not a promise');
+check(Schema::hasColumns('fuel_purchases', ['currency_code', 'amount', 'fx_rate', 'fx_rate_source', 'fx_rate_date', 'fx_rate_ref', 'base_currency_code', 'base_amount']), 'fuel_purchases carries the eight columns');
+check(Schema::hasColumn('fuel_purchases', 'posted_to_ledger'), '...and the posting seam is a column, not a promise');
 
 $issueDdl = (string) ((array) DB::select('show create table fuel_issues')[0])['Create Table'];
 
@@ -388,9 +410,9 @@ foreach ([
     check(str_contains($issueDdl, $name), "fuel_issues carries {$name}");
 }
 
-check(Schema::hasColumns('fuel_issues', ['previous_state', 'state_changed_at', 'reversal_of_id']), '...and §10.1/§10.9\'s state columns, including the reversal link');
+check(Schema::hasColumns('fuel_issues', ['previous_state', 'state_changed_at', 'reversal_of_id']), '...and /the state columns, including the reversal link');
 
-echo "\n== §4.3/§15.2 phase 3 the bulk tank's promises are CHECKs too ==\n";
+echo "\n== / phase 3 the bulk tank's promises are CHECKs too ==\n";
 
 $bulkTankDdl = (string) ((array) DB::select('show create table bulk_tanks')[0])['Create Table'];
 check(str_contains($bulkTankDdl, 'bulk_tanks_company_name_unique'), 'a bulk tank is unique per company by name');
@@ -409,7 +431,7 @@ $costDdl = (string) ((array) DB::select('show create table trip_costs')[0])['Cre
 check(str_contains($costDdl, "'stock'"), 'a trip cost can be settled from stock, and the table knows the word');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §4.3 stations: master data, refused before it can split a pump's history ==\n";
+echo "\n== stations: master data, refused before it can split a pump's history ==\n";
 
 $createStation = app(CreateFuelStation::class);
 
@@ -510,7 +532,7 @@ $created['trip_ids'][] = $trip->id;
 $trip = $trip->fresh();
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §4.3 fitting tanks: taken from the truck's stated capacity, one per kind ==\n";
+echo "\n== fitting tanks: taken from the truck's stated capacity, one per kind ==\n";
 
 $createTank = app(CreateFuelTank::class);
 
@@ -552,7 +574,7 @@ refuses(
 );
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §4.3/§5.2 purchases: the slip ties to itself and the rate is frozen ==\n";
+echo "\n== / purchases: the slip ties to itself and the rate is frozen ==\n";
 
 $createPurchase = app(CreateFuelPurchase::class);
 
@@ -609,7 +631,7 @@ $created['purchase_ids'][] = $purchase->id;
 
 check($purchase->litresMajor() === '400.00', 'the slip reads back as 400.00 litres');
 check($purchase->baseMoney()->minorUnits === 740_000, '...at BWP 7 400.00 in base money');
-check($purchase->posted_to_ledger === false, '...and is NOT posted to the ledger in this slice (§6.8 needs Phase 5\'s bills)');
+check($purchase->posted_to_ledger === false, '...and is NOT posted to the ledger in this slice (the design needs Phase 5\'s bills)');
 
 $retry = $createPurchase(new FuelPurchaseDto(
     amount: Money::ofMinor(740_000, $baseCurrency),
@@ -629,7 +651,7 @@ check($retry->id === $purchase->id, 'a re-delivered slip (same source_uuid) is t
 check((int) DB::table('fuel_purchases')->where('invoice_no', 'XFL-SLIP-1')->count() === 1, '...and the table holds exactly one row for it');
 
 /*
- * The slip that lands between cents. 25.30 L at BWP 19.75 is BWP 499.675, and §5.5 rounds the cost
+ * The slip that lands between cents. 25.30 L at BWP 19.75 is BWP 499.675, and rounds the cost
  * HALF_UP to 499.68 — so `amount × 100 = litres × price` is a rule, not an identity, and the CHECK
  * has to state the rule. Written as the bare identity it refused 99 slips in 100, this one among
  * them: `SQLSTATE[HY000] 3819 Check constraint 'fuel_purchases_price_times_litres_is_amount'`.
@@ -675,7 +697,7 @@ refuses(
 );
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §4.3 issuing fuel: onto a trip, from that trip's own truck ==\n";
+echo "\n== issuing fuel: onto a trip, from that trip's own truck ==\n";
 
 $issue = app(RecordFuelIssue::class);
 
@@ -708,7 +730,7 @@ refuses(
 );
 
 refuses(
-    'the office door cannot claim a kiosk issue for itself (§9.6 two doors, one write)',
+    'the office door cannot claim a kiosk issue for itself (two doors, one write)',
     fn () => $issue($trip, new FuelIssueDto(
         tankId: $mainTank->id,
         litresX100: 10_000,
@@ -777,7 +799,7 @@ check($reading !== null && $reading->source === 'fuel_issue', 'the issue records
 check((int) DB::table('trucks')->where('id', $truck->id)->value('odometer_km') === 120_400, '...and the truck\'s projection moves to it');
 
 $rollup = (int) DB::table('trips')->where('id', $trip->id)->value('fuel_cost_base');
-check($rollup === 463_425, 'the §6.6 rollup\'s fuel bucket equals the cost that was posted ('.$rollup.')');
+check($rollup === 463_425, 'the rollup\'s fuel bucket equals the cost that was posted ('.$rollup.')');
 
 $trail = DB::table('operational_events')
     ->where('aggregate_type', 'fuel_issue')
@@ -786,7 +808,7 @@ $trail = DB::table('operational_events')
     ->get(['from_state', 'to_state'])
     ->all();
 
-check(count($trail) === 1 && $trail[0]->from_state === 'recorded' && $trail[0]->to_state === 'posted', '§10.9\'s move is on the trail exactly once: recorded → posted');
+check(count($trail) === 1 && $trail[0]->from_state === 'recorded' && $trail[0]->to_state === 'posted', 'the move is on the trail exactly once: recorded → posted');
 
 $entry = DB::table('gl_journal_entries')
     ->where('source_type', 'trip_cost')
@@ -800,14 +822,14 @@ if ($entry !== null) {
     check(count($lines) === 2, '...with exactly two lines');
 
     $fuelLine = collect($lines)->firstWhere('direction', 'debit');
-    check($fuelLine !== null && $fuelLine->truck_id === $truck->id && $fuelLine->trip_id === $trip->id, '...and the fuel debit carries both dimensions account 5100 requires (§6.1)');
+    check($fuelLine!== null && $fuelLine->truck_id === $truck->id && $fuelLine->trip_id === $trip->id, '...and the fuel debit carries both dimensions account 5100 requires');
 }
 
 $remaining = $purchase->fresh()->litresRemainingX100();
 check($remaining === 14_950, 'the slip has 149.50 litres left after the issue ('.$remaining.' × 100)');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §7 R7 a tank that takes more than it holds is flagged, not refused ==\n";
+echo "\n== R7 a tank that takes more than it holds is flagged, not refused ==\n";
 
 $secondSlip = $createPurchase(new FuelPurchaseDto(
     amount: Money::ofMinor(1_110_000, $baseCurrency),
@@ -838,7 +860,7 @@ check($overCapacity->exception_reason !== null && str_contains((string) $overCap
 check($overCapacity->status === FuelIssueStatus::Posted, '...and still posts, because refusing would push the discrepancy into a wrong number');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §4.3/§15.2 phase 3 a bulk tank: opened empty, fed by delivery, valued by average ==\n";
+echo "\n== / phase 3 a bulk tank: opened empty, fed by delivery, valued by average ==\n";
 
 $createBulkTank = app(CreateBulkTank::class);
 
@@ -892,7 +914,7 @@ $delivery = $createPurchase(new FuelPurchaseDto(
 ));
 $created['purchase_ids'][] = $delivery->id;
 
-check($delivery->posted_to_ledger === true, 'a delivery into a tank is posted in the same transaction as its row (§6.8)');
+check($delivery->posted_to_ledger === true, 'a delivery into a tank is posted in the same transaction as its row');
 check($delivery->isBulkDelivery(), '...and the row knows it went into stock');
 check($delivery->litresRemainingX100() === 0, '...so its litres are not also offered as a slip the trucks could drain');
 
@@ -941,7 +963,7 @@ check($bulk->stock_litres_x100 === 1_500_000 && $bulk->stock_value_base === 32_0
 check($bulk->average_cost_per_litre_minor === 2133, '...and the moving average is value over litres: 2,133 minor a litre ('.$bulk->average_cost_per_litre_minor.')');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §6.8/§15.2 a truck takes diesel out of the tank, at the tank's own average ==\n";
+echo "\n== / a truck takes diesel out of the tank, at the tank's own average ==\n";
 
 $bulkIssue = $issue($trip, new FuelIssueDto(
     tankId: $mainTank->id,
@@ -959,7 +981,7 @@ check($bulkIssue->bulk_tank_id === $bulk->id && $bulkIssue->purchase_id === null
 check($bulkIssue->status === FuelIssueStatus::Posted, '...and it posts like any other issue');
 
 $bulkCost = TripCost::query()->findOrFail($bulkIssue->trip_cost_id);
-check($bulkCost->paid_with === TripCostPayment::Stock, 'the cost is settled from stock, not paid for a second time (§6.8)');
+check($bulkCost->paid_with === TripCostPayment::Stock, 'the cost is settled from stock, not paid for a second time');
 
 $bulkEntry = DB::table('gl_journal_entries')
     ->where('source_type', 'trip_cost')
@@ -1027,7 +1049,7 @@ refuses(
 $bulk->forceFill(['active' => true])->save();
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §15.2 a dip is a fact to record, and its variance goes to 5110 ==\n";
+echo "\n== a dip is a fact to record, and its variance goes to 5110 ==\n";
 
 $reconcile = app(ReconcileBulkTank::class);
 
@@ -1097,7 +1119,7 @@ $stockBalance = ledgerBalance((int) $stockAccountId);
 check($stockBalance === $bulk->fresh()->stock_value_base, '1180\'s ledger balance equals the tank\'s value — the account and the book are one figure ('.$stockBalance.')');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §15.2 draining the tank takes the exact value, so an empty tank is worth nothing ==\n";
+echo "\n== draining the tank takes the exact value, so an empty tank is worth nothing ==\n";
 
 $beforeDrain = $bulk->fresh();
 
@@ -1139,7 +1161,7 @@ refuses(
 );
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.9 consumption is judged per 100 km, rounded half-up on both sides of zero ==\n";
+echo "\n== consumption is judged per 100 km, rounded half-up on both sides of zero ==\n";
 
 $flat = FuelConsumption::compare(30_000, 1_000, 30.0);
 check($flat['actual_x100'] === 3_000 && $flat['expected_x100'] === 3_000 && $flat['variance_pct_x100'] === 0, '300.00 L over 1,000 km at an expected 30.00 L/100 is no variance at all');
@@ -1153,7 +1175,7 @@ check($low['actual_x100'] === 799 && $low['variance_pct_x100'] === -13, '...and 
 check(FuelConsumption::litresLabel(801) === '8.01' && FuelConsumption::varianceLabel(13) === '+0.13' && FuelConsumption::varianceLabel(-13) === '-0.13', 'the labels carry two decimals and the sign the screen prints');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.9 a variance is one row per trip, and its figures are CHECKs ==\n";
+echo "\n== a variance is one row per trip, and its figures are CHECKs ==\n";
 
 $varianceDdl = (string) ((array) DB::select('show create table fuel_variances')[0])['Create Table'];
 
@@ -1161,11 +1183,11 @@ check(str_contains($varianceDdl, 'fuel_variances_company_trip_unique'), 'a trip 
 check(str_contains($varianceDdl, 'fuel_variances_state_allowed') && str_contains($varianceDdl, 'fuel_variances_previous_state_allowed'), '...and the four states are a CHECK, not a convention');
 check(str_contains($varianceDdl, 'fuel_variances_decided_is_explained'), '...a decided variance must carry the sentence that decided it');
 check(str_contains($varianceDdl, 'fuel_variances_span_positive') && str_contains($varianceDdl, 'fuel_variances_trip_company_fk'), '...and a row with no span, or a trip from another company, cannot be written');
-check(str_contains($issueDdl, 'reversal_reason'), 'a reversed issue carries its reason on the row (§10.1)');
+check(str_contains($issueDdl, 'reversal_reason'), 'a reversed issue carries its reason on the row');
 check(str_contains($movementDdl, "'reversal'"), '...and the stock book knows a reversal as a movement of its own');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.9 a trip inside the noise writes no variance, and one above it does ==\n";
+echo "\n== a trip inside the noise writes no variance, and one above it does ==\n";
 
 $evaluateVariance = app(EvaluateFuelVariance::class);
 
@@ -1210,12 +1232,12 @@ check($variance->state === FuelVarianceState::Open && $variance->isOpen(), 'the 
 
 $varianceAlert = Alert::query()->where('subject_type', 'fuel_variance')->where('subject_id', (string) $variance->id)->first();
 
-check($varianceAlert !== null && $varianceAlert->type === AlertType::FuelVariance, 'the variance raises a fuel_variance alert through §14.1\'s door');
+check($varianceAlert!== null && $varianceAlert->type === AlertType::FuelVariance, 'the variance raises a fuel_variance alert through the door');
 check($varianceAlert !== null && $varianceAlert->severity === AlertSeverity::Critical, '...critical above the 25% band');
 check($varianceAlert !== null && $varianceAlert->state === AlertState::Open && $varianceAlert->payload['variance_pct'] === '5133.50', '...open, carrying the figure the register shows');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.9 a posted issue is reversed, never edited: the mirror is a journal entry ==\n";
+echo "\n== a posted issue is reversed, never edited: the mirror is a journal entry ==\n";
 
 $reverse = app(ReverseFuelIssue::class);
 
@@ -1229,7 +1251,7 @@ $dispatcherProbe->save();
 app(ChangeUserRole::class)($dispatcherProbe->fresh(), RoleKey::Dispatcher);
 $dispatcherProbe = $dispatcherProbe->fresh();
 
-check(! Gate::forUser($dispatcherProbe)->allows('fuel.correct'), 'a dispatcher does not hold fuel.correct (§9.3)');
+check(! Gate::forUser($dispatcherProbe)->allows('fuel.correct'), 'a dispatcher does not hold fuel.correct');
 
 Auth::login($dispatcherProbe);
 refuses(
@@ -1255,7 +1277,7 @@ check($reversedFirst->status === FuelIssueStatus::Reversed && $reversedFirst->re
 
 $mirror = DB::table('gl_journal_entries')->where('source_type', 'fuel_issue_reversal')->where('source_id', $first->id)->first();
 
-check($mirror !== null && $mirror->reverses_entry_id === $entry->id && $mirror->netting_group === $first->id, '...and the ledger holds a mirror entry that points at the original and nets with it (§6.4)');
+check($mirror!== null && $mirror->reverses_entry_id === $entry->id && $mirror->netting_group === $first->id, '...and the ledger holds a mirror entry that points at the original and nets with it');
 check($mirror !== null && $mirror->status === 'posted' && (int) $mirror->created_by === 1, '...posted, naming the person who corrected it');
 
 $fuelAccountId = $chart['5100']?->id ?? throw new RuntimeException('5100 Fuel is missing from the chart');
@@ -1279,7 +1301,7 @@ if ($mirror !== null) {
 check($purchase->fresh()->litresRemainingX100() === 40_000, 'the slip gets its 250.50 litres back, because a reversed issue is no longer dispensed');
 
 $rollupAfterReversal = (int) DB::table('trips')->where('id', $trip->id)->value('fuel_cost_base');
-check($rollupAfterReversal === $rollupBeforeReversal - 463_425, '...and the §6.6 fuel bucket falls by exactly the reversed cost ('.$rollupAfterReversal.')');
+check($rollupAfterReversal === $rollupBeforeReversal - 463_425, '...and the fuel bucket falls by exactly the reversed cost ('.$rollupAfterReversal.')');
 
 $reversalTrail = DB::table('operational_events')
     ->where('aggregate_type', 'fuel_issue')
@@ -1293,7 +1315,7 @@ check(
         && $reversalTrail[1]->from_state === 'posted'
         && $reversalTrail[1]->to_state === 'reversed'
         && str_contains((string) $reversalTrail[1]->reason, 'wrong truck'),
-    '§10.1: the trail says posted → reversed, with the reason on the row'
+    'the trail says posted → reversed, with the reason on the row'
 );
 
 refuses(
@@ -1310,7 +1332,7 @@ $varianceAlert->refresh();
 check($varianceAlert->state === AlertState::Open, '...and the alert stays open, because the finding is still on the register');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.9 a bulk-tank reversal puts the litres and their value back ==\n";
+echo "\n== a bulk-tank reversal puts the litres and their value back ==\n";
 
 $reversedBulk = $reverse($bulkIssue->fresh(), 'XFL: issued to the wrong trip', 1);
 
@@ -1340,7 +1362,7 @@ $variance->refresh();
 check($variance->litres_x100 === 1_535_000 && $variance->variance_pct_10_2 === '5016.67', 'the open variance follows that correction too (+5,016.67%)');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.9 a decision is a sentence, a seat, and a closed alert ==\n";
+echo "\n== a decision is a sentence, a seat, and a closed alert ==\n";
 
 $decide = app(DecideFuelVariance::class);
 
@@ -1395,7 +1417,7 @@ $variance = $decide($variance->fresh(), FuelVarianceState::Resolved, 'XFL: accep
 check($variance->state === FuelVarianceState::Resolved && $variance->previous_state === 'acknowledged', 'resolving is the leaf, and the previous state is on the row');
 
 $varianceAlert->refresh();
-check($varianceAlert->state === AlertState::Resolved, 'resolving the variance closes the alert it raised (§14.1)');
+check($varianceAlert->state === AlertState::Resolved, 'resolving the variance closes the alert it raised');
 
 // A decided row is a judgement about figures already examined; a later re-completion must not
 // quietly rewrite the numbers the person signed off on.
@@ -1405,7 +1427,7 @@ $decidedAgain = $evaluateVariance($trip->fresh());
 check($decidedAgain !== null && $decidedAgain->id === $variance->id && $decidedAgain->distance_km === 1000, '...and re-evaluating a decided trip leaves its figures as they were decided');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.9 completing a trip is what raises the judgement ==\n";
+echo "\n== completing a trip is what raises the judgement ==\n";
 
 $completionTrip = (app(CreateTrip::class))($job, 1);
 $completionTrip->forceFill([
@@ -1454,7 +1476,7 @@ $ledgerCheck = Artisan::call('ledger:verify');
 check($ledgerCheck === 0, 'the ledger recomputes from its own lines with no drift', mb_substr(str_replace("\n", ' ', Artisan::output()), 0, 200));
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.2 a frozen trip cannot acquire fuel ==\n";
+echo "\n== a frozen trip cannot acquire fuel ==\n";
 
 $frozenTrip = (app(CreateTrip::class))($job, 1);
 $frozenTrip->forceFill([
@@ -1479,7 +1501,7 @@ refuses(
 );
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §9.3 the accountant reads fuel and does not record it ==\n";
+echo "\n== the accountant reads fuel and does not record it ==\n";
 
 /** @var User $accountant */
 $accountant = User::query()->firstOrNew(['email' => 'verify-xfl-accountant@fleetguard.local']);
@@ -1491,7 +1513,7 @@ $accountant->save();
 app(ChangeUserRole::class)($accountant->fresh(), RoleKey::Accountant);
 $accountant = $accountant->fresh();
 
-check(Gate::forUser($accountant)->allows('fuel.view'), 'the accountant may see fuel (§9.3)');
+check(Gate::forUser($accountant)->allows('fuel.view'), 'the accountant may see fuel');
 check(! Gate::forUser($accountant)->allows('fuel.record'), '...but may not record it');
 
 Auth::login($accountant);
@@ -1505,7 +1527,7 @@ Auth::login($owner);
 CurrentCompany::force(1);
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §8 tenancy: the fuel register is scoped, not filtered by habit ==\n";
+echo "\n== tenancy: the fuel register is scoped, not filtered by habit ==\n";
 
 $stamp = Carbon::now()->toDateTimeString();
 
@@ -1650,7 +1672,7 @@ DB::table('audits')->where('auditable_type', User::class)->whereIn('auditable_id
 DB::table('users')->whereIn('id', $probeIds ?: [0])->delete();
 
 /*
- * The §8 tenancy block inserts a second company by hand, and until now nothing removed it: the row
+ * The tenancy block inserts a second company by hand, and until now nothing removed it: the row
  * survived every run and the next `verify-operations` died on `1062 Duplicate entry '2' for key
  * companies.PRIMARY` before it could assert anything. A harness that leaves a company behind is a
  * harness that breaks its neighbours.
@@ -1659,9 +1681,13 @@ DB::table('companies')->where('name', 'Verify XFL Second Company')->delete();
 
 $alignCounters('after cleanup');
 
-$afterExit = Artisan::call('documents:number-integrity');
-$afterOutput = Artisan::output();
-check($afterExit === 0, 'the counters and the surviving rows agree once the fixtures are gone', mb_substr(str_replace("\n", ' ', $afterOutput), 0, 200));
+$newDrift = array_values(array_diff($driftScopes(), $driftBefore));
+check(
+    $newDrift === [],
+    'this run burned no document number the surviving rows cannot account for'
+        .($driftBefore === [] ? '' : ' ('.count($driftBefore).' scope(s) were already drifting before it)'),
+    implode(', ', $newDrift),
+);
 
 $leftovers = [
     'fuel_issues' => (int) DB::table('fuel_issues')->whereIn('id', $runIssueIds ?: ['0'])->count(),

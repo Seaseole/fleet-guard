@@ -11,7 +11,7 @@ use Illuminate\Support\Carbon;
 use RuntimeException;
 
 /**
- * §6.6's write-time projection: what one trip has earned and spent, read from the ledger itself.
+ * The write-time projection: what one trip has earned and spent, read from the ledger itself.
  *
  * The rollup is **derived, never incremented**. `RecordTripCost` writes it inside the same
  * transaction that posts the entry, and `trips:recost` recomputes it later to prove the stored
@@ -19,7 +19,7 @@ use RuntimeException;
  * Phase 3, a border crossing in 2f) cannot leave the dashboard behind. Adding to a counter would
  * need every future posting path to remember to do it; reading the lines needs no such promise.
  *
- * Only ledger lines carrying this `trip_id` are counted, which is exactly the dimension §6.1 makes
+ * Only ledger lines carrying this `trip_id` are counted, which is exactly the dimension the design makes
  * mandatory on every direct-cost account. An account the bucket map does not know is ignored rather
  * than folded into "other", because a new account silently joining a report is how a cost bucket
  * stops meaning what its label says.
@@ -33,7 +33,7 @@ final class TripCostRollup
      */
     public function compute(Trip $trip): array
     {
-        // The lines are read through the ledger's own door (D3), not its tables: §6.6 is derived from
+        // The lines are read through the ledger's own door (D3), not its tables: The design is derived from
         // the ledger, and a projection that queries the line table itself is a second way in.
         $rows = $this->ledger->totalsByAccount(['trip_id' => $trip->id]);
 
@@ -41,7 +41,7 @@ final class TripCostRollup
 
         /*
          * Turnover arrives grouped by account *and* direction, but a cost is a net figure: a
-         * reversal (§6.4) posts the mirror line — a credit on 5100 carrying the same trip — and
+         * reversal posts the mirror line — a credit on 5100 carrying the same trip — and
          * reading the two halves separately called every corrected cost a refund. The halves are
          * summed here before the sign is judged, so a mirrored pair nets to zero and only a trip
          * genuinely credited more than it was charged is refused below.
@@ -76,7 +76,7 @@ final class TripCostRollup
             if ($amount < 0) {
                 throw new RuntimeException(sprintf(
                     'Trip %s has a net credit of %d on account %s (%s). A refund belongs in a reversing '
-                    .'entry against a receivable or a contra account, not as a negative direct cost (§6.6).',
+                    .'entry against a receivable or a contra account, not as a negative direct cost.',
                     $trip->trip_no,
                     -$amount,
                     $code,

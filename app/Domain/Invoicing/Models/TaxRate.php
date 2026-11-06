@@ -13,13 +13,13 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
- * §17 Q4 — a VAT rate the ledger can be held to, with the window it applied in.
+ * Q4 — a VAT rate the ledger can be held to, with the window it applied in.
  *
  * A rate is read as of a **date**, never as of today: an invoice issued in December under the old
  * rate must print and post the old rate in March, which is what `effectiveOn()` is for and the
  * reason the window is data rather than a single editable row.
  *
- * `rate_x10000` is the §5.5 scale (12.00% is 120_000), so the arithmetic below is integer
+ * `rate_x10000` is the scale (12.00% is 120_000), so the arithmetic below is integer
  * throughout — a percentage computed as a float is how a VAT line stops agreeing with the return.
  *
  * @property string $id
@@ -42,7 +42,7 @@ final class TaxRate extends Model
     /**
      * A ULID primary key, not an integer one. Without these two lines Eloquent reads `id` as an int and
      * `$rate->id` answers `1` for a row whose real key is `01M6…` — which is how an invoice line came to
-     * reference a tax rate that does not exist (§20.32).
+     * reference a tax rate that does not exist.
      */
     protected $keyType = 'string';
 
@@ -54,7 +54,7 @@ final class TaxRate extends Model
      * The percentage is itself per hundred, so turning a stored rate into a fraction of the amount is a
      * division by `RATE_SCALE × 100`. Writing that second hundred out is the whole point of this constant
      * pair: dividing by `RATE_SCALE` alone turns 12% into 1200%, which the invoice's own
-     * `tax_amount <= amount` CHECK then refuses — see §20.32's defect note, where exactly that happened.
+     * `tax_amount <= amount` CHECK then refuses — see the defect note, where exactly that happened.
      */
     public const RATE_SCALE = 10_000;
 
@@ -87,7 +87,7 @@ final class TaxRate extends Model
     }
 
     /**
-     * The VAT on a line: the line's own amount × the rate, rounded HALF_UP once (§5.5 — VAT is
+     * The VAT on a line: the line's own amount × the rate, rounded HALF_UP once (VAT is
      * computed per line, never on the invoice total, so the invoice adds up on the page).
      *
      * Zero-rated and exempt lines answer 0 rather than refusing: the distinction between them is a

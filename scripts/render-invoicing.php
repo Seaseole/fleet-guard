@@ -16,7 +16,7 @@ declare(strict_types=1);
  * been deliberately corrupted and then agrees with the rows.
  *
  * Fixtures live in the `INV-R` namespace on the development database and are removed afterwards, with
- * their journal entries deleted under §6.3's lifted barrier. The counters this run advances are rewound
+ * their journal entries deleted under the lifted barrier. The counters this run advances are rewound
  * so `documents:number-integrity` sees only surviving rows.
  *
  * Run: php scripts/render-invoicing.php   (set RENDER_INVOICING_TRACE=1 for stack traces)
@@ -50,6 +50,7 @@ use App\Domain\Operations\Data\JobQuoteDto;
 use App\Domain\Operations\Data\RouteDto;
 use App\Domain\Operations\Data\TripDto;
 use App\Domain\Operations\Models\Chargeable;
+use App\Domain\Operations\RouteRateType;
 use App\Domain\People\Actions\CreateDriver;
 use App\Domain\People\Actions\CreateEmployee;
 use App\Domain\People\Data\DriverDto;
@@ -147,7 +148,7 @@ final class InvoicingRenderSweep extends TestCase
             notes: 'INV-R job',
         ), 1);
 
-        $job = (app(QuoteJob::class))($job, new JobQuoteDto(rateType: \App\Domain\Operations\RouteRateType::PerTrip, amountMajor: '90000', currencyCode: $base), 1);
+        $job = (app(QuoteJob::class))($job, new JobQuoteDto(rateType: RouteRateType::PerTrip, amountMajor: '90000', currencyCode: $base), 1);
         $job = (app(AcceptJob::class))($job, 1);
 
         $truck = (app(CreateTruck::class))(new TruckDto(
@@ -198,7 +199,7 @@ final class InvoicingRenderSweep extends TestCase
 
         $invoice = (app(IssueInvoice::class))($trip->id, $accountant->id);
 
-        echo "== The register lists the document, its derived state and its money (§10.4) ==\n";
+        echo "== The register lists the document, its derived state and its money ==\n";
 
         $this->attempt('the accountant opens /invoices and sees the number, customer and outstanding', function () use ($accountant, $invoice, $customer): void {
             $html = $this->page($accountant, '/invoices');
@@ -234,7 +235,7 @@ final class InvoicingRenderSweep extends TestCase
             }
         });
 
-        echo "\n== One invoice's machine: lines, settlement, the three corrections (§10.5, §10.7) ==\n";
+        echo "\n== One invoice's machine: lines, settlement, the three corrections ==\n";
 
         $this->attempt('the detail screen renders the line, its VAT and the settlement state', function () use ($accountant, $invoice): void {
             $html = $this->page($accountant, '/invoices/'.$invoice->id);
@@ -278,7 +279,7 @@ final class InvoicingRenderSweep extends TestCase
             DB::table('customers')->where('id', $invoice->customer_id)->update(['contact_email' => 'render-inv-check-customer@fleetguard.local']);
         });
 
-        echo "\n== The print door answers with PDF bytes (§14.4, definition of done 4) ==\n";
+        echo "\n== The print door answers with PDF bytes (definition of done 4) ==\n";
 
         $this->attempt('the invoice PDF route returns a PDF', function () use ($accountant, $invoice): void {
             $response = $this->actingAs($accountant, 'web')->get('/invoices/'.$invoice->id.'/pdf');
@@ -313,7 +314,7 @@ final class InvoicingRenderSweep extends TestCase
             }
         });
 
-        echo "\n== The ageing report is worked out on the page, not stored (§10.4) ==\n";
+        echo "\n== The ageing report is worked out on the page, not stored ==\n";
 
         $this->attempt('the ageing page shows the customer in \"not yet due\" and the AR total', function () use ($accountant, $customer): void {
             $html = (string) $this->actingAs($accountant, 'web')->get('/ageing')->assertOk()->getContent();
@@ -325,7 +326,7 @@ final class InvoicingRenderSweep extends TestCase
             }
         });
 
-        echo "\n== The balance tie-out repairs a projection the rows disagree with (§10.4) ==\n";
+        echo "\n== The balance tie-out repairs a projection the rows disagree with ==\n";
 
         $this->attempt('--check reports drift, the repair run fixes it, and a second check agrees', function () use ($invoice): void {
             DB::table('invoices')->where('id', $invoice->id)->update(['balance_amount' => 1]);

@@ -13,7 +13,7 @@ use App\Domain\Operations\Models\Job;
 use App\Domain\Operations\Models\Trip;
 
 /**
- * The Operations module's billing read door (§13 D5).
+ * The Operations module's billing read door (D5).
  *
  * Invoicing may not import `Chargeable`, `Trip` or `Job`, and it should not: what it needs is the money a
  * delivery earned, the leg it earned it on and who owes it. This class answers exactly that and nothing the
@@ -24,7 +24,7 @@ use App\Domain\Operations\Models\Trip;
  * `invoice_lines.chargeable_unique` would then refuse at the database with a worse message.
  *
  * Ordering is oldest first, so an invoice's line positions follow the order the work was delivered rather
- * than whatever the storage engine returns — the same reason §5.5's allocation is FIFO.
+ * than whatever the storage engine returns — the same reason the allocation is FIFO.
  */
 final class TripBilling
 {

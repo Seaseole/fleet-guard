@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * Raises a work order and puts it where §10.6 says it belongs: `draft`, then straight to `approved`
+ * Raises a work order and puts it where the design says it belongs: `draft`, then straight to `approved`
  * or `awaiting_approval` depending on its estimate against the limit.
  *
  * The estimate is the lines' own arithmetic, not a number typed into a box, so the threshold is
@@ -32,7 +32,7 @@ use InvalidArgumentException;
  * (for the schedule and trip) to this truck — the alternative is a service history that credits the
  * wrong vehicle.
  *
- * `draft` is the row's first state because §10.6's machine starts there and a future "save and come
+ * `draft` is the row's first state because the machine starts there and a future "save and come
  * back" path needs it; this Action always finishes the job of deciding, so a caller never sees the
  * draft row.
  */
@@ -46,7 +46,7 @@ final class RaiseWorkOrder
     public function __invoke(WorkOrderDto $dto, ?int $actorId = null): WorkOrder
     {
         if (! Gate::allows('work_orders.create')) {
-            throw new InvalidArgumentException('Raising a work order is a workshop act (§9.3).');
+            throw new InvalidArgumentException('Raising a work order is a workshop act.');
         }
 
         return DB::transaction(function () use ($dto, $actorId): WorkOrder {
@@ -61,7 +61,7 @@ final class RaiseWorkOrder
             foreach ($dto->lines as $line) {
                 if ($line->currencyCode !== $base) {
                     throw new InvalidArgumentException(sprintf(
-                        'A work-order line is priced in %s. A line quoted in %s arrives with the supplier bill, which carries its §5.2 rate (Phase 5).',
+                        'A work-order line is priced in %s. A line quoted in %s arrives with the supplier bill, which carries its rate (Phase 5).',
                         $base,
                         $line->currencyCode,
                     ));

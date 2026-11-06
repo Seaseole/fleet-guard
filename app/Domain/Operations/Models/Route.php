@@ -14,7 +14,7 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.1 ROUTE — a corridor the fleet prices against, e.g. GBE-WDH.
+ * ROUTE — a corridor the fleet prices against, e.g. GBE-WDH.
  *
  * The endpoints are stored as names for people and ISO codes for reports: Phase 6's per-country
  * summary groups by `origin_country_code`/`destination_country_code`, and no amount of string

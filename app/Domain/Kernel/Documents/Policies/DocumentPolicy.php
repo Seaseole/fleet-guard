@@ -10,7 +10,7 @@ use App\Models\User;
 use Illuminate\Auth\Access\Response;
 
 /**
- * §9.3's documents row and §14.4's "role-based visibility via documents.visibility + policy".
+ * The documents row and the "role-based visibility via documents.visibility + policy".
  *
  * Two layers, and both are needed. The ability (`documents.view`, `.upload`, …) is the *kind* of
  * action a role may perform at all; `visibility` narrows *which papers* — a Dispatcher with
@@ -49,7 +49,7 @@ final class DocumentPolicy
     }
 
     /**
-     * §9.3 gives the delete column to the Owner only (⚑ on the row), and the route adds the
+     * The design gives the delete column to the Owner only (⚑ on the row), and the route adds the
      * re-authentication. The policy does not re-check the re-auth window: that is the middleware's
      * job, and duplicating it here would mean two answers to "was this person just asked for their
      * password".
@@ -74,7 +74,7 @@ final class DocumentPolicy
      */
     private function visibleTo(User $user, Document $document): bool
     {
-        // §9.3 gives the Owner F on this row outright, so the Owner is the one role a narrowing
+        // The design gives the Owner F on this row outright, so the Owner is the one role a narrowing
         // cannot lock out — the alternative is an owner who cannot read their own register because
         // somebody typed the wrong role into a visibility list.
         if ($user->hasRole(RoleKey::Owner->value)) {

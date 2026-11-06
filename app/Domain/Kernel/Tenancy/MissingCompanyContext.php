@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use RuntimeException;
 
 /**
- * T3 in DESIGN.md §8, and the whole point of the tenancy work: a scoped model read with
+ * T3 in DESIGN.md, and the whole point of the tenancy work: a scoped model read with
  * no company context throws rather than quietly returning every row. A silent cross-tenant
  * read is the one failure mode this model cannot afford.
  */

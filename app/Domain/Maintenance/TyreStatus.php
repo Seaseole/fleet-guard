@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Maintenance;
 
 /**
- * §4.3 TYRE `status`, minus the spec's `rotating`.
+ * TYRE `status`, minus the spec's `rotating`.
  *
  * Rotation is an event — a tyre is taken off one position and fitted to another — and the
  * `tyre_positions` history records it twice (a removal and a fitment) with dates and odometers. A

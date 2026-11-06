@@ -9,7 +9,7 @@ use App\Domain\Invoicing\Models\Customer;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Edits a customer's master details (§4.1, D1).
+ * Edits a customer's master details (D1).
  *
  * The payment term is written from the DTO like any other field; a caller that cannot read terms is
  * the *screen's* problem to solve before it builds the DTO (it carries the stored value forward),

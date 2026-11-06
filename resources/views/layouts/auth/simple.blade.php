@@ -16,9 +16,9 @@
                 </a>
             </div>
 
-            <div class="rounded-fg-lg border border-fg-line bg-fg-surface p-6 shadow-fg-1">
+            <main id="main" class="rounded-fg-lg border border-fg-line bg-fg-surface p-6 shadow-fg-1">
                 {{ $slot }}
-            </div>
+            </main>
 
             <div class="flex items-center justify-center gap-2">
                 <x-theme-toggle class="size-8" />
@@ -26,6 +26,8 @@
         </div>
 
         <x-ui.toast.group />
-        <x-flash-toasts />
+
+        @php $shellFlashes = collect(session()->pull("flash_toasts", []))->concat(session("status") ? [["message" => session("status"), "kind" => "success"]] : [])->values()->all(); @endphp
+        <x-flash-toasts :flashes="$shellFlashes" />
     </body>
 </html>

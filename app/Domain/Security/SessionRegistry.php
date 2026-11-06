@@ -10,7 +10,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 
 /**
- * §9.2's session record: the two writes that are bookkeeping rather than business — adopting a device
+ * The session record: the two writes that are bookkeeping rather than business — adopting a device
  * the first time the middleware sees it, and moving its clock on activity.
  *
  * Revocation is deliberately **not** here: it is a security decision with an actor and a reason, so it is
@@ -62,7 +62,7 @@ final class SessionRegistry
     }
 
     /**
-     * The absolute cap (§9.2: idle 2 h, absolute max 12 h) is measured from the sign-in, so the deadline
+     * The absolute cap (idle 2 h, absolute max 12 h) is measured from the sign-in, so the deadline
      * a device can reach never passes the deadline the day created.
      */
     private function cap(CarbonInterface $idle, CarbonInterface $signedInAt): CarbonInterface

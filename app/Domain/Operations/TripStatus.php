@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace App\Domain\Operations;
 
 /**
- * The operational lifecycle of a trip (§10.2) — sixteen states, one table.
+ * The operational lifecycle of a trip — sixteen states, one table.
  *
  * The enum is the vocabulary only; the machine lives in `Trip::transitions()` so it cannot drift from
- * the `trips_status_allowed` CHECK (§10.1). What belongs here is the *meaning* of a state for the
- * three rules §10.2 states in prose:
+ * the `trips_status_allowed` CHECK. What belongs here is the *meaning* of a state for the
+ * three rules the design states in prose:
  *
  * - **pre-departure vs post-departure** decides whether a stopped trip is `cancelled` or `aborted`,
  *   and an aborted trip still carries costs and may still be billed — a cancelled one never does;
@@ -59,7 +59,7 @@ enum TripStatus: string
         };
     }
 
-    /** The `ui/badge` tone for the dispatch board and trip detail (DESIGN-SYSTEM.md §1.5). */
+    /** The `ui/badge` tone for the dispatch board and trip detail. */
     public function tone(): string
     {
         return match ($this) {
@@ -77,19 +77,19 @@ enum TripStatus: string
         };
     }
 
-    /** Before the truck has left, a stopped trip is a cancellation, not an abort (§10.2). */
+    /** Before the truck has left, a stopped trip is a cancellation, not an abort. */
     public function isPreDeparture(): bool
     {
         return in_array($this, [self::Draft, self::Planned, self::Assigned, self::Loaded, self::OnHold], true);
     }
 
-    /** §10.2's "a driver may never transition to" list, at the level the kiosk guard asks about. */
+    /** The "a driver may never transition to" list, at the level the kiosk guard asks about. */
     public function requiresOfficeRole(): bool
     {
         return in_array($this, [self::Delivered, self::Completed, self::Closed], true);
     }
 
-    /** Costs are editable until the trip closes; a re-open keeps them editable on purpose (§10.2). */
+    /** Costs are editable until the trip closes; a re-open keeps them editable on purpose. */
     public function acceptsCostEdits(): bool
     {
         return ! in_array($this, [self::Closed, self::Cancelled], true);
@@ -100,7 +100,7 @@ enum TripStatus: string
         return in_array($this, [self::Cancelled, self::Aborted], true);
     }
 
-    /** The states that occupy a truck and driver on the dispatch board's day grid (§3.2). */
+    /** The states that occupy a truck and driver on the dispatch board's day grid. */
     public function holdsCapacity(): bool
     {
         return in_array($this, [self::Assigned, self::Loaded, self::Departed, self::InTransit, self::AtBorder, self::Arrived, self::PodPending], true);

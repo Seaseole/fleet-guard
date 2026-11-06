@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Invoicing;
 
 /**
- * How the money arrived, and the account it landed in (§6.8's `PaymentReceived` debit side).
+ * How the money arrived, and the account it landed in (the `PaymentReceived` debit side).
  *
  * Four values because the fleet's cash actually comes from four places. `card` and `mobile_money` both
  * debit `1120 Bank — BWP operating` because COA v1 has no settlement-account row for either — the float
@@ -36,7 +36,7 @@ enum PaymentMethod: string
         };
     }
 
-    /** The COA v1 code the receipt debits (§6.8). */
+    /** The COA v1 code the receipt debits. */
     public function accountCode(): string
     {
         return match ($this) {

@@ -5,10 +5,10 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 
 /*
- * Security screens (§3.2): the staff register and the two halves of an invitation.
+ * Security screens: the staff register and the two halves of an invitation.
  *
  * The accept route is the only unauthenticated page in the application besides login. The token
- * travels in the path because a guest has no session to attach it to, and §9.1 makes the link itself
+ * travels in the path because a guest has no session to attach it to, and the design makes the link itself
  * the proof of the address — which is why the row stores only its hash.
  */
 

@@ -1,0 +1,4 @@
+reference,principal,annual_rate_percent,frequency,repayment_count,first_payment_on,purpose,truck_registration_no,supplier_code,bank_account_name,notes
+ABSA-2024-0117,486000.00,14.75,monthly,36,2026-12-05,vehicle,B 9001 OV1,OPENSUP-2,,Twelve of the original forty-eight rows paid in the old system
+FNB-2025-0032,150000.00,12.5,fortnightly,8,2026-11-16,working_capital,,OPENSUP-3,,Bridge facility carried at the principal still outstanding
+CAB-2023-0208,27500.55,16.9,monthly,1,2026-11-30,vehicle,B 9001 OV2,,The final row of a facility almost paid off — the residue lands here

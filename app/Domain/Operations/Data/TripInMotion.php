@@ -8,7 +8,7 @@ use App\Domain\Operations\TripStatus;
 use Carbon\CarbonImmutable;
 
 /**
- * A trip that is on the road, as the Telematics module is allowed to see it (§13 D5).
+ * A trip that is on the road, as the Telematics module is allowed to see it (D5).
  *
  * The live map needs the trip number, the corridor and the two points to draw a line between; it does
  * not need the customer, the money or the crew, and naming the `Trip` model from another module would

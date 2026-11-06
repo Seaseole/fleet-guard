@@ -41,7 +41,7 @@ enum RouteRateState: string
      * The windows come from `date` columns (UTC midnight) and `$on` is the company's business day
      * (`Carbon::today('Africa/Gaborone')` — 22:00 UTC the evening before). Comparing *instants*
      * would call a card starting today "scheduled" for two hours of every day; comparing the
-     * calendar dates is what the column means (§2).
+     * calendar dates is what the column means.
      */
     public static function of(CarbonInterface $from, ?CarbonInterface $to, CarbonInterface $on): self
     {

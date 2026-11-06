@@ -94,6 +94,11 @@ final class PostingRejected extends RuntimeException
         return new self("The {$period} accounting period is locked. Corrections into a locked period post at today's date as a reversal.");
     }
 
+    public static function periodIsClosed(string $period): self
+    {
+        return new self("The {$period} accounting period is closed (nothing posts into a closed month). Reopen it deliberately from the periods screen, or post the correction at today's date.");
+    }
+
     public static function zeroAmount(): self
     {
         return new self('A journal line with a zero base amount is not a line: it inflates line_count and unbalances what ledger:verify recomputes (gl_journal_lines_amount_positive).');

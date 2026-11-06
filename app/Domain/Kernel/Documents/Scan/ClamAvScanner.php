@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Kernel\Documents\Scan;
 
 /**
- * The ClamAV sidecar adapter (§14.4's "queue-clamav against a ClamAV sidecar is the honest Linux
+ * The ClamAV sidecar adapter (the "queue-clamav against a ClamAV sidecar is the honest Linux
  * design").
  *
  * INSTREAM rather than a temp-path command: the file is already on disk, and asking clamd to read a

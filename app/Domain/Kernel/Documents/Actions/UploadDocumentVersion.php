@@ -21,7 +21,7 @@ use Illuminate\Support\Str;
 use Throwable;
 
 /**
- * The one door through which bytes reach the private disk (§14.4), and the only place a version row
+ * The one door through which bytes reach the private disk, and the only place a version row
  * is ever created.
  *
  * The order of the steps is the contract:
@@ -37,7 +37,7 @@ use Throwable;
  * and `sha256` cannot catch it because the values are well-formed and simply not about the file that
  * exists. So the row is written *from* the store's measurement, never alongside it.
  *
- * The supersede happens inside the same transaction as the insert, and the §10.8 unique index is
+ * The supersede happens inside the same transaction as the insert, and the unique index is
  * what makes it safe rather than this code: two uploads racing would both read "no other current
  * version" and both insert, and the index across `current_slot` is the thing that makes the second
  * one fail instead of a document with two truths.
@@ -52,7 +52,7 @@ final class UploadDocumentVersion
     ) {}
 
     /**
-     * @param  string|null  $replacedReason  why this copy replaces the one on file (§10.8 keeps it on the version)
+     * @param  string|null  $replacedReason  why this copy replaces the one on file (the design keeps it on the version)
      */
     public function handle(Document $document, DocumentInput $input, ?int $uploadedBy = null, ?string $replacedReason = null): DocumentVersion
     {
@@ -84,7 +84,7 @@ final class UploadDocumentVersion
 
         if ($scan->verdict === ScanVerdict::Infected) {
             // Refused at the door: the bytes are never written, so an infected file does not exist
-            // on the private disk at all. §14.4's scan is an intake control, not a badge on a listing.
+            // on the private disk at all. The scan is an intake control, not a badge on a listing.
             throw InvalidDocumentFile::infected($scan->detail);
         }
 
@@ -157,7 +157,7 @@ final class UploadDocumentVersion
     }
 
     /**
-     * A document becomes `current` when its first version is published (§10.8). A document already
+     * A document becomes `current` when its first version is published. A document already
      * `current` stays `current` — the version behind it is what got superseded, not the paper.
      *
      * This is the only reading the stored axis survives: if publishing a newer scan moved the

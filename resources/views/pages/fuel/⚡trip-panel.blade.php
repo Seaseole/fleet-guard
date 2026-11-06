@@ -16,6 +16,7 @@ use App\Domain\Fuel\Models\FuelVariance;
 use App\Domain\Fuel\Support\FuelConsumption;
 use App\Domain\Kernel\Money\Money;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
+use App\Domain\Kernel\Identity\ConfirmsRecentPassword;
 use App\Domain\Operations\Models\Trip;
 use App\Domain\Operations\TripStatus;
 use Illuminate\Support\Carbon;
@@ -26,7 +27,7 @@ use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /*
- * A trip's fuel panel (§4.3, §10.9): what this trip's truck has been given, and the one form that
+ * A trip's fuel panel: what this trip's truck has been given, and the one form that
  * gives it more.
  *
  * It is a component of its own rather than another section of the trip page because fuel is a
@@ -39,6 +40,8 @@ use Livewire\Component;
  * Action would accept, so the form does not pretend it is one.
  */
 new class extends Component {
+    use ConfirmsRecentPassword;
+
     #[Locked]
     public Trip $trip;
 
@@ -85,13 +88,13 @@ new class extends Component {
             && $this->tanks !== [];
     }
 
-    /** §10.9's correction seat: reversing a posted issue is an operations decision (§9.3). */
+    /** The correction seat: reversing a posted issue is an operations decision. */
     public function canCorrectFuel(): bool
     {
         return Gate::allows('fuel.correct');
     }
 
-    /** §10.2: a closed trip, or one that never left, has costs that are final rather than editable. */
+    /** A closed trip, or one that never left, has costs that are final rather than editable. */
     public function costsAreFrozen(): bool
     {
         return $this->trip->costs_frozen
@@ -155,6 +158,10 @@ new class extends Component {
     {
         abort_unless($this->canCorrectFuel(), 403);
 
+        if (! $this->confirmRecentPassword()) {
+            return;
+        }
+
         $validated = $this->validate([
             'reversalIssueId' => ['required', 'string'],
             'reversalReason' => ['required', 'string', 'max:160'],
@@ -180,7 +187,7 @@ new class extends Component {
         $this->dispatch('toast', message: __('Issue reversed — the mirror entry is posted and the stock is back.'), kind: 'success');
     }
 
-    /** "45.32" → 4532, without ever building a float (§20.4). */
+    /** "45.32" → 4532, without ever building a float. */
     private function scaledHundredths(string $input): int
     {
         $text = trim(str_replace([' ', ','], ['', '.'], $input));
@@ -346,7 +353,7 @@ new class extends Component {
 --}}
 <div class="grid gap-5">
     @if ($this->canSeeFuel())
-        <section class="grid gap-5 rounded-fg-lg border border-fg-line bg-fg-surface p-5">
+        <section class="grid gap-5 fg-panel p-5">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="grid gap-1">
                     <x-ui.subheading>{{ __('Fuel') }}</x-ui.subheading>
@@ -400,9 +407,9 @@ new class extends Component {
                 <x-ui.table :caption="__('Fuel issued on this trip, newest first, with the state of each issue')">
                     <x-slot name="head">
                         <x-ui.table.th>{{ __('Tank') }}</x-ui.table.th>
-                        <x-ui.table.th>{{ __('Source') }}</x-ui.table.th>
+                        <x-ui.table.th hideBelow="lg">{{ __('Source') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Litres') }}</x-ui.table.th>
-                        <x-ui.table.th numeric>{{ __('Odometer') }}</x-ui.table.th>
+                        <x-ui.table.th numeric hideBelow="lg">{{ __('Odometer') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Cost') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('State') }}</x-ui.table.th>
                         @if ($this->canCorrectFuel())
@@ -413,9 +420,9 @@ new class extends Component {
                     @foreach ($this->issues as $issued)
                         <tr wire:key="trip-fuel-{{ $issued->id }}">
                             <x-ui.table.td>{{ $issued->tank?->kind->label() ?? '—' }}</x-ui.table.td>
-                            <x-ui.table.td>{{ $issued->purchase?->invoice_no ?? $issued->bulkTank?->name ?? __('pump card') }}</x-ui.table.td>
+                            <x-ui.table.td hideBelow="lg">{{ $issued->purchase?->invoice_no ?? $issued->bulkTank?->name ?? __('pump card') }}</x-ui.table.td>
                             <x-ui.table.td numeric>{{ $issued->litresMajor() }}</x-ui.table.td>
-                            <x-ui.table.td numeric>{{ $issued->odometer_km }}</x-ui.table.td>
+                            <x-ui.table.td numeric hideBelow="lg">{{ $issued->odometer_km }}</x-ui.table.td>
                             <x-ui.table.td numeric>{{ $this->money($issued->cost_base) }}</x-ui.table.td>
                             <x-ui.table.td><x-ui.badge :tone="$issued->status->tone()">{{ $issued->status->label() }}</x-ui.badge></x-ui.table.td>
                             @if ($this->canCorrectFuel())
@@ -450,7 +457,7 @@ new class extends Component {
 
             @if ($this->costsAreFrozen() && $this->trip->truck_id !== null)
                 <x-ui.alert tone="info" :title="__('Costs are final')">
-                    {{ __('This trip is closed, cancelled or aborted, so no fuel may be issued. Re-open it, or correct the ledger with a reversing entry (§6.4).') }}
+                    {{ __('This trip is closed, cancelled or aborted, so no fuel may be issued. Re-open it, or correct the ledger with a reversing entry.') }}
                 </x-ui.alert>
             @elseif ($this->trip->truck_id !== null && $this->tanks === [])
                 <x-ui.alert tone="info" :title="__('No tank is fitted')">
@@ -523,7 +530,7 @@ new class extends Component {
                 <x-ui.dialog name="fuel-issue-reversal" :title="__('Reverse this fuel issue')">
                     <form wire:submit="reverse" class="grid gap-4 p-5">
                         <p class="text-sm text-fg-ink-muted">
-                            {{ __('The issue is not edited (§10.9). A mirror journal entry nets the cost, a bulk tank takes its litres and money back, the slip’s litres become available again, and the issue is marked reversed with your reason in the trail.') }}
+                            {{ __('The issue is not edited. A mirror journal entry nets the cost, a bulk tank takes its litres and money back, the slip’s litres become available again, and the issue is marked reversed with your reason in the trail.') }}
                         </p>
 
                         <x-ui.input name="reversalReason" wire:model="reversalReason" :label="__('Reason for the reversal')" :hint="__('Required — stored on the issue and in the operational trail.')" />

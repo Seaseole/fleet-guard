@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Maintenance;
 
 /**
- * §4.3's work-order kinds: why the truck is in the workshop.
+ * The work-order kinds: why the truck is in the workshop.
  *
  * The kind is not decoration — it is what the register groups by and what a maintenance-history read
  * asks for ("how often does this truck break down" is a different question from "how often is it

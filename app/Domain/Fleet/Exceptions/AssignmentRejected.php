@@ -35,7 +35,7 @@ final class AssignmentRejected extends RuntimeException
 
     public static function driverNotEligible(string $name, string $on): self
     {
-        return new self("{$name} is not eligible to drive on {$on}: their status, licence or PDP permit does not cover that date. Renew the paper or pick another driver.");
+        return new self("{$name} is not eligible to drive on {$on}: their status, licence or PRDP permit does not cover that date. Renew the paper or pick another driver.");
     }
 
     public static function driverAlreadyAssigned(string $name, string $from, ?string $to): self

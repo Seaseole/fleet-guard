@@ -7,7 +7,7 @@ namespace App\Domain\Fleet;
 use InvalidArgumentException;
 
 /**
- * The fuel a truck's tank takes (§4.3's `TRUCK.fuel_type`).
+ * The fuel a truck's tank takes (the `TRUCK.fuel_type`).
  *
  * A closed list rather than free text because the column is a fact about the engine, not a note:
  * "Diesel" and "DIESEL " were two different answers to the same question, and a report grouped by

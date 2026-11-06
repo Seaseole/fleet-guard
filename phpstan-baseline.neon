@@ -1,0 +1,139 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Property App\\Domain\\Fuel\\Actions\\CreateFuelPurchase\:\:\$ledger is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: app/Domain/Fuel/Actions/CreateFuelPurchase.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 1
+			path: app/Domain/Fuel/Actions/CreateFuelPurchase.php
+
+		-
+			message: '#^Property App\\Domain\\Fuel\\Actions\\ReconcileBulkTank\:\:\$ledger is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: app/Domain/Fuel/Actions/ReconcileBulkTank.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 1
+			path: app/Domain/Fuel/Actions/ReconcileBulkTank.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Domain/Invoicing/Queries/AgeingReport.php
+
+		-
+			message: '#^Trait App\\Domain\\Kernel\\Identity\\ConfirmsRecentPassword is used zero times and is not analysed\.$#'
+			identifier: trait.unused
+			count: 1
+			path: app/Domain/Kernel/Identity/ConfirmsRecentPassword.php
+
+		-
+			message: '#^Property App\\Domain\\Maintenance\\Models\\WorkOrder\:\:\$closed_at \(Illuminate\\Support\\Carbon\|null\) does not accept Carbon\\CarbonImmutable\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: app/Domain/Maintenance/Actions/CloseWorkOrder.php
+
+		-
+			message: '#^Property App\\Domain\\Maintenance\\Actions\\CountPartStock\:\:\$ledger is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: app/Domain/Maintenance/Actions/CountPartStock.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 1
+			path: app/Domain/Maintenance/Actions/CountPartStock.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>minorUnits" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Domain/Maintenance/Actions/CreateTyre.php
+
+		-
+			message: '#^Property App\\Domain\\Maintenance\\Actions\\IssuePartToWorkOrder\:\:\$ledger is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: app/Domain/Maintenance/Actions/IssuePartToWorkOrder.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 1
+			path: app/Domain/Maintenance/Actions/IssuePartToWorkOrder.php
+
+		-
+			message: '#^Property App\\Domain\\Maintenance\\Models\\WorkOrder\:\:\$planned_for \(Illuminate\\Support\\Carbon\|null\) does not accept string\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: app/Domain/Maintenance/Actions/PlanWorkOrder.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>wo_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Domain/Maintenance/Actions/RaiseBreakdownRepair.php
+
+		-
+			message: '#^Property App\\Domain\\Maintenance\\Actions\\ReceivePartStock\:\:\$ledger is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: app/Domain/Maintenance/Actions/ReceivePartStock.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 1
+			path: app/Domain/Maintenance/Actions/ReceivePartStock.php
+
+		-
+			message: '#^Parameter \#1 \.\.\.\$arg1 of function min expects non\-empty\-array, list\<int\> given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Domain/Maintenance/Alerts/ServiceDueSource.php
+
+		-
+			message: '#^Property App\\Domain\\Operations\\Models\\Trip\:\:\$arrived_at \(Illuminate\\Support\\Carbon\|null\) does not accept Carbon\\CarbonImmutable\.$#'
+			identifier: assign.propertyType
+			count: 1
+			path: app/Domain/Operations/Actions/AdvanceTrip.php
+
+		-
+			message: '#^Property App\\Domain\\Operations\\Actions\\CompleteTrip\:\:\$fleet is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: app/Domain/Operations/Actions/CompleteTrip.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Domain/Operations/Models/BorderCrossing.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>label" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Domain/Operations/Queries/TripsInMotion.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>label" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Domain/Telematics/Queries/LiveMap.php
+
+		-
+			message: '#^Called ''Model\:\:make\(\)'' which performs unnecessary work, use ''new Model\(\)''\.$#'
+			identifier: larastan.noModelMake
+			count: 3
+			path: database/seeders/Production/TaxRateSeeder.php

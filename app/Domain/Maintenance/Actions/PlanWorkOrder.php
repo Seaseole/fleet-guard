@@ -14,7 +14,7 @@ use InvalidArgumentException;
 use Throwable;
 
 /**
- * §10.6's `approved → planned`: the job has a day in the workshop diary.
+ * The `approved → planned`: the job has a day in the workshop diary.
  *
  * The date is stored on the row (`planned_for`) because "when is the truck in the bay" is a question
  * the fleet register asks of a truck that is still on the road, and answering it from the audit trail
@@ -28,7 +28,7 @@ final class PlanWorkOrder
     public function __invoke(WorkOrder $workOrder, string $plannedFor, ?int $actorId = null): WorkOrder
     {
         if (! Gate::allows('work_orders.create')) {
-            throw new InvalidArgumentException('Planning a work order is a workshop act (§9.3).');
+            throw new InvalidArgumentException('Planning a work order is a workshop act.');
         }
 
         try {
@@ -43,7 +43,7 @@ final class PlanWorkOrder
 
             if ($locked->status !== WorkOrderStatus::Approved) {
                 throw new InvalidArgumentException(sprintf(
-                    '%s is %s. A job is planned once it is approved, so the diary never holds work nobody may do (§10.6).',
+                    '%s is %s. A job is planned once it is approved, so the diary never holds work nobody may do.',
                     $locked->wo_no,
                     strtolower($locked->status->label()),
                 ));

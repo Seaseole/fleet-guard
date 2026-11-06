@@ -26,7 +26,7 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /*
- * Breakdowns (§3.2, §4.3): the trucks that stopped, where they stopped, and the job each stop needed.
+ * Breakdowns: the trucks that stopped, where they stopped, and the job each stop needed.
  *
  * A breakdown is recorded before anything else happens to it. The row is the availability record —
  * date, place, hours lost — and the work order is raised from it afterwards, carrying the same truck
@@ -35,7 +35,7 @@ use Livewire\WithPagination;
  *
  * Recording is `breakdowns.record` (Owner, Operations Manager, Workshop Manager, Dispatcher — a
  * dispatcher is who hears about it first). Raising the repair is `work_orders.create`, because the
- * job goes through the same estimate and approval threshold as any other (§10.6): a breakdown is a
+ * job goes through the same estimate and approval threshold as any other: a breakdown is a
  * reason to need the owner's signature, not a way around it.
  */
 new #[Title('Breakdowns')] class extends Component {
@@ -90,7 +90,7 @@ new #[Title('Breakdowns')] class extends Component {
             unset($this->tripOptions);
         }
 
-        // Recovery is only a driver-caused stop's option (§4.3's CHECK); the form follows the cause.
+        // Recovery is only a driver-caused stop's option (the CHECK); the form follows the cause.
         if ($property === 'bdCause' && $this->bdCause !== BreakdownCause::Driver->value) {
             $this->bdRecoverable = false;
         }
@@ -319,7 +319,7 @@ new #[Title('Breakdowns')] class extends Component {
         return CurrentCompany::model()->base_currency_code;
     }
 
-    /** "2.5" → 250, without ever building a float (§20.4). */
+    /** "2.5" → 250, without ever building a float. */
     private function scaledHundredths(string $input, string $label): int
     {
         $text = trim(str_replace([' ', ','], ['', '.'], $input));
@@ -338,7 +338,7 @@ new #[Title('Breakdowns')] class extends Component {
 }; ?>
 
 <div class="grid gap-6">
-    <header class="flex flex-wrap items-end justify-between gap-3">
+    <header class="fg-page-header flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div class="grid gap-1">
             <x-ui.heading size="xl" level="1">{{ __('Breakdowns') }}</x-ui.heading>
             <x-ui.text>
@@ -382,9 +382,9 @@ new #[Title('Breakdowns')] class extends Component {
                     <x-ui.table.th>{{ __('Stopped') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Truck') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Where and what') }}</x-ui.table.th>
-                    <x-ui.table.th>{{ __('Cause') }}</x-ui.table.th>
+                    <x-ui.table.th hideBelow="lg">{{ __('Cause') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('Hours lost') }}</x-ui.table.th>
-                    <x-ui.table.th>{{ __('Trip / repair') }}</x-ui.table.th>
+                    <x-ui.table.th hideBelow="md">{{ __('Trip / repair') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                 </tr>
             </thead>
@@ -394,7 +394,7 @@ new #[Title('Breakdowns')] class extends Component {
                         <x-ui.table.td nowrap>{{ $breakdown->occurred_at->format('d M Y H:i') }}</x-ui.table.td>
                         <x-ui.table.td>
                             @if ($breakdown->truck)
-                                <a href="{{ route('fleet.show', ['truck' => $breakdown->truck->id]) }}" wire:navigate class="text-fg-ink hover:text-accent">{{ $breakdown->truck->label() }}</a>
+                                <a href="{{ route('fleet.show', ['truck' => $breakdown->truck->id]) }}" wire:navigate class="text-fg-ink underline-offset-4 hover:text-accent-ink hover:underline">{{ $breakdown->truck->label() }}</a>
                             @else
                                 <span class="text-xs text-fg-ink-muted">{{ __('Truck #:id', ['id' => $breakdown->truck_id]) }}</span>
                             @endif
@@ -403,7 +403,7 @@ new #[Title('Breakdowns')] class extends Component {
                             <span class="text-fg-ink">{{ $breakdown->location }}</span>
                             <span class="block text-xs text-fg-ink-muted">{{ $breakdown->description }}</span>
                         </x-ui.table.td>
-                        <x-ui.table.td>
+                        <x-ui.table.td hideBelow="lg">
                             <x-ui.badge>{{ $breakdown->cause->label() }}</x-ui.badge>
 
                             @if ($breakdown->recoverable_from_driver)
@@ -411,14 +411,14 @@ new #[Title('Breakdowns')] class extends Component {
                             @endif
                         </x-ui.table.td>
                         <x-ui.table.td numeric nowrap>{{ $breakdown->hours_lost === 0 ? '—' : number_format($breakdown->hours_lost).' h' }}</x-ui.table.td>
-                        <x-ui.table.td>
+                        <x-ui.table.td hideBelow="md">
                             <div class="grid gap-0.5 text-xs">
                                 @if ($breakdown->trip)
-                                    <a href="{{ route('operations.trip', ['trip' => $breakdown->trip->id]) }}" wire:navigate class="text-fg-ink hover:text-accent">{{ $breakdown->trip->trip_no }}</a>
+                                    <a href="{{ route('operations.trip', ['trip' => $breakdown->trip->id]) }}" wire:navigate class="text-fg-ink underline-offset-4 hover:text-accent-ink hover:underline">{{ $breakdown->trip->trip_no }}</a>
                                 @endif
 
                                 @if ($breakdown->workOrder)
-                                    <a href="{{ route('maintenance.work_order', ['workOrder' => $breakdown->workOrder->id]) }}" wire:navigate class="text-fg-ink hover:text-accent">{{ $breakdown->workOrder->wo_no }}</a>
+                                    <a href="{{ route('maintenance.work_order', ['workOrder' => $breakdown->workOrder->id]) }}" wire:navigate class="text-fg-ink underline-offset-4 hover:text-accent-ink hover:underline">{{ $breakdown->workOrder->wo_no }}</a>
                                 @else
                                     <span class="text-fg-ink-muted">{{ __('no repair yet') }}</span>
                                 @endif

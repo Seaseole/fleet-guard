@@ -9,7 +9,7 @@ use App\Domain\Fleet\Models\Equipment;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The only path equipment's status moves through (§10.1, D1).
+ * The only path equipment's status moves through (D1).
  */
 final class ChangeEquipmentStatus
 {

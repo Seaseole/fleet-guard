@@ -9,7 +9,7 @@ use App\Domain\Kernel\Identity\FieldGate;
 use App\Models\User;
 
 /**
- * Who may see and change a truck (§9.3 "Fleet").
+ * Who may see and change a truck ("Fleet").
  *
  * Cost is not a row decision: purchase price renders behind
  * {@see FieldGate::SeeVehicleCost}, so this policy never asks about
@@ -40,7 +40,7 @@ final class TruckPolicy
             && $user->can('fleet.update');
     }
 
-    /** §9.3's ⚑ row: recording a disposal is re-authenticated, and costs a `fleet.sell` grant. */
+    /** The ⚑ row: recording a disposal is re-authenticated, and costs a `fleet.sell` grant. */
     public function sell(User $user, Truck $truck): bool
     {
         return $truck->company_id === $user->company_id
@@ -53,7 +53,7 @@ final class TruckPolicy
             && $user->can('fleet.odometer.record');
     }
 
-    /** A truck is never deleted; `sold` is the terminal state (§10.1). */
+    /** A truck is never deleted; `sold` is the terminal state. */
     public function delete(User $user, Truck $truck): bool
     {
         return false;

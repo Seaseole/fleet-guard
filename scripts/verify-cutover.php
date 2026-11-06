@@ -25,9 +25,9 @@ use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 
 /**
- * Phase 0.5 cutover verification (DESIGN.md §15.2).
+ * Phase 0.5 cutover verification.
  *
- * Not the test suite — `tests/` is local-only by owner decision (§14.6). This is the runnable proof
+ * Not the test suite — `tests/` is local-only by owner decision. This is the runnable proof
  * that a balanced trial balance validates, posts as one real journal, is refused when re-uploaded,
  * reverses through a mirror entry, and that the error report names every line the rehearsal refuses.
  *
@@ -153,7 +153,7 @@ $publicIds = [];
 $entryIds = [];
 
 try {
-    echo "\nPermissions (§9.3, §15.2)\n";
+    echo "\nPermissions\n";
 
     $accountant = Role::query()->where('company_id', 1)->where('name', 'accountant')->firstOrFail();
     $owner = Role::query()->where('company_id', 1)->where('name', 'owner')->firstOrFail();
@@ -318,7 +318,7 @@ CSV;
         $reverse->handle($postedAgain, '   ', $userId);
     }, CutoverRejected::class);
 
-    echo "\nDatabase guards hold the shape too (§6.3)\n";
+    echo "\nDatabase guards hold the shape too\n";
 
     refuses('the row CHECK refuses a valid row with both sides', function () use ($batch): void {
         DB::table('cutover_rows')->insert([

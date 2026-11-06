@@ -21,18 +21,18 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * §10.2's `delivered → completed` — the trip's facts are in, and the truck comes home.
+ * The `delivered → completed` — the trip's facts are in, and the truck comes home.
  *
  * The closing odometer is the one number this Action insists on, because everything downstream is
  * measured against the span it completes: fuel variance (Phase 3), cost-per-km and the corridor
- * distance figures (Phase 8). Of the §10.2 checklist's other two lines, *every crossing exited*
+ * distance figures (Phase 8). Of the checklist's other two lines, *every crossing exited*
  * landed with slice 2f: a crossing still `planned` or `entered` is a gate the paper says the truck
  * has not cleared, and completion is where the road's facts are declared in. *Fuel reconciled* still
  * waits for Phase 3's fuel module, and a gate that has nothing to check would be a gate that always
  * passes, so it is absent rather than assumed.
  *
  * The reading goes through Fleet's `RecordOdometerReading`, so the truck's projection, its audit trail
- * and its service-schedule arithmetic all move on the same call that ends the trip (§4.3: one reading,
+ * and its service-schedule arithmetic all move on the same call that ends the trip (one reading,
  * one owner).
  */
 final class CompleteTrip
@@ -52,19 +52,19 @@ final class CompleteTrip
         ?int $actorId = null,
         ActorKind $actorKind = ActorKind::User,
     ): Trip {
-        // §10.2 has two doors into `completed`: the normal one from `delivered`, and `reopened →
+        // The design has two doors into `completed`: the normal one from `delivered`, and `reopened →
         // completed`, which is the same checklist run a second time after an Owner re-opened the trip.
         // Both are this Action — the point of a re-open is that the facts get re-examined, not that
         // the state is nudged forward — which is why the edge is not in AdvanceTrip's door list.
         if (! in_array($trip->status, [TripStatus::Delivered, TripStatus::Reopened], true)) {
             throw new InvalidArgumentException(sprintf(
-                'Trip %s is %s; a trip is completed after its POD is approved (§10.2), or re-completed after a re-open.',
+                'Trip %s is %s; a trip is completed after its POD is approved, or re-completed after a re-open.',
                 $trip->trip_no,
                 $trip->status->label(),
             ));
         }
 
-        // §10.2: a gate the crossing record has not cleared is a trip that has not finished crossing.
+        // A gate the crossing record has not cleared is a trip that has not finished crossing.
         $uncleared = BorderCrossing::query()
             ->where('trip_id', $trip->id)
             ->whereIn('status', [BorderCrossingStatus::Planned, BorderCrossingStatus::Entered])
@@ -73,7 +73,7 @@ final class CompleteTrip
 
         if ($uncleared !== null) {
             throw new InvalidArgumentException(sprintf(
-                'Trip %s cannot be completed: the crossing at %s is %s, and §10.2 requires every crossing to be exited.',
+                'Trip %s cannot be completed: the crossing at %s is %s, and the design requires every crossing to be exited.',
                 $trip->trip_no,
                 $uncleared->label(),
                 $uncleared->status->label(),
@@ -91,7 +91,7 @@ final class CompleteTrip
 
         if ($odometerEndKm < $start) {
             throw new InvalidArgumentException(sprintf(
-                'The closing reading (%s km) is below the opening one (%s km). §4.3: mileage that runs backwards is recorded as a suspect reading against the truck, not as the end of a trip.',
+                'The closing reading (%s km) is below the opening one (%s km). Mileage that runs backwards is recorded as a suspect reading against the truck, not as the end of a trip.',
                 number_format($odometerEndKm),
                 number_format($start),
             ));
@@ -128,7 +128,7 @@ final class CompleteTrip
             if (! $recompletion) {
                 ($this->endTruckTrip)((int) $trip->truck_id, 'Returned from trip '.$trip->trip_no);
 
-                // The truck is home, so the reservation that held it must close. §10.1's timeline is
+                // The truck is home, so the reservation that held it must close. The timeline is
                 // append-only — the row stays, with an end time — and without this the truck would sit
                 // "already assigned (still open)" forever and no second trip could ever be dispatched
                 // on it. The gap was found by a verification run that reused a driver, not by a reader.

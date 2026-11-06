@@ -6,10 +6,10 @@ use App\Http\Controllers\Documents\DownloadDocumentController;
 use Illuminate\Support\Facades\Route;
 
 /*
- * Documents (§14.4). Two screens and one endpoint, and the endpoint is the reason the rest exists.
+ * Documents. Two screens and one endpoint, and the endpoint is the reason the rest exists.
  *
  * The download route is the only place in the application that reads the private disk, which is what
- * makes §14.4's promises enforceable rather than stylistic: a file that could also be fetched by a
+ * makes the promises enforceable rather than stylistic: a file that could also be fetched by a
  * public path has no download trail, no scan gate and no TTL, because none of those are on its way
  * out. `serve => false` on the disk is what stops the framework offering a second door.
  *

@@ -11,7 +11,7 @@
 
 @php
     // The tone colours the figure; the caption carries the words. Colour alone never says what is
-    // wrong (DESIGN-SYSTEM.md §1.5), which is why a card with a tone always has a caption.
+    // wrong, which is why a card with a tone always has a caption.
     $tones = [
         'neutral' => 'text-fg-ink',
         'success' => 'text-success',
@@ -22,24 +22,13 @@
     $isZero = (int) $figure === 0;
     $link = ! $gated && $href !== null;
 
-    // Display role (DESIGN-SYSTEM.md §3) — a dashboard hero figure is 30/34 semibold, and tabular
+    // Display role — a dashboard hero figure is 30/34 semibold, and tabular
     // so four cards side by side align on the digit rather than the glyph width.
-    $figureClasses = 'text-3xl leading-9 font-semibold tracking-[-0.015em] tabular-nums '.($tones[$tone] ?? $tones['neutral']);
+    $figureClasses = 'text-3xl leading-9 font-semibold tracking-figure tabular-nums '.($tones[$tone] ?? $tones['neutral']);
 @endphp
 
 @if ($gated)
-    <div {{ $attributes->class('grid gap-2 rounded-fg-md border border-dashed border-fg-line bg-fg-surface p-5') }}>
-        <p class="text-xs font-medium tracking-[0.02em] text-fg-ink-muted">{{ $label }}</p>
-
-        <p class="flex items-center gap-2 text-sm text-fg-ink-muted">
-            <x-ui.icon name="lock-closed" size="4" />
-            {{ __('Not available to your role') }}
-        </p>
-
-        <p class="text-xs leading-4 text-fg-ink-muted">
-            {{ $gate === null ? __('Ask the Owner for the screen this figure comes from.') : __('Requires :ability.', ['ability' => $gate]) }}
-        </p>
-    </div>
+    <x-ui.gated-state :label="$label" :gate="$gate" {{ $attributes }} />
 @else
     <{{ $link ? 'a' : 'div' }}
         @if($link) href="{{ $href }}" wire:navigate @endif
@@ -49,7 +38,7 @@
         ]) }}
     >
         <div class="flex items-center justify-between gap-2">
-            <p class="text-xs font-medium tracking-[0.02em] text-fg-ink-secondary">{{ $label }}</p>
+            <p class="text-xs font-medium tracking-label text-fg-ink-secondary">{{ $label }}</p>
 
             @if($link)
                 <x-ui.icon

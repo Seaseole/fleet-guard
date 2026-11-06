@@ -28,29 +28,29 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
- * §6.8 / §15.2 phase 5, slice 5b — money leaving the till toward a supplier: `Dr 2110 / Cr bank-or-cash`.
+ * / Phase 5, slice 5b — money leaving the till toward a supplier: `Dr 2110 / Cr bank-or-cash`.
  *
- * The receipt side's ordering rule is copied here because it is the same accounting truth (§20.33's
+ * The receipt side's ordering rule is copied here because it is the same accounting truth (the
  * decision 1): **a payment is a bank fact, and the bills it settles are what give it meaning.** One
  * transaction writes the payment, walks its money FIFO over the supplier's open bills by `bill_on`
  * (oldest paper first — what a supplier chases), records one allocation row per bill, and posts one
  * entry whose debit lines carry the `bill_id` dimension. So AP ageing and a supplier's statement are
- * ledger queries, and §6.8's "split read from stored rows, never recomputed at report time" holds.
+ * ledger queries, and the "split read from stored rows, never recomputed at report time" holds.
  *
  * Money that no bill has claimed stays as a debit line on `2110` **without** a bill dimension: an
- * advance is the fleet's own claim on its supplier, and §6.8's table gives no unapplied-payable account.
+ * advance is the fleet's own claim on its supplier, and the table gives no unapplied-payable account.
  * The `unapplied_amount` projection carries it so a later payment application can find it, and the
- * residue rule from §5.5 applies: when the last application lands within one minor unit of a balance,
+ * residue rule from the design applies: when the last application lands within one minor unit of a balance,
  * it absorbs the difference, so a paid bill reaches exactly zero rather than leaving a thebe nobody
  * can ever clear.
  *
- * Base currency only (§20.32's decision 5): the FX slice owns the rate a ZAR payment is made at and the
+ * Base currency only (the decision 5): the FX slice owns the rate a ZAR payment is made at and the
  * realised `7510`/`7511` pair, and inventing one here would be a ledger entry that disagrees with the
  * bank statement.
  *
- * The ability is `bills.create`. §9.3's "Expenses & supplier bills" row gives the Accountant and the
+ * The ability is `bills.create`. The "Expenses & supplier bills" row gives the Accountant and the
  * Owner full rights over the whole pair — entering the paper and paying it — and the catalogue carries
- * no `bills.pay`; the door follows the row rather than inventing a permission (§20.28's deviation note).
+ * no `bills.pay`; the door follows the row rather than inventing a permission (the deviation note).
  */
 final class RecordSupplierPayment
 {
@@ -78,7 +78,7 @@ final class RecordSupplierPayment
         ?int $actorId = null,
     ): SupplierPayment {
         if (! Gate::allows('bills.create')) {
-            throw new InvalidArgumentException('Paying a supplier bill needs the bills.create ability (§9.3).');
+            throw new InvalidArgumentException('Paying a supplier bill needs the bills.create ability.');
         }
 
         if ($amountMinor <= 0) {
@@ -105,12 +105,12 @@ final class RecordSupplierPayment
         $cash = $accounts[$method->accountCode()] ?? null;
 
         if ($payable === null) {
-            throw new InvalidArgumentException('Account 2110 Accounts payable is not in this company\'s chart, so the payment has no liability to reduce (§6.8).');
+            throw new InvalidArgumentException('Account 2110 Accounts payable is not in this company\'s chart, so the payment has no liability to reduce.');
         }
 
         if ($cash === null) {
             throw new InvalidArgumentException(sprintf(
-                'Account %s is not in this company\'s chart, so a %s payment cannot be made (§6.8).',
+                'Account %s is not in this company\'s chart, so a %s payment cannot be made.',
                 $method->accountCode(),
                 mb_strtolower($method->label()),
             ));
@@ -146,10 +146,10 @@ final class RecordSupplierPayment
                 $planned[] = ['bill' => $bill, 'amount' => $take];
             }
 
-            // There is no residue rule on this side, and that is a difference worth stating (§5.5's
+            // There is no residue rule on this side, and that is a difference worth stating (the
             // absorption lives on the receipt): here the money is the ceiling, so a bill left one minor
             // unit short keeps that unit — over-applying would post a debit the payment has no cash
-            // behind and break §6.1's balance. Money that does not fit a bill is an advance instead, and
+            // behind and break the balance. Money that does not fit a bill is an advance instead, and
             // an advance is a debit on 2110 with no bill dimension, which is honest to the bank.
 
             $applied = $amountMinor - $remaining;
@@ -162,7 +162,7 @@ final class RecordSupplierPayment
                 'paid_on' => $paidOn->toDateString(),
                 'method' => $method->value,
                 'reference' => $reference === null || trim($reference) === '' ? null : mb_substr(trim($reference), 0, 80),
-                // §5.2's block is the identity, base-only, until the FX slice (§20.32's decision 5).
+                // The block is the identity, base-only, until the FX slice (the decision 5).
                 'currency_code' => $baseCurrency,
                 'amount' => $amountMinor,
                 'fx_rate' => '1',
@@ -198,7 +198,7 @@ final class RecordSupplierPayment
                     'base_amount' => $item['amount'],
                     'applied_on' => $paidOn->toDateString(),
                     // The application that closes the bill is marked as it is written, so the tie-out can
-                    // tell a zeroed balance from a partly paid one without re-walking the FIFO order (§20.33).
+                    // tell a zeroed balance from a partly paid one without re-walking the FIFO order.
                     'settled' => $closing,
                     'reversed' => false,
                     'applied_by' => $actorId,
@@ -259,7 +259,7 @@ final class RecordSupplierPayment
             ));
 
             foreach ($closed as $item) {
-                // The lifecycle axis never moves (§10.4's three axes, copied to the payable side): what
+                // The lifecycle axis never moves (the three axes, copied to the payable side): what
                 // changed is the derived settlement, and the operational trail says so for the reader
                 // who asks "when did we stop owing BILL-00007".
                 $this->audit->operational(
@@ -323,7 +323,7 @@ final class RecordSupplierPayment
 
             if ($bill === null) {
                 throw new InvalidArgumentException(sprintf(
-                    'Bill %s is not an open bill of %s — a void document, a settled one, or another supplier\'s paper cannot receive this money (§10.9).',
+                    'Bill %s is not an open bill of %s — a void document, a settled one, or another supplier\'s paper cannot receive this money.',
                     $id,
                     $supplier->name,
                 ));
@@ -340,7 +340,7 @@ final class RecordSupplierPayment
 
         if ($ordered === []) {
             throw new InvalidArgumentException(sprintf(
-                '%s has no open bill to settle. Record the supplier\'s paper first — cash that never met a document is an advance, and an advance needs the bill it is waiting for (§6.8).',
+                '%s has no open bill to settle. Record the supplier\'s paper first — cash that never met a document is an advance, and an advance needs the bill it is waiting for.',
                 $supplier->name,
             ));
         }

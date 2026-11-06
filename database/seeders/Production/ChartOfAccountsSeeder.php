@@ -13,9 +13,9 @@ use App\Domain\Kernel\Tenancy\CurrentCompany;
 use Illuminate\Database\Seeder;
 
 /**
- * COA v1 — the accounts Phase 0's ledger needs, shaped for a Botswana haulage business (§15.2).
+ * COA v1 — the accounts Phase 0's ledger needs, shaped for a Botswana haulage business.
  *
- * It is a seed rather than a migration because the accountant edits it (§15 phase 1 "COA review
+ * It is a seed rather than a migration because the accountant edits it (phase 1 "COA review
  * with the accountant"), and `is_system` is what protects the rows the application itself posts
  * against: a code an Action cites by name cannot be deleted without breaking a posting path.
  *
@@ -28,13 +28,13 @@ final class ChartOfAccountsSeeder extends Seeder
 {
     public function run(): void
     {
-        // Per company, exactly as RolesSeeder does it: the accounts table is company-keyed (§8),
+        // Per company, exactly as RolesSeeder does it: the accounts table is company-keyed,
         // and CurrentCompany has to be forced because a seeder has no authenticated user.
         Company::query()->orderBy('id')->each(function (Company $company): void {
             CurrentCompany::force($company->id);
 
             // Counts are taken while the context is still forced: Account is a scoped model, and
-            // reading it after forget() is exactly the fail-closed throw §8 T3 promises.
+            // reading it after forget() is exactly the fail-closed throw T3 promises.
             try {
                 $this->seedForCompany();
 
@@ -87,7 +87,7 @@ final class ChartOfAccountsSeeder extends Seeder
                         'type' => $row['type'],
                         'normal_balance' => $row['normal'],
                         'parent_id' => $parent,
-                        // Seeded rows are system rows: §6.1 marks them so Phase 1+ cannot delete an
+                        // Seeded rows are system rows: Marks them so Phase 1+ cannot delete an
                         // account an Action posts against by code.
                         'is_system' => true,
                         'is_postable' => (bool) $row['is_postable'],
@@ -107,7 +107,7 @@ final class ChartOfAccountsSeeder extends Seeder
 
     /**
      * Headers are the rollup rows a trial balance groups under; leaves are what a line may post
-     * to. `requires` is the §6.1 mask — every line on that account must carry those dimensions.
+     * to. `requires` is the mask — every line on that account must carry those dimensions.
      *
      * @return list<array<string, mixed>> one row per gl_accounts entry, read with the local types asserted below.
      *                                    A list, not a code-keyed map: PHP turns the numeric-string key '1000' into the integer 1000,
@@ -125,11 +125,11 @@ final class ChartOfAccountsSeeder extends Seeder
             ['code' => '1150', 'name' => 'Accounts receivable — customers', 'type' => AccountType::Asset, 'normal' => Side::Debit, 'parent' => '1100', 'is_postable' => true, 'requires' => [Dimension::Customer]],
             ['code' => '1160', 'name' => 'Driver advances receivable', 'type' => AccountType::Asset, 'normal' => Side::Debit, 'parent' => '1100', 'is_postable' => true, 'requires' => [Dimension::Driver]],
             ['code' => '1170', 'name' => 'Prepaid permits and customs deposits', 'type' => AccountType::Asset, 'normal' => Side::Debit, 'parent' => '1100', 'is_postable' => true],
-            // Phase 3 slice 3b: diesel in a bulk tank is an asset until a trip burns it (§6.8). No
+            // Phase 3 slice 3b: diesel in a bulk tank is an asset until a trip burns it. No
             // dimensions — a tank is not a truck, a trip or a customer, and a dip book-keeping entry
             // has no leg to carry.
             ['code' => '1180', 'name' => 'Bulk fuel stock', 'type' => AccountType::Asset, 'normal' => Side::Debit, 'parent' => '1100', 'is_postable' => true],
-            // Phase 3 slice 3e: the stores shelf is an asset until a work order fits the part (§6.8).
+            // Phase 3 slice 3e: the stores shelf is an asset until a work order fits the part.
             // No dimensions — the shelf is not a truck or a job, and the receipt that fills it has no
             // leg to carry; the issue's debit is where the truck and the work order are named.
             ['code' => '1190', 'name' => 'Parts stock', 'type' => AccountType::Asset, 'normal' => Side::Debit, 'parent' => '1100', 'is_postable' => true],
@@ -145,14 +145,14 @@ final class ChartOfAccountsSeeder extends Seeder
             ['code' => '2120', 'name' => 'Purchase tax / VAT payable', 'type' => AccountType::Liability, 'normal' => Side::Credit, 'parent' => '2100', 'is_postable' => true],
             ['code' => '2130', 'name' => 'PAYE and employee deductions payable', 'type' => AccountType::Liability, 'normal' => Side::Credit, 'parent' => '2100', 'is_postable' => true],
             ['code' => '2140', 'name' => 'Driver settlements payable', 'type' => AccountType::Liability, 'normal' => Side::Credit, 'parent' => '2100', 'is_postable' => true, 'requires' => [Dimension::Driver]],
-            // Phase 4: §6.8 posts VAT on *both* sides and the two must be held apart — a filing that
+            // Phase 4: The design posts VAT on *both* sides and the two must be held apart — a filing that
             // nets output VAT against input VAT in one account cannot be shown to BRBS, and the
             // accountant's ledger keeps them as separate controls. 2120 stays exactly where it is
-            // because Phase 3 already posted diesel deliveries' input VAT onto it (§20.25); these two
+            // because Phase 3 already posted diesel deliveries' input VAT onto it; these two
             // rows give each side its own home without reopening the 1180 postings already in the book.
             ['code' => '2125', 'name' => 'Output VAT — sales', 'type' => AccountType::Liability, 'normal' => Side::Credit, 'parent' => '2100', 'is_postable' => true],
             ['code' => '2126', 'name' => 'Input VAT — purchases', 'type' => AccountType::Liability, 'normal' => Side::Debit, 'parent' => '2100', 'is_postable' => true],
-            // Money the customer has paid that no invoice has claimed yet (§5.5's allocation, §6.8's
+            // Money the customer has paid that no invoice has claimed yet (the allocation, the
             // `PaymentAllocated`). An overpayment never "adjusts" an invoice, so the residue needs a
             // liability to sit in until the next allocation finds it.
             ['code' => '2150', 'name' => 'Unapplied customer cash', 'type' => AccountType::Liability, 'normal' => Side::Credit, 'parent' => '2100', 'is_postable' => true, 'requires' => [Dimension::Customer]],
@@ -176,7 +176,7 @@ final class ChartOfAccountsSeeder extends Seeder
             ['code' => '5000', 'name' => 'Expenses', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'is_postable' => false],
             ['code' => '5100', 'name' => 'Fuel', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true, 'requires' => [Dimension::Truck, Dimension::Trip]],
             // The tank, not the trip, disagrees with the book: a dip variance is measured in litres
-            // the truck never burned, so 5100's truck+trip rule cannot carry it (§15.2 phase 3).
+            // the truck never burned, so 5100's truck+trip rule cannot carry it.
             ['code' => '5110', 'name' => 'Fuel stock variance', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true],
             ['code' => '5200', 'name' => 'Driver wages and allowances', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true, 'requires' => [Dimension::Driver]],
             ['code' => '5300', 'name' => 'Maintenance and repairs', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true, 'requires' => [Dimension::Truck]],
@@ -186,7 +186,7 @@ final class ChartOfAccountsSeeder extends Seeder
             // no vehicle consumed, so 5310's truck rule cannot carry it (mirrors 5110 for diesel).
             ['code' => '5315', 'name' => 'Parts stock variance', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true],
             ['code' => '5400', 'name' => 'Border and customs costs', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true, 'requires' => [Dimension::Trip]],
-            // §6.6's direct-cost buckets need three accounts the v1 chart did not carry: a toll is not
+            // The direct-cost buckets need three accounts the v1 chart did not carry: a toll is not
             // a customs charge, and putting a weighbridge fee or a police fine in "border" would make
             // the bucket report lie. All three require the trip so a direct cost cannot lose its leg.
             ['code' => '5410', 'name' => 'Tolls and road charges', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true, 'requires' => [Dimension::Trip]],
@@ -199,10 +199,10 @@ final class ChartOfAccountsSeeder extends Seeder
             ['code' => '5900', 'name' => 'Fines, penalties and overload charges', 'type' => AccountType::Expense, 'normal' => Side::Debit, 'parent' => '5000', 'is_postable' => true],
 
             // ── Realised exchange differences ──
-            // §5.5's payment-side rule: the difference between an open item's rate and the payment's
+            // The payment-side rule: the difference between an open item's rate and the payment's
             // rate is a realised gain or loss, and it needs somewhere to land that is not "bank
             // charges" — a corridor fleet bills in ZAR and settles in BWP, so the pair is a standing
-            // part of the month. §6.8 names these codes; the 7000 section is the design's own range,
+            // part of the month. The design names these codes; the 7000 section is the design's own range,
             // opened here for the first time with the two rows Phase 4 actually posts to.
             ['code' => '7000', 'name' => 'Exchange differences', 'type' => AccountType::Revenue, 'normal' => Side::Credit, 'is_postable' => false],
             ['code' => '7510', 'name' => 'Realised FX gain', 'type' => AccountType::Revenue, 'normal' => Side::Credit, 'parent' => '7000', 'is_postable' => true],

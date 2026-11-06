@@ -11,9 +11,9 @@ use App\Domain\Kernel\Tenancy\CurrentCompany;
 use Illuminate\Console\Command;
 
 /**
- * Give every company the thresholds its sources declare — once, and never again (§14.1).
+ * Give every company the thresholds its sources declare — once, and never again.
  *
- * §14.1 made thresholds rows so the Owner could change them, and a rule that lives only in data has the
+ * Made thresholds rows so the Owner could change them, and a rule that lives only in data has the
  * hole that *nothing* is also data: a company created last week would simply have no reminders, and the
  * register would be right about that while the Owner read it as "nothing is expiring". This command is
  * what turns an absent family into a decision somebody made.
@@ -34,7 +34,7 @@ class EnsureReminderThresholds extends Command
 
         if ($sources === []) {
             $this->error('No reminder source is registered. A schedule that scans nothing reports a clean '
-                .'run, which is the least useful thing a command can do (§14.6).');
+                .'run, which is the least useful thing a command can do.');
 
             return self::FAILURE;
         }

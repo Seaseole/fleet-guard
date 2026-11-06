@@ -12,7 +12,7 @@ use App\Domain\People\Queries\DriverDirectory;
 use Illuminate\Support\Collection;
 
 /**
- * The Fleet module's read door for other modules (§13 D5).
+ * The Fleet module's read door for other modules (D5).
  *
  * Operations names a truck and a trailer on every trip and has to ask both about status, capacity
  * and mileage; it may not import the models. This class is the whole contract, in the tenant scope
@@ -30,36 +30,14 @@ final class FleetDirectory
     {
         $truck = Truck::query()->find($truckId);
 
-        return $truck === null
-            ? null
-            : new FleetUnitOption(
-                id: $truck->id,
-                kind: 'truck',
-                label: $truck->label(),
-                status: $truck->status,
-                capacityTonnes: $truck->capacity_tonnes_10_2 === null ? null : (float) $truck->capacity_tonnes_10_2,
-                odometerKm: (int) $truck->odometer_km,
-                engineHours: $truck->engine_hours_10_2 === null ? null : (float) $truck->engine_hours_10_2,
-                active: (bool) $truck->active,
-            );
+        return $truck === null ? null : $this->truckOption($truck);
     }
 
     public function trailer(int $trailerId): ?FleetUnitOption
     {
         $trailer = Trailer::query()->find($trailerId);
 
-        return $trailer === null
-            ? null
-            : new FleetUnitOption(
-                id: $trailer->id,
-                kind: 'trailer',
-                label: $trailer->label(),
-                status: $trailer->status,
-                capacityTonnes: $trailer->capacity_tonnes_10_2 === null ? null : (float) $trailer->capacity_tonnes_10_2,
-                odometerKm: null,
-                engineHours: null,
-                active: (bool) $trailer->active,
-            );
+        return $trailer === null ? null : $this->trailerOption($trailer);
     }
 
     public function unit(string $kind, int $unitId): ?FleetUnitOption
@@ -69,6 +47,56 @@ final class FleetDirectory
             'trailer' => $this->trailer($unitId),
             default => $this->equipment($unitId),
         };
+    }
+
+    /**
+     * Several trucks in one read, keyed by id.
+     *
+     * A board that lists a week of trips knows every truck it is about to ask for; the per-id door
+     * would spend one query per row to answer the same question. Ids that do not exist are absent,
+     * which is exactly the answer `truck()` gives by returning null.
+     *
+     * @param  iterable<int>  $truckIds
+     * @return array<int, FleetUnitOption>
+     */
+    public function trucksById(iterable $truckIds): array
+    {
+        $ids = self::ids($truckIds);
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $options = [];
+
+        foreach (Truck::query()->whereKey($ids)->get() as $truck) {
+            $option = $this->truckOption($truck);
+            $options[$option->id] = $option;
+        }
+
+        return $options;
+    }
+
+    /**
+     * @param  iterable<int>  $trailerIds
+     * @return array<int, FleetUnitOption>
+     */
+    public function trailersById(iterable $trailerIds): array
+    {
+        $ids = self::ids($trailerIds);
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $options = [];
+
+        foreach (Trailer::query()->whereKey($ids)->get() as $trailer) {
+            $option = $this->trailerOption($trailer);
+            $options[$option->id] = $option;
+        }
+
+        return $options;
     }
 
     public function equipment(int $equipmentId): ?FleetUnitOption
@@ -89,8 +117,8 @@ final class FleetDirectory
             status: $item->status,
             capacityTonnes: null,
             odometerKm: null,
-            engineHours: $item->engine_hours_10_2 === null ? null : (float) $item->engine_hours_10_2,
-            active: (bool) $item->active,
+            engineHours: null,
+            active: ! $item->status->isTerminal(),
         );
     }
 
@@ -121,26 +149,59 @@ final class FleetDirectory
     }
 
     /**
-     * @param  Collection<int, Truck|Trailer>  $units
+     * @param  iterable<int, Truck|Trailer>  $units
      * @return Collection<int, FleetUnitOption>
      */
-    private function ordered(Collection $units): Collection
+    private function ordered(iterable $units): Collection
     {
         /** @var Collection<int, FleetUnitOption> $options */
-        $options = $units->map(fn ($unit): FleetUnitOption => new FleetUnitOption(
-            id: $unit->id,
-            kind: $unit instanceof Truck ? 'truck' : 'trailer',
-            label: $unit->label(),
-            status: $unit->status,
-            capacityTonnes: $unit->capacity_tonnes_10_2 === null ? null : (float) $unit->capacity_tonnes_10_2,
-            odometerKm: $unit instanceof Truck ? (int) $unit->odometer_km : null,
-            engineHours: $unit->engine_hours_10_2 === null ? null : (float) $unit->engine_hours_10_2,
-            active: (bool) $unit->active,
-        ));
+        $options = collect($units)->map(fn ($unit): FleetUnitOption => $unit instanceof Truck
+            ? $this->truckOption($unit)
+            : $this->trailerOption($unit));
 
-        return $options->sortBy([
-            [static fn (FleetUnitOption $o): int => $o->mayBeDispatched() ? 0 : 1, SORT_ASC],
-            [static fn (FleetUnitOption $o): string => $o->label, SORT_ASC],
-        ])->values();
+        return $options
+            ->sortBy(static fn (FleetUnitOption $o): string => $o->label)
+            ->sortBy(static fn (FleetUnitOption $o): int => $o->mayBeDispatched() ? 0 : 1)
+            ->values();
+    }
+
+    private function truckOption(Truck $truck): FleetUnitOption
+    {
+        return new FleetUnitOption(
+            id: $truck->id,
+            kind: 'truck',
+            label: $truck->label(),
+            status: $truck->status,
+            capacityTonnes: $truck->capacity_tonnes_10_2 === null ? null : (float) $truck->capacity_tonnes_10_2,
+            odometerKm: (int) $truck->odometer_km,
+            engineHours: $truck->engine_hours_10_2 === null ? null : (float) $truck->engine_hours_10_2,
+            active: (bool) $truck->active,
+        );
+    }
+
+    private function trailerOption(Trailer $trailer): FleetUnitOption
+    {
+        return new FleetUnitOption(
+            id: $trailer->id,
+            kind: 'trailer',
+            label: $trailer->label(),
+            status: $trailer->status,
+            capacityTonnes: $trailer->capacity_tonnes_10_2 === null ? null : (float) $trailer->capacity_tonnes_10_2,
+            odometerKm: null,
+            engineHours: null,
+            active: (bool) $trailer->active,
+        );
+    }
+
+    /**
+     * @param  iterable<int|string>  $ids
+     * @return list<int>
+     */
+    private static function ids(iterable $ids): array
+    {
+        return array_values(array_unique(array_map(
+            static fn (int|string $id): int => (int) $id,
+            is_array($ids) ? $ids : iterator_to_array($ids, false),
+        )));
     }
 }

@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §15.2 Phase 0.5 CUTOVER_ROW — one parsed line of an uploaded file, kept whether it validated
+     * Phase 0.5 CUTOVER_ROW — one parsed line of an uploaded file, kept whether it validated
      * or not.
      *
      * Rejected rows are stored rather than discarded because the error report is a deliverable:
@@ -21,7 +21,7 @@ return new class extends Migration
      *
      * `gl_account_id` is resolved at validation time and stored so the preview and the commit agree
      * about which account a code meant. The ledger schema intentionally carries no FK on its own
-     * dimension columns yet (§20.4); this table names a real chart row, so it can.
+     * dimension columns yet; this table names a real chart row, so it can.
      */
     public function up(): void
     {

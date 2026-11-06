@@ -26,6 +26,6 @@ final class InvitationAlreadyExists extends RuntimeException
 
     public static function notInvitable(RoleKey $role): self
     {
-        return new self("The {$role->label()} role is not granted by invitation — it is created by the first-run setup (§9.1).");
+        return new self("The {$role->label()} role is not granted by invitation — it is created by the first-run setup.");
     }
 }

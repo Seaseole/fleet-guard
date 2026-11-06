@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * Raises the repair a breakdown finally got, and ties the two rows together (§4.3 BREAKDOWN).
+ * Raises the repair a breakdown finally got, and ties the two rows together (BREAKDOWN).
  *
  * The work order is raised by {@see RaiseWorkOrder}, so the approval threshold, the numbering and the
  * line arithmetic are the same ones a workshop-raised job goes through — a breakdown is not a way to

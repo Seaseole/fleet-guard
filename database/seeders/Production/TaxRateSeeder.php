@@ -11,14 +11,14 @@ use App\Domain\Kernel\Tenancy\CurrentCompany;
 use Illuminate\Database\Seeder;
 
 /**
- * §17 Q4's default, as rows: 12% standard, a zero-rated line type and an exempt one.
+ * Q4's default, as rows: 12% standard, a zero-rated line type and an exempt one.
  *
  * Q4 asks for the VAT rate, the registration number and the zero-rating treatment of export legs,
  * and its stated default is "configurable `tax_rates` (default 12%), zero-rated line type available".
  * That default is what this seeds — **the 12% is the design's placeholder, not a verified rate**: the
  * number the accountant must confirm before the first tax invoice is issued, which is why it lives in
  * a seed rather than in a CHECK or a constant. Changing it is a row edit and a new window, not a
- * deploy (§16 R5: a wrong answer here is a config change, not a migration).
+ * deploy (R5: a wrong answer here is a config change, not a migration).
  *
  * The three rows also exist to make the *kinds* real on day one. An owner who decides a Namibia leg
  * is zero-rated needs a rate to point a line at; if only `standard` were seeded, that decision would

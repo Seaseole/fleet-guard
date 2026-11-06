@@ -10,10 +10,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
- * §4.4 NOTIFICATION_PREFERENCE — one person's answer about one type on one channel.
+ * NOTIFICATION_PREFERENCE — one person's answer about one type on one channel.
  *
  * **The absence of a row means deliver.** That is the only shape that survives a new alert type: an
- * opt-in table would silently mute every type its author forgot to insert, and §14.1's whole sentence
+ * opt-in table would silently mute every type its author forgot to insert, and the whole sentence
  * is about the alert reaching somebody. So a row is written only when someone opts *out*, and the
  * `enabled` column exists so the screen can offer both directions without deleting the record of a
  * choice.

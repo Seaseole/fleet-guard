@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §14.3's `latest_positions` projection — where the fleet is, without touching the history.
+     * The `latest_positions` projection — where the fleet is, without touching the history.
      *
      * "Where are my trucks" is the question the live map asks on every poll, and answering it from
      * `gps_positions` would scan 60 k rows a day and grow worse every day. One row per truck, moved

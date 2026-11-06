@@ -3,19 +3,19 @@
 namespace App\Domain\Kernel;
 
 /**
- * Screen formatting for the quantities that are not money (docs/DESIGN-SYSTEM.md §11).
+ * Screen formatting for the quantities that are not money.
  *
- * §11's contract is space thousands, a comma decimal and the unit attached — `1 842 km`,
+ * The contract is space thousands, a comma decimal and the unit attached — `1 842 km`,
  * `33,20 t`, `412,5 l`. Until this class existed, templates called `number_format()` inline,
  * which produces the English `1,842.00`, drops the unit half the time, and puts the same
  * convention in forty places instead of one. Money has its own door
  * ({@see Money\Money::format()}); this is everything else.
  *
- * Dates stay with Carbon's `format('d M Y')` until the date half of §14.8 lands here.
+ * Dates stay with Carbon's `format('d M Y')` until the date half of lands here.
  */
 final class Formatter
 {
-    /** Thousands separated by spaces, decimals by a comma — the §11 grouping rule. */
+    /** Thousands separated by spaces, decimals by a comma — the grouping rule. */
     public static function number(int|float $value, int $decimals = 0): string
     {
         return number_format((float) $value, $decimals, ',', ' ');

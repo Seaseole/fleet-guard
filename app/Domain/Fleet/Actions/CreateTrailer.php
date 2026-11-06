@@ -9,7 +9,7 @@ use App\Domain\Fleet\Models\Trailer;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Adds a trailer (§4.3, D1).
+ * Adds a trailer (D1).
  */
 final class CreateTrailer
 {

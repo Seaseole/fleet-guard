@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * `planned → entered` (§10.9): the truck is at the gate, and where it is has become a fact.
+ * `planned → entered`: the truck is at the gate, and where it is has become a fact.
  *
  * The transit document number is recorded here rather than at exit because it is the paper the
  * gate asks for on the way in, and a number typed while the queue moves is a number somebody
@@ -35,7 +35,7 @@ final class MarkCrossingEntered
         ?CarbonInterface $at = null,
     ): BorderCrossing {
         if (! Gate::allows('crossborder.manage')) {
-            throw new InvalidArgumentException('Recording a gate entry is cross-border management (§9.3).');
+            throw new InvalidArgumentException('Recording a gate entry is cross-border management.');
         }
 
         if ($crossing->status !== BorderCrossingStatus::Planned) {
@@ -82,7 +82,7 @@ final class MarkCrossingEntered
 
         if ($trip === null || in_array($trip->status, [TripStatus::Cancelled, TripStatus::Aborted, TripStatus::Closed], true)) {
             throw new InvalidArgumentException(sprintf(
-                'The crossing sits on a trip that is %s. A gate event has to belong to a trip that travelled (§10.2).',
+                'The crossing sits on a trip that is %s. A gate event has to belong to a trip that travelled.',
                 $trip?->status->label() ?? 'missing',
             ));
         }

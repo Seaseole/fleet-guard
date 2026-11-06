@@ -12,7 +12,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * §9.2's "log out everywhere". `$exceptHash` is what turns the same control into Breeze's older
+ * The "log out everywhere". `$exceptHash` is what turns the same control into Breeze's older
  * "log out other browser sessions": a person who is standing at the depot desk with a suspicious phone
  * in their hand wants the phone gone and the desk stay open, in one click.
  *

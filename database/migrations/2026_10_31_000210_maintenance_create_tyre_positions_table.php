@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 TYRE_POSITION — one fitment: this tyre on this wheel of this truck, from one odometer
-     * reading to another (§15.2 phase 3).
+     * TYRE_POSITION — one fitment: this tyre on this wheel of this truck, from one odometer
+     * reading to another.
      *
      * The row is a period, not a pointer. When a tyre comes off, `removed_at` and
      * `removed_odometer_km` are written and the row stays: how many kilometres a casing ran on the
@@ -21,7 +21,7 @@ return new class extends Migration
      * Two things must be true at once while a fitment is open, and MySQL has no partial indexes, so
      * each is a **generated column that is null once the tyre is removed** plus a unique index over
      * it: a wheel has one tyre, and a tyre is on one wheel. NULLs are distinct under a unique index,
-     * which is exactly the "only while open" semantics — the same trick §10.8's one-current-document
+     * which is exactly the "only while open" semantics — the same trick the one-current-document
      * index uses.
      *
      * `retread_count` is copied onto the fitment rather than read from the tyre, because the number
@@ -42,7 +42,7 @@ return new class extends Migration
             $table->dateTime('removed_at')->nullable();
             $table->unsignedBigInteger('removed_odometer_km')->nullable();
             $table->unsignedTinyInteger('retread_count')->default(0);
-            // Rand ×10,000 so a cost per kilometre of 0.0125 is 125 (§5.5's scale).
+            // Rand ×10,000 so a cost per kilometre of 0.0125 is 125 (the scale).
             $table->unsignedBigInteger('cost_per_km_x10000')->nullable();
 
             $table->timestamps();

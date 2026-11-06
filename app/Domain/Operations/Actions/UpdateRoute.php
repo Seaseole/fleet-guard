@@ -9,7 +9,7 @@ use App\Domain\Operations\Models\Route;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Edits a corridor's master details (§4.1, D1).
+ * Edits a corridor's master details (D1).
  *
  * The code is editable on purpose: it is how the lane is spoken about, and a typo caught a week
  * later should not force a retirement. Rate cards point at the row id, so a corrected code does not

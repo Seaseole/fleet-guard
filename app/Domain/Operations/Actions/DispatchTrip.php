@@ -17,7 +17,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
- * §10.2's `planned → assigned` — the transition the phase's definition of done is written against:
+ * The `planned → assigned` — the transition the phase's definition of done is written against:
  * **dispatch refuses an expired licence**.
  *
  * Two things happen inside one transaction, in this order, and the order is the design:
@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\DB;
  *    answered against *that* row. Everything before the lock is a fast refusal for a stale page, not a
  *    decision: two dispatchers on one trip both pass the check outside, and the one who arrives second
  *    then waits on the row and reads a trip that has already left;
- * 2. {@see DispatchGate} asks every question §10.2 lists *as of the trip's start date* — unit
+ * 2. {@see DispatchGate} asks every question the design lists *as of the trip's start date* — unit
  *    availability, the driver's status and both papers, and whether a filed document (the insurance
  *    certificate, the licence scan) has since expired. All findings come back together so a
  *    dispatcher fixes the trip in one pass instead of discovering the second problem after the first;
@@ -40,7 +40,7 @@ use Illuminate\Support\Facades\DB;
  * they hold for exactly that reason.
  *
  * A refusal writes nothing. The trip stays `planned`, no assignment exists, and the reason is a
- * message rather than a log line, because §11.2's `TripAssigned` subscribers fire *after* both halves
+ * message rather than a log line, because the `TripAssigned` subscribers fire *after* both halves
  * succeed.
  */
 final class DispatchTrip
@@ -58,7 +58,7 @@ final class DispatchTrip
         // It is a fast refusal only: the decision is the one taken against the locked row below.
         if ($trip->status !== TripStatus::Planned) {
             throw new \InvalidArgumentException(sprintf(
-                'Trip %s is %s; only a planned trip can be dispatched (§10.2).',
+                'Trip %s is %s; only a planned trip can be dispatched.',
                 $trip->trip_no,
                 $trip->status->label(),
             ));
@@ -74,7 +74,7 @@ final class DispatchTrip
 
             if ($locked->status !== TripStatus::Planned) {
                 throw new \InvalidArgumentException(sprintf(
-                    'Trip %s is %s; only a planned trip can be dispatched (§10.2).',
+                    'Trip %s is %s; only a planned trip can be dispatched.',
                     $locked->trip_no,
                     $locked->status->label(),
                 ));

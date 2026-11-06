@@ -1,0 +1,48 @@
+/*
+ | Tier 2 — the flip. This is the only file where a value changes between themes, which is why no component
+ | contains a theme conditional: a component asks for `bg-background`, and the answer is decided here.
+ |
+ | The names are the same as `tokens/palette.css` and so are the rules about them: a new colour in the light
+ | theme needs a partner here and a measured ratio in both.
+ */
+@layer theme {
+    .dark {
+        /* Cool charcoal — the same reading desk with the lamp off. The ladder keeps its order (canvas is the
+           darkest step, raised the lightest), because an overlay that goes *down* at night inverts the cue
+           the surface ladder is there to give. */
+        --color-fg-canvas: #0f1113;
+        --color-fg-surface: #17191c;
+        --color-fg-surface-raised: #1d2023;
+        --color-fg-surface-sunk: #212429;
+        --color-fg-surface-hover: #262a2f;
+        --color-fg-ink: #f3f4f5;             /* 17.18:1 on canvas, 15.99:1 on surface */
+        --color-fg-ink-secondary: #b3b8bf;   /* 9.48:1 on canvas, 8.83:1 on surface */
+        --color-fg-ink-muted: #8b9199;       /* 5.95:1 on canvas, 5.54:1 on surface, 4.90:1 on sunk, 4.54:1 on hover */
+        --color-fg-line: #2a2e33;
+        --color-fg-line-strong: #748078;
+
+        --color-accent: #61d394;
+        --color-accent-hover: #83e0ac;
+        --color-accent-soft: #142d20;
+        --color-on-accent: #102319;
+        --color-accent-ink: #83e0ac;
+
+        --color-success: #4cc38a;
+        --color-success-soft: #0d2a1c;
+        --color-warning: #f0b429;
+        --color-warning-soft: #28200c;
+        --color-danger: #ff5a6e;
+        --color-danger-hover: #f97a8c;
+        --color-danger-soft: #2b1319;
+        --color-on-danger: #1a0d10;          /* 6.26:1 on fg-danger */
+        --color-info: #7ca9f9;
+        --color-info-soft: #101d33;
+        --color-neutral-badge: #a2a8b0;      /* 7.90:1 on canvas, 7.35:1 on surface */
+
+        --color-focus: #61d394;
+
+        --shadow-fg-1: 0 1px 2px rgb(0 0 0 / 0.4);
+        --shadow-fg-2: 0 1px 3px rgb(0 0 0 / 0.45), 0 4px 10px rgb(0 0 0 / 0.5);
+        --shadow-fg-3: 0 4px 8px rgb(0 0 0 / 0.5), 0 16px 40px rgb(0 0 0 / 0.6);
+    }
+}

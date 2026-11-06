@@ -17,7 +17,7 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.1 BORDER_CROSSING — one gate event on one trip, carrying §10.9's machine.
+ * BORDER_CROSSING — one gate event on one trip, carrying the machine.
  *
  * The post's country is **copied** onto the row the way a trip copies its route: a later correction
  * to the master record must not silently restate where a truck went, and Phase 6's per-country
@@ -48,7 +48,7 @@ final class BorderCrossing extends Model implements AuditableContract
 {
     use Auditable, BelongsToCompany, CanTransition;
 
-    /** ULID key (§2), written by the `creating` hook below. */
+    /** ULID key, written by the `creating` hook below. */
     protected $keyType = 'string';
 
     public $incrementing = false;
@@ -88,7 +88,7 @@ final class BorderCrossing extends Model implements AuditableContract
     }
 
     /**
-     * §10.9's reachable edges. `agent_reconciled` and `closed` are absent on purpose: Phase 6 owns the
+     * The reachable edges. `agent_reconciled` and `closed` are absent on purpose: Phase 6 owns the
      * advance that makes reconciliation possible, and an edge that led to a state nothing can verify
      * would be a door onto a cliff.
      *

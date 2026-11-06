@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * §10.6's `in_progress → on_hold`, with one of §4.3's four reasons.
+ * The `in_progress → on_hold`, with one of the four reasons.
  *
  * The reason is an enum rather than free text so "how many jobs are waiting on parts" is a group-by
  * and not a search, and the note beside it is capped because it is the sentence a person reads next
@@ -32,7 +32,7 @@ final class HoldWorkOrder
         ?int $actorId = null,
     ): WorkOrder {
         if (! Gate::allows('work_orders.create')) {
-            throw new InvalidArgumentException('Putting a job on hold is a workshop act (§9.3).');
+            throw new InvalidArgumentException('Putting a job on hold is a workshop act.');
         }
 
         $note = $note === null ? null : trim($note);
@@ -51,7 +51,7 @@ final class HoldWorkOrder
 
             if ($locked->status !== WorkOrderStatus::InProgress) {
                 throw new InvalidArgumentException(sprintf(
-                    '%s is %s. Only work under way can be stopped (§10.6).',
+                    '%s is %s. Only work under way can be stopped.',
                     $locked->wo_no,
                     strtolower($locked->status->label()),
                 ));

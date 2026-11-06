@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * Writes a roadside stop to the register (§4.3 BREAKDOWN).
+ * Writes a roadside stop to the register (BREAKDOWN).
  *
  * The breakdown is recorded before any repair exists, because the first fact is that the truck is
  * down and where — waiting for a work order would leave the corridor's worst hours undocumented. A
@@ -25,7 +25,7 @@ final class RecordBreakdown
     public function __invoke(BreakdownDto $dto): Breakdown
     {
         if (! Gate::allows('breakdowns.record')) {
-            throw new InvalidArgumentException('Recording a breakdown is an operations act (§9.3).');
+            throw new InvalidArgumentException('Recording a breakdown is an operations act.');
         }
 
         return DB::transaction(function () use ($dto): Breakdown {

@@ -1,0 +1,399 @@
+/*
+ * Select2, dressed as this app's own control.
+ *
+ * The widget ships two things that would read instantly as "vendored plugin" if left alone: a square panel
+ * fused to the trigger and a saturated blue highlighted row. Both are replaced here from the tokens in
+ * app.css, so the palette follows `.dark` without a second set of values and the trigger keeps the metrics
+ * every other form control uses (h-9, rounded-fg-md, shadow-fg-1, --t-fast).
+ *
+ * Two structural facts drive the shape of these selectors, and neither is obvious from the widget's markup:
+ *
+ *  1. `theme: fg` is passed in data-options by x-ui.select, which renames the theme class on both the
+ *     container and the dropdown from `select2-container--default` to `select2-container--fg`. Nearly every
+ *     cosmetic rule in select2.css is scoped to `--default`, so those rules stop matching and this file
+ *     starts from a clean slate instead of fighting them with `!important`. The rules that remain are the
+ *     structural ones scoped to `.select2-container`, which is why the trigger's height, padding and border
+ *     are restated here rather than inherited.
+ *  2. The panel is not inside the trigger's container: select2 appends it to `dropdownParent` (the nearest
+ *     dialog, or the body) wrapped in a span that carries the theme class, and the visible panel is the
+ *     child of that span. So every panel rule below is a descendant selector. Measured, not assumed: 4.1.0
+ *     does not copy the source `<select>`'s classes onto either node, so the widget brings no Tailwind
+ *     utilities with it and every metric here has to be stated.
+ *
+ * Cascade order matters as much as specificity. app.css puts its utilities in `@layer`s; select2.css and this
+ * file are unlayered, and an unlayered rule beats a layered one at any specificity. That is why a copied
+ * utility class can never win against a rule below, and why this file is imported after select2.css in
+ * resources/js/select2.js — the two are emitted into the same lazy chunk, in that order.
+ *
+ * Focus needs nothing here. app.css gives every `[tabindex]` an outline band on :focus-visible, and select2's
+ * trigger carries tabindex, so the widget already meets the same keyboard standard as the rest of the app.
+ */
+
+:root {
+    /* The app's own chevron and check, copied from x-ui.icon's path data so the widget cannot drift from
+       the icon set. Masked rather than painted so the colour comes from a token, not a hard-coded hex. */
+    --fg-icon-chevron-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m19.5 8.25-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+    --fg-icon-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4.5 12.75 6 6 9-13.5'/%3E%3C/svg%3E");
+    --fg-icon-close: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 18 18 6M6 6l12 12'/%3E%3C/svg%3E");
+}
+
+/* --------------------------------------------------------------- trigger */
+
+.select2-container--fg {
+    /* select2 writes an inline pixel width it measured off the native <select> at mount. Inside a dialog that
+       is still closed that measurement is zero, so the fields come out at four different widths sharing no
+       edge. The native control this widget replaces is `w-full`, so the wrapper's width is the answer in
+       every case — which makes this the one rule here that has to beat an inline style. */
+    width: 100% !important;
+}
+
+.select2-container--fg .select2-selection--single {
+    position: relative;
+    height: 2.25rem;
+    padding: 0 2.25rem 0 0.75rem;
+    border: 1px solid var(--color-input);
+    border-radius: var(--radius-fg-md);
+    background-color: var(--color-fg-surface);
+    color: var(--color-fg-ink);
+    box-shadow: var(--shadow-fg-1);
+    cursor: default;
+    transition:
+        border-color var(--t-fast) var(--ease-standard),
+        box-shadow var(--t-fast) var(--ease-standard);
+}
+
+/* A driver tablet and a clerk on a phone get the 44px target the rest of the app's controls use. */
+@media (pointer: coarse) {
+    .select2-container--fg .select2-selection--single {
+        height: 2.75rem;
+    }
+}
+
+.select2-container--fg .select2-selection--single:hover {
+    border-color: var(--color-fg-ink-muted);
+}
+
+.select2-container--fg.select2-container--open .select2-selection--single {
+    border-color: var(--color-fg-ink-muted);
+}
+
+.select2-container--fg .select2-selection--single .select2-selection__rendered {
+    display: block;
+    padding: 0;
+    overflow: hidden;
+    color: inherit;
+    font-size: 0.875rem;
+    line-height: calc(2.25rem - 2px);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (pointer: coarse) {
+    .select2-container--fg .select2-selection--single .select2-selection__rendered {
+        line-height: calc(2.75rem - 2px);
+    }
+}
+
+.select2-container--fg .select2-selection--single .select2-selection__placeholder {
+    color: var(--color-fg-ink-muted);
+}
+
+/* The arrow is the app's chevron, and it turns over when the panel opens — transform only, so the
+   animation never touches layout. */
+.select2-container--fg .select2-selection--single .select2-selection__arrow {
+    position: absolute;
+    inset-inline-end: 0;
+    top: 0;
+    bottom: 0;
+    display: grid;
+    width: 2.25rem;
+    place-items: center;
+}
+
+.select2-container--fg .select2-selection--single .select2-selection__arrow b {
+    position: static;
+    display: block;
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    border: 0;
+    background-color: var(--color-fg-ink-muted);
+    -webkit-mask: var(--fg-icon-chevron-down) center / 1rem no-repeat;
+    mask: var(--fg-icon-chevron-down) center / 1rem no-repeat;
+    transition: transform var(--t-fast) var(--ease-standard);
+}
+
+/* Only `--open` turns the arrow: `--above`/`--below` can outlive the panel, and a closed field with its
+   chevron pointing up reads as a control that is still open. */
+.select2-container--fg.select2-container--open .select2-selection--single .select2-selection__arrow b {
+    transform: rotate(-180deg);
+}
+
+/* The clear affordance, printed only when the field is nullable. select2's default is a heavy "x" that
+   sits over the text; this is a quiet mark that answers to the same hover as the rest of the shell. */
+.select2-container--fg .select2-selection--single .select2-selection__clear {
+    position: absolute;
+    inset-inline-end: 2rem;
+    top: 50%;
+    width: 0.875rem;
+    height: 0.875rem;
+    margin: 0;
+    cursor: pointer;
+    font-size: 0;
+    line-height: 0;
+    transform: translateY(-50%);
+}
+
+.select2-container--fg .select2-selection--single .select2-selection__clear::after {
+    display: block;
+    width: 0.875rem;
+    height: 0.875rem;
+    background-color: var(--color-fg-ink-muted);
+    -webkit-mask: var(--fg-icon-close) center / 0.875rem no-repeat;
+    mask: var(--fg-icon-close) center / 0.875rem no-repeat;
+    content: "";
+    transition: background-color var(--t-fast) var(--ease-standard);
+}
+
+.select2-container--fg .select2-selection--single .select2-selection__clear:hover::after {
+    background-color: var(--color-danger);
+}
+
+.select2-container--fg.select2-container--disabled .select2-selection--single {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.select2-container--fg.select2-container--disabled .select2-selection--single:hover {
+    border-color: var(--color-input);
+}
+
+/* A locked field must not offer to empty itself — select2 hid this under `--default` as well. */
+.select2-container--fg.select2-container--disabled .select2-selection__clear {
+    display: none;
+}
+
+/* A refused selection has to be visible on the box the user is actually looking at. The native `<select>`
+    carries `aria-invalid` and is hidden by the widget, so x-ui.select prints the signal on the wrapper. */
+.fg-select--error .select2-container--fg .select2-selection--single {
+    border-color: var(--color-danger);
+}
+
+/* -------------------------------------------------------------- panel */
+
+/* Measured in the browser, not assumed: select2 puts `select2-container--fg` and `--open` on the wrapper
+   span it appends to the parent, and the visible panel is the CHILD inside it, carrying only
+   `select2-dropdown select2-dropdown--above|below`. So the panel is a descendant selector, and the search
+   field and rows below are all scoped the same way. */
+.select2-container--fg .select2-dropdown {
+    /* select2 sizes the panel to the trigger with an inline width, so width is left alone here. */
+    margin-block-start: 0.25rem;
+    border: 1px solid var(--color-fg-line);
+    border-radius: var(--radius-fg-lg);
+    background-color: var(--color-fg-surface-raised);
+    box-shadow: var(--shadow-fg-3);
+    overflow: hidden;
+    transform-origin: top center;
+    animation: fg-panel-in var(--t-fast) var(--ease-standard);
+}
+
+.select2-container--fg .select2-dropdown.select2-dropdown--above {
+    margin-block-start: 0;
+    margin-block-end: 0.25rem;
+    transform-origin: bottom center;
+}
+
+@keyframes fg-panel-in {
+    from {
+        opacity: 0;
+        transform: translateY(-0.25rem);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .select2-container--fg .select2-dropdown {
+        animation: none;
+    }
+
+    .select2-container--fg .select2-selection--single .select2-selection__arrow b {
+        transition: none;
+    }
+}
+
+/* ------------------------------------------------------------ search */
+
+.select2-container--fg .select2-search--dropdown {
+    padding: 0.375rem 0.375rem 0.25rem;
+}
+
+.select2-container--fg .select2-search__field {
+    width: 100%;
+    height: 2rem;
+    padding: 0 0.625rem;
+    border: 1px solid var(--color-input);
+    border-radius: var(--radius-fg-sm);
+    background-color: var(--color-fg-surface-sunk);
+    color: var(--color-fg-ink);
+    font-family: inherit;
+    font-size: 0.8125rem;
+    outline-offset: 2px;
+}
+
+.select2-container--fg .select2-search__field::placeholder {
+    color: var(--color-fg-ink-muted);
+}
+
+.select2-container--fg .select2-search__field:focus {
+    border-color: var(--color-focus);
+}
+
+/* ------------------------------------------------------------ results */
+
+.select2-container--fg .select2-results > .select2-results__options {
+    /* select2's own max-height AND overflow-y live together under `--default`, so renaming the theme for the
+       cosmetics threw away the scroller with them: 930px of rows sat in a 256px box with `overflow: visible`
+       and a clipped panel, which is why everything past the fifth option was unreachable. The scroll is
+       restated here, capped by the viewport so a short screen gets a shorter list rather than one that runs
+       off the bottom edge. */
+    max-height: min(16rem, 40vh);
+    overflow-y: auto;
+    /* Without this, reaching the end of a long list keeps scrolling the dialog behind it — the panel and the
+       page fight for one wheel, and the page loses the reader's place. */
+    overscroll-behavior: contain;
+    /* The gutter is reserved whether or not the list overflows, so the rows do not slide sideways the
+       moment a scrollbar appears — a 15px jump in the middle of a click reads exactly like a broken
+       control. */
+    scrollbar-gutter: stable;
+    padding: 0.25rem;
+    font-size: 0.875rem;
+}
+
+/* Nested options (an optgroup inside a group) indent; select2's own indents were `--default` rules too. */
+.select2-container--fg .select2-results__option .select2-results__option {
+    padding-inline-start: 1.25rem;
+}
+
+.select2-container--fg .select2-results__option {
+    position: relative;
+    padding: 0.3125rem 0.5rem;
+    border-radius: var(--radius-fg-sm);
+    color: var(--color-fg-ink);
+    line-height: 1.25rem;
+}
+
+.select2-container--fg .select2-results__option + .select2-results__option {
+    margin-block-start: 1px;
+}
+
+/* The active row. select2's own choice is a block of #5897fb with white text, which is both the single
+   loudest colour in the library and off-palette here. */
+.select2-container--fg .select2-results__option--highlighted.select2-results__option--selectable {
+    background-color: var(--color-accent-soft);
+    color: var(--color-accent);
+}
+
+.select2-container--fg .select2-results__option--selected {
+    padding-inline-end: 1.75rem;
+    color: var(--color-accent);
+    font-weight: 500;
+}
+
+.select2-container--fg .select2-results__option--selected::after {
+    content: "";
+    position: absolute;
+    inset-inline-end: 0.75rem;
+    width: 0.875rem;
+    height: 0.875rem;
+    background-color: var(--color-accent);
+    -webkit-mask: var(--fg-icon-check) center / 0.875rem no-repeat;
+    mask: var(--fg-icon-check) center / 0.875rem no-repeat;
+}
+
+.select2-container--fg .select2-results__option--disabled {
+    color: var(--color-fg-ink-muted);
+}
+
+.select2-container--fg .select2-results__option--group {
+    padding: 0;
+}
+
+/* Group headings read like the section labels used elsewhere in the shell, not like select2's default
+   centred grey band. */
+.select2-container--fg .select2-results__group {
+    padding: 0.5rem 0.5rem 0.25rem;
+    color: var(--color-fg-ink-muted);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.06em;
+    line-height: 1;
+    text-align: start;
+    text-transform: uppercase;
+}
+
+.select2-container--fg .select2-results__message {
+    padding: 0.75rem 0.5rem;
+    color: var(--color-fg-ink-muted);
+    font-size: 0.8125rem;
+    text-align: center;
+}
+
+/* --------------------------------------------------------- the figures */
+
+/* Codes, registrations and dates are set the way the rest of the app sets them. The templates in
+   resources/js/select2.js add these classes to the nodes they build, so the widget inherits the app's
+   tabular-numeral rule instead of inventing a third typographic voice. */
+.select2-container--fg .fg-choice {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+}
+
+.select2-container--fg .fg-choice__code {
+    color: var(--color-fg-ink-secondary);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.8125rem;
+}
+
+.select2-container--fg .select2-selection__rendered .fg-choice {
+    gap: 0.375rem;
+    /* Inside the closed box there is one line and nothing else: the code keeps its width and the label
+       takes the remainder, so a long account name ellipsises instead of wrapping into a clipped second
+       line under the 36px edge. */
+    white-space: nowrap;
+}
+
+.select2-container--fg .select2-selection__rendered .fg-choice span:last-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* A driver row says more than a name: the reason a handover would be refused rides under it. Set apart
+   rather than coloured alone, because the app never lets colour be the only channel — and in the
+   app's own tones, not literals a JS template would have to carry. */
+.select2-container--fg .fg-paper {
+    display: grid;
+    gap: 1px;
+}
+
+.select2-container--fg .fg-paper__note {
+    color: var(--color-fg-ink-muted);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.75rem;
+    line-height: 1.1rem;
+}
+
+.select2-container--fg .fg-paper__note[data-tone='danger'] {
+    color: var(--color-danger);
+}
+
+.select2-container--fg .fg-paper__note[data-tone='warning'] {
+    color: var(--color-warning);
+}

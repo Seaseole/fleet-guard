@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * §15.2 — validate an uploaded file and keep the result, errors included.
+ * Validate an uploaded file and keep the result, errors included.
  *
  * Validation runs before the batch row exists so a rejected upload is still a row with a
  * reproducible error report: "the import error report is empty" is the phase's exit criterion, and

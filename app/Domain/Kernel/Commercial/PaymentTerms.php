@@ -37,11 +37,11 @@ final class PaymentTerms
     }
 
     /**
-     * The date an invoice issued on `$issuedOn` falls due — the date §10.4's ageing axis measures from.
+     * The date an invoice issued on `$issuedOn` falls due — the date the ageing axis measures from.
      *
      * Kept beside {@see self::label()} because terms are interpreted in exactly one place: a second
      * parser in a screen is how `net_30` becomes 30 days on the form and 31 in the report. Calendar days,
-     * not business days — §17 Q3's fiscal calendar question is unresolved and a "next working day" rule
+     * not business days — Q3's fiscal calendar question is unresolved and a "next working day" rule
      * invented here would silently disagree with the accountant's reading.
      */
     public static function dueOn(string $terms, DateTimeInterface $issuedOn): Carbon
@@ -58,7 +58,7 @@ final class PaymentTerms
         }
 
         throw new InvalidArgumentException(sprintf(
-            '"%s" is not a payment term, so the invoice has no due date to age against. Use cash or net_<days> (§4.1).',
+            '"%s" is not a payment term, so the invoice has no due date to age against. Use cash or net_<days>.',
             $terms,
         ));
     }

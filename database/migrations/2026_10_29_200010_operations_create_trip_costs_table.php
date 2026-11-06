@@ -10,14 +10,14 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.1 TRIP_COST — one direct cost against a trip, with §5.2's FX block verbatim.
+     * TRIP_COST — one direct cost against a trip, with the FX block verbatim.
      *
      * `amount` is minor units of `currency_code` and `base_amount` is the authoritative BWP figure,
      * frozen at write time. The row is the operational record and the journal entry is the accounting
      * one; `source_type`/`source_id` tie the two together, and the unique pair is what makes a
      * redelivered capture one cost rather than two.
      *
-     * `description` is a deliberate addition to the table sketch in §4.1: a fuel slip with no words on
+     * `description` is a deliberate addition to the table sketch: a fuel slip with no words on
      * it is unreadable six weeks later, and the alternative — encoding the note in the journal's
      * description only — would hide it from the screen that records it.
      */
@@ -32,7 +32,7 @@ return new class extends Migration
             $table->string('paid_with', 20)->default('petty_cash');
             $table->string('description', 160)->nullable();
 
-            // §5.2, applied verbatim.
+            //, Applied verbatim.
             $table->char('currency_code', 3);
             $table->unsignedBigInteger('amount');
             $table->decimal('fx_rate', 19, 8);

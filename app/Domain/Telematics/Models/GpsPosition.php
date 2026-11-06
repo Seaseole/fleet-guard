@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
- * §4.4 GPS_POSITION — one normalised fix, append-only.
+ * GPS_POSITION — one normalised fix, append-only.
  *
  * There is no update path in the design: a fix that was wrong is wrong, and the provider's corrected
  * message arrives as a new row with its own id. The map reads {@see LatestPosition}; this table is

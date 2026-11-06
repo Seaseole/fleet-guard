@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §10.9's correction path: an issue is never edited, so the reversal needs somewhere to say why,
+     * The correction path: an issue is never edited, so the reversal needs somewhere to say why,
      * and a bulk tank needs a movement kind that reads as stock coming back.
      *
      * `reversal_reason` is `nullable` because a posted issue is not reversed yet. It is required by

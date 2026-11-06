@@ -7,7 +7,7 @@ namespace App\Domain\Security\DataGovernance;
 use Illuminate\Encryption\Encrypter;
 
 /**
- * §9.5 — the column-level key, separate from `APP_KEY`.
+ * The column-level key, separate from `APP_KEY`.
  *
  * Versioned on purpose: rotation becomes `keys:reencrypt` reading `key_version` per row instead of
  * a data-loss event, and an old row stays readable while new writes use the current key.
@@ -38,6 +38,16 @@ final class FieldCipher
     public function currentVersion(): string
     {
         return $this->currentVersion;
+    }
+
+    /**
+     * Whether the configured key ring can read a row stamped with this version. Rotation asks this
+     * before writing anything: discovering a version nothing can decrypt halfway through a run is
+     * the difference between "the job stopped" and "a column is now unreadable".
+     */
+    public function supports(string $version): bool
+    {
+        return isset($this->keys[$version]);
     }
 
     /** The payload is safe to store in a `text` column; it is base64 of a JSON envelope. */

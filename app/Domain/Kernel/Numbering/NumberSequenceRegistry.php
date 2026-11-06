@@ -13,11 +13,11 @@ use Illuminate\Support\Facades\DB;
 /**
  * Creates the `number_sequences` rows a company needs, ahead of the first allocation.
  *
- * This exists because DESIGN.md §7.2 step 1 was wrong, and the 3307 instance proved it:
+ * This exists because DESIGN.md step 1 was wrong, and the 3307 instance proved it:
  * `INSERT IGNORE` on a row that already exists takes a shared next-key lock on it, so the
  * `SELECT ... FOR UPDATE` that follows is a shared-to-exclusive lock upgrade. Two concurrent
  * issuers both holding S and both asking for X is the textbook InnoDB deadlock, and it
- * reproduced on the first four-process run. §7.2 is amended in §20.4: the row is created
+ * reproduced on the first four-process run. The design is amended: the row is created
  * outside the allocation path, so allocation only ever takes one X lock and serialises cleanly.
  *
  * Rows must exist before their period starts — hence a seeder at install and a scheduled

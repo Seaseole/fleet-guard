@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §9.6 — the driver's phone names itself on the litre it issued.
+     * The driver's phone names itself on the litre it issued.
      *
      * A kiosk issue has no `recorded_by` (a driver has no account, ADR-0006), so without this column
      * the only answer to "which phone wrote this?" would be an operational event's JSON. The POD

@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Domain\Operations;
 
 /**
- * What one number on a rate card means (§4.1 `route_rates.rate_type`).
+ * What one number on a rate card means (`route_rates.rate_type`).
  *
  * The basis is part of the price, not a detail: `150000` is BWP 1 500 per trip on a short haul and
- * BWP 1 500 per tonne on a cross-border leg. §4.1's JOB carries its own `rate_type`, so a job may
+ * BWP 1 500 per tonne on a cross-border leg. The JOB carries its own `rate_type`, so a job may
  * be quoted per trip even where the standing card is per tonne — the card states the default, the
  * job states what was agreed.
  */

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Maintenance;
 
 /**
- * §4.3 TYRE_POSITION `position` — six wheels, as the CHECK in the migration allows.
+ * TYRE_POSITION `position` — six wheels, as the CHECK in the migration allows.
  *
  * One rear axle carrying dual wheels on each side is the common Botswana rigid truck, so the slots
  * are counted per side rather than by axle: `RL1`/`RL2` are the two tyres on the left rear, inner and

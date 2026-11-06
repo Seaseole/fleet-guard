@@ -18,11 +18,11 @@ final class UnknownDimension extends InvalidArgumentException
         ));
     }
 
-    /** A posting carried a dimension key that has no column in §6.2. */
+    /** A posting carried a dimension key that has no column in. */
     public static function key(string $key): self
     {
         return new self(
-            'PostingDto line carries the dimension "'.$key.'", which is not a typed column in §6.2. '
+            'PostingDto line carries the dimension "'.$key.'", which is not a typed column in. '
             .'Long-tail dimensions (permit_id, tyre_id, route_id) go in dimension_extra; a dimension '
             .'earns a column when a report needs it twice.'
         );

@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * §4.3 FUEL_TANK — the tank an issue fills, with the capacity the truck row states.
+ * FUEL_TANK — the tank an issue fills, with the capacity the truck row states.
  *
  * Deliberately not auditable: the row carries no money and no decision, and a tank whose capacity
  * was corrected is a master-data edit the truck timeline does not need to explain. The issues it

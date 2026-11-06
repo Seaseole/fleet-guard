@@ -15,7 +15,7 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.3 VEHICLE_ASSIGNMENT — an append-only history of who had which truck and trailer.
+ * VEHICLE_ASSIGNMENT — an append-only history of who had which truck and trailer.
  *
  * Ending an assignment writes `to_at`; nothing is deleted. `driver_id` is a plain foreign key and
  * deliberately **not** a `belongsTo(Driver::class)`: Fleet may not import People's model (D5), so

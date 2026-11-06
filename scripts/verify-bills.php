@@ -69,25 +69,25 @@ use Illuminate\Support\Str;
 
 /*
  * Phase 5 slice 5a verification — the supplier bill and the `BillRecorded` posting
- * (DESIGN.md §4.2, §6.1, §6.8, §7, §10.9, §20.35).
+ *.
  *
  * The sentences this slice turns on:
  *
  *  - a paper document from a garage, an insurer, any supplier becomes a bill: numbered with the
- *    operational reference (never reused, allocated at creation, §7), and posting the expense the
- *    fleet owed but the ledger had never heard about (§6.8's `BillRecorded`, restated onto COA v1);
+ *    operational reference (never reused, allocated at creation), and posting the expense the
+ *    fleet owed but the ledger had never heard about (the `BillRecorded`, restated onto COA v1);
  *  - VAT is computed per line from the rate effective on the bill date, stored, and claimed onto
- *    2126 Input VAT — the pair §20.31 pre-work opened so the filing shape was settled before bills
+ *    2126 Input VAT — the pair pre-work opened so the filing shape was settled before bills
  *    arrived;
- *  - the expense line names its leg because the account demands it (§6.1's masks): 5100 truck+trip,
+ *  - the expense line names its leg because the account demands it (the masks): 5100 truck+trip,
  *    5310/5300 truck — a fuel bill that cannot name the trip is refused, not silently overheaded;
  *  - the payable lands on 2110 with the supplier and the bill as dimensions, the same liability
  *    Phase 3's receipts and deliveries were pointing at;
- *  - and a void mirrors the posting through the ledger's own door (§6.4), releases the lines, and
- *    keeps the number (§10.9).
+ *  - and a void mirrors the posting through the ledger's own door, releases the lines, and
+ *    keeps the number.
  *
  * Fixtures are prefixed `BILL-VERIFY` and removed in `finally` — including this run's journal
- * entries, deleted under LedgerBarrier::withLiftedGuard() with a written reason, as §6.3 requires.
+ * entries, deleted under LedgerBarrier::withLiftedGuard() with a written reason, as the design requires.
  *
  * Run: php scripts/verify-bills.php
  */
@@ -122,7 +122,7 @@ function check(bool $condition, string $what, string $why = ''): void
 /**
  * The rate the register applies on a date, as its stored scale.
  *
- * §20.37 made the standard rate a runtime figure an Owner can change — so a harness that hard-codes
+ * Made the standard rate a runtime figure an Owner can change — so a harness that hard-codes
  * 12% is asserting against a number the application no longer fixes. The percentage is read here and
  * the arithmetic is then restated **independently of the door** (integer HALF_UP at the stored scale),
  * which is what keeps the check worth running: agreement between two implementations proves nothing
@@ -135,7 +135,7 @@ function registerRateX(): ?int
     return $rate === null ? null : (int) $rate->rate_x10000;
 }
 
-/** The harness's own HALF_UP at the §5.5 scale, from the register's percentage. */
+/** The harness's own HALF_UP at the scale, from the register's percentage. */
 function vatAt(int $netMinor, int $rateX10000): int
 {
     return intdiv($netMinor * $rateX10000 + 500_000, 10_000 * 100);
@@ -188,7 +188,7 @@ function cleanUp(): void
 
     if ($billIds !== []) {
         // An application names the bill, so it goes first: the evidence of a payment cannot outlive the
-        // document it settled, even in a fixture purge (§20.33's ordering lesson).
+        // document it settled, even in a fixture purge (the ordering lesson).
         if ($allocationIds !== []) {
             DB::table('supplier_payment_allocations')->whereIn('id', $allocationIds)->delete();
         }
@@ -261,7 +261,7 @@ function cleanUp(): void
     DB::table('users')->whereIn('id', $probeIds ?: [0])->delete();
 
     /*
-     * §20.8's rule that a harness must not break its neighbours: every counter this run could advance
+     * The rule that a harness must not break its neighbours: every counter this run could advance
      * is rewound to where the surviving documents leave it, or `documents:number-integrity` would
      * report drift that no person caused.
      */
@@ -299,7 +299,7 @@ cleanUp();
 Artisan::call('numbering:ensure', ['--company' => 1]);
 
 /*
- * The seat that records is the Accountant's (§9.3 gives it `bills.create`); user 1 is a dispatcher and
+ * The seat that records is the Accountant's (the design gives it `bills.create`); user 1 is a dispatcher and
  * must not be silently granted it by a harness.
  */
 /** @var User $recorder */
@@ -316,7 +316,7 @@ $dispatcher = User::query()->findOrFail(1);
 
 /*
  * Slice 5b's fixtures are Phase 3's doors: a bulk delivery needs `fuel.record` and a shelf receipt needs
- * `parts.adjust`, neither of which the Accountant holds (§9.3). The Owner seat carries both, so the
+ * `parts.adjust`, neither of which the Accountant holds. The Owner seat carries both, so the
  * obligations this slice documents are created through the real doors by a probe that can, and the bills
  * and payments are recorded back through the Accountant's own door.
  */
@@ -391,12 +391,12 @@ try {
 
     $rate = TaxRate::effectiveOn(Carbon::now());
     $rateX = registerRateX();
-    check($rate !== null && $rateX !== null && $rateX > 0, 'a standard VAT rate applies on the bill date (§17 Q4)', $rate === null ? 'none seeded' : 'rate zero');
+    check($rate!== null && $rateX!== null && $rateX > 0, 'a standard VAT rate applies on the bill date (Q4)', $rate === null? 'none seeded': 'rate zero');
 
     /* ------------------------------------------------------------------ A: the seat */
     echo "\n== A: only the seat that may record does ==\n";
 
-    check(! Gate::forUser($dispatcher)->allows('bills.create'), 'a dispatcher does not hold bills.create (§9.3)');
+    check(! Gate::forUser($dispatcher)->allows('bills.create'), 'a dispatcher does not hold bills.create');
 
     Auth::login($dispatcher);
     $dispatcherRefused = '';
@@ -457,10 +457,10 @@ try {
     check($bill->exists, 'the Accountant seat records the bill');
     check($bill->status === BillLifecycle::Recorded, '...and the row is recorded, not draft');
     check($bill->amount === $expectedGross && $bill->base_amount === $expectedGross, '...whose header stores the gross the supplier asks for', "amount={$bill->amount} expected={$expectedGross}");
-    check($bill->tax_amount === $expectedTax, '...and the bill\'s VAT is the sum of the rounded lines, never the rounded sum (§5.5)', "tax={$bill->tax_amount} expected={$expectedTax}");
+    check($bill->tax_amount === $expectedTax, '...and the bill\'s VAT is the sum of the rounded lines, never the rounded sum', "tax={$bill->tax_amount} expected={$expectedTax}");
     // The rounding rule, not the rate: pick a figure whose VAT lands on a fraction of a minor unit, so
     // half-up and truncate disagree and the check can tell them apart whatever the register's percentage
-    // is (§20.37 made the rate a runtime fact; §5.5 keeps the rounding a fixed one).
+    // is (made the rate a runtime fact; The design keeps the rounding a fixed one).
     $exactFuelTax = $fuelNet * (int) $rateX;
     $truncatedFuelTax = intdiv($exactFuelTax, 10_000 * 100);
 
@@ -486,30 +486,30 @@ try {
 
     $debit = (int) $entryLines->where('direction', 'debit')->sum('amount_base');
     $credit = (int) $entryLines->where('direction', 'credit')->sum('amount_base');
-    check($debit === $credit, '...which balances (§6.1)', "debit={$debit} credit={$credit}");
+    check($debit === $credit, '...which balances', "debit={$debit} credit={$credit}");
     check($credit === $expectedGross, '...at the gross the document states', "credit={$credit} expected={$expectedGross}");
 
     $accountOf = static fn (stdClass $line): string => (string) DB::table('gl_accounts')->where('id', $line->account_id)->value('code');
 
     $byAccount = $entryLines->groupBy($accountOf);
 
-    check($byAccount->has('5100') && (int) $byAccount['5100']->sum('amount_base') === $fuelNet, 'the fuel line debited 5100 at its net (§6.8)');
+    check($byAccount->has('5100') && (int) $byAccount['5100']->sum('amount_base') === $fuelNet, 'the fuel line debited 5100 at its net');
     check($byAccount->has('5300') && (int) $byAccount['5300']->sum('amount_base') === $labourNet, '...the labour line debited 5300, the maintenance account COA v1 actually carries');
     check($byAccount->has('5500') && (int) $byAccount['5500']->sum('amount_base') === $insuranceNet, '...and the policy line debited 5500');
-    check($byAccount->has('2126') && (int) $byAccount['2126']->sum('amount_base') === $expectedTax, '...with the bill\'s whole input VAT on 2126, kept apart from 2120 (§20.31 pre-work)');
+    check($byAccount->has('2126') && (int) $byAccount['2126']->sum('amount_base') === $expectedTax, '...with the bill\'s whole input VAT on 2126, kept apart from 2120 (pre-work)');
     check($byAccount->has('2110') && (int) $byAccount['2110']->where('direction', 'credit')->sum('amount_base') === $expectedGross, '...and one payable credit on 2110 at the gross');
 
     $fuelLedgerLine = $byAccount['5100']->first();
-    check((int) $fuelLedgerLine->truck_id === $truck->id, 'the fuel line names the truck its account demands (§6.1)');
+    check((int) $fuelLedgerLine->truck_id === $truck->id, 'the fuel line names the truck its account demands');
     check($fuelLedgerLine->trip_id === $trip->id, '...and the trip it was burned on');
-    check((int) $entryLines->where('direction', 'credit')->first()->supplier_id === $supplier->id, 'the payable names the supplier (§6.2)');
+    check((int) $entryLines->where('direction', 'credit')->first()->supplier_id === $supplier->id, 'the payable names the supplier');
     check($entryLines->every(static fn (stdClass $line): bool => $line->bill_id === $bill->id), '...and every line carries the bill dimension, so AP ageing is one query');
 
     $savedLines = $bill->lines()->get();
     check($savedLines->count() === 3, 'the document keeps its own three lines');
     check($savedLines->firstWhere('category', 'fuel')->expense_account_code === '5100'
         && $savedLines->firstWhere('category', 'insurance')->expense_account_code === '5500',
-        '...each copied with the account it posted to, so a later re-code cannot rewrite history (§20.32)');
+        '...each copied with the account it posted to, so a later re-code cannot rewrite history');
     check((int) $savedLines->firstWhere('category', 'fuel')->tax_amount === $expectedFuelTax, '...and the per-line VAT is stored, not re-derived at print time');
 
     /* ------------------------------------------------------------------ C: idempotency */
@@ -590,9 +590,9 @@ try {
     echo "\n== E: the rate register answers through its own door ==\n";
 
     $projected = app(EffectiveVat::class)->on($billOn);
-    check($projected instanceof EffectiveVatRate, 'Invoicing\'s EffectiveVat answers a projection, not the TaxRate model (§3.1 D5)');
+    check($projected instanceof EffectiveVatRate, 'Invoicing\'s EffectiveVat answers a projection, not the TaxRate model (D5)');
     check($projected->id === $rate->id, '...naming the rate that applies on the bill date');
-    check($projected->taxOn($fuelNet) === $rate->taxOn($fuelNet), '...whose per-line rounding is the register\'s own (§20.32\'s defect stays fixed on both sides)');
+    check($projected->taxOn($fuelNet) === $rate->taxOn($fuelNet), '...whose per-line rounding is the register\'s own (the defect stays fixed on both sides)');
 
     /* ------------------------------------------------------------------ F: the void */
     echo "\n== F: a void mirrors, releases, and keeps its number ==\n";
@@ -610,14 +610,14 @@ try {
     $voided = (app(VoidBill::class))($bill, 'The garage mis-keyed the policy line', $recorder->id);
 
     check($voided->status === BillLifecycle::Void, 'the Accountant voids the bill');
-    check($voided->number === $bill->number, '...keeping its BILL- number: operational references are never reused (§7)');
+    check($voided->number === $bill->number, '...keeping its BILL- number: operational references are never reused');
 
     $mirror = DB::table('gl_journal_entries')
         ->where('company_id', 1)->where('source_type', 'bill_void')->where('source_id', $bill->id)
         ->first();
 
     check($mirror !== null, '...and the ledger holds the mirror entry');
-    check((int) $mirror->reverses_entry_id === (int) $entry->id, '...naming the entry it reverses (§6.4)');
+    check((int) $mirror->reverses_entry_id === (int) $entry->id, '...naming the entry it reverses');
     check($mirror->netting_group === $bill->id, '...netted by the bill itself');
 
     $mirrorLines = DB::table('gl_journal_lines')->where('entry_id', $mirror->id)->get();
@@ -631,7 +631,7 @@ try {
         ->sum(DB::raw('case when direction = \'debit\' then amount_base else -amount_base end'));
     check($netAfter === 0, '...so the pair nets the payable back to zero', "net={$netAfter}");
 
-    check($bill->lines()->whereNotNull('released_at')->count() === 3, 'the lines are released, never deleted (§10.9)');
+    check($bill->lines()->whereNotNull('released_at')->count() === 3, 'the lines are released, never deleted');
     check($bill->lines()->count() === 3, '...and still stand as the document\'s own record');
 
     $againVoid = '';
@@ -661,7 +661,7 @@ try {
     );
 
     check($payBill->balance_amount === $payGross, 'a fresh bill owes its whole gross — the projection starts at the document', "balance={$payBill->balance_amount} expected={$payGross}");
-    check($payBill->settlementState() === SettlementState::Open, '...and its derived state reads open, stored nowhere (§10.4 sideways)');
+    check($payBill->settlementState() === SettlementState::Open, '...and its derived state reads open, stored nowhere (sideways)');
 
     $paymentSequenceBefore = (int) DB::table('number_sequences')
         ->where('company_id', 1)->where('scope', 'supplier_payment')
@@ -684,7 +684,7 @@ try {
         $payRefused = $refused->getMessage();
     }
 
-    check(str_contains($payRefused, 'bills.create'), 'a dispatcher cannot pay a supplier, and the refusal names the ability (§9.3)', $payRefused);
+    check(str_contains($payRefused, 'bills.create'), 'a dispatcher cannot pay a supplier, and the refusal names the ability', $payRefused);
     check(SupplierPayment::query()->where('supplier_id', $supplier->id)->count() === 0, '...and the refused attempt wrote no payment and spent no number');
 
     Auth::login($recorder);
@@ -710,15 +710,15 @@ try {
     check($partialEntry !== null, '...and one entry names the payment');
     check((int) $partialLines->where('direction', 'debit')->sum('amount_base') === 1_000_000
         && (int) $partialLines->where('direction', 'credit')->sum('amount_base') === 1_000_000,
-        '...which balances at the money that moved (§6.1)');
+        '...which balances at the money that moved');
     check((int) $partialLines->firstWhere('account_id', $payableId)?->amount_base === 1_000_000
         && $partialLines->firstWhere('account_id', $payableId)->bill_id === $payBill->id,
-        '...debiting 2110 under the bill\'s own dimension, so AP ageing is one query (§4.2)');
+        '...debiting 2110 under the bill\'s own dimension, so AP ageing is one query');
     check((int) $partialLines->firstWhere('account_id', $bankId)?->amount_base === 1_000_000
         && (string) $partialLines->firstWhere('account_id', $bankId)->direction === 'credit',
-        '...and crediting the bank account the method names (§6.8)');
+        '...and crediting the bank account the method names');
     check($partialBill->balance_amount === $payGross - 1_000_000, '...the projection walks down by exactly the application', "balance={$partialBill->balance_amount}");
-    check($partialBill->settlementState()->value === 'partially_paid', '...and the derived state says partially paid while the lifecycle stays recorded (§10.4)');
+    check($partialBill->settlementState()->value === 'partially_paid', '...and the derived state says partially paid while the lifecycle stays recorded');
     check((string) $partialBill->status->value === 'recorded', '...the lifecycle axis did not move');
     check(SupplierPaymentAllocation::query()->where('bill_id', $payBill->id)->where('reversed', false)->count() === 1, '...one application row stands behind it');
     check($partial->unapplied_amount === 0, 'the payment was spent whole — nothing was left on account');
@@ -761,8 +761,8 @@ try {
     check($settledBill->settlementState()->value === 'paid', '...and the derived state reads paid');
     check($closing->unapplied_amount === 100, '...one thebe no bill claimed stays as an advance', "unapplied={$closing->unapplied_amount}");
     check($closingLines->where('account_id', $payableId)->whereNull('bill_id')->count() === 1, '...booked as an undimensioned debit on 2110, because no document owns it');
-    check((string) $closingLines->firstWhere('account_id', (int) DB::table('gl_accounts')->where('code', '1110')->value('id'))?->direction === 'credit', '...and the cash account is credited when the method says cash (§6.8)');
-    check(SupplierPaymentAllocation::query()->where('bill_id', $payBill->id)->where('settled', true)->count() === 1, 'the application that closed the bill is marked, so the tie-out need not re-walk FIFO (§20.33)');
+    check((string) $closingLines->firstWhere('account_id', (int) DB::table('gl_accounts')->where('code', '1110')->value('id'))?->direction === 'credit', '...and the cash account is credited when the method says cash');
+    check(SupplierPaymentAllocation::query()->where('bill_id', $payBill->id)->where('settled', true)->count() === 1, 'the application that closed the bill is marked, so the tie-out need not re-walk FIFO');
 
     $voidRefused = '';
 
@@ -790,7 +790,7 @@ try {
         $bareRefused = $refused->getMessage();
     }
 
-    check(str_contains($bareRefused, 'no open bill'), 'cash that never met a document is refused rather than banked blind (§6.8)', $bareRefused);
+    check(str_contains($bareRefused, 'no open bill'), 'cash that never met a document is refused rather than banked blind', $bareRefused);
 
     /* ------------------------------------------------------------------ I: linked bills */
     echo "\n== I: the paper for an obligation the ledger already holds posts nothing twice ==\n";
@@ -824,8 +824,8 @@ try {
     $deliveryObligation = app(UnbilledDeliveries::class)->find((string) $delivery->id);
     $receiptObligation = app(UnbilledReceipts::class)->find((string) $receipt->id);
 
-    check($deliveryObligation !== null && $deliveryObligation->amountBase === 1_200_000, 'the yard\'s posted delivery is on the unbilled list at its own figure (§20.26)', $deliveryObligation === null ? 'not listed' : 'amount='.$deliveryObligation->amountBase);
-    check($receiptObligation !== null && $receiptObligation->amountBase === 20_000, '...and so is the shelf\'s receipt at the value it moved (§20.29)', $receiptObligation === null ? 'not listed' : 'amount='.$receiptObligation->amountBase);
+    check($deliveryObligation!== null && $deliveryObligation->amountBase === 1_200_000, 'the yard\'s posted delivery is on the unbilled list at its own figure', $deliveryObligation === null? 'not listed': 'amount='.$deliveryObligation->amountBase);
+    check($receiptObligation!== null && $receiptObligation->amountBase === 20_000, '...and so is the shelf\'s receipt at the value it moved', $receiptObligation === null? 'not listed': 'amount='.$receiptObligation->amountBase);
 
     Auth::login($recorder);
 
@@ -843,9 +843,9 @@ try {
 
     check($linked->linked_source === BillLinkedSource::FuelDelivery, 'the delivery\'s paper records the link as well as the number');
     check($linked->amount === 1_200_000 && $linked->tax_amount === 0, '...and carries the book\'s figure, not a typed one — no input VAT, because the movement modelled none');
-    check($linked->lines()->count() === 0, '...with no lines of its own (§20.36)');
+    check($linked->lines()->count() === 0, '...with no lines of its own');
     check(DB::table('gl_journal_entries')->where('source_type', 'bill')->where('source_id', $linked->id)->count() === 0, '...and posted nothing: a second expense debit would fund the same diesel twice');
-    check((string) DB::table('fuel_purchases')->where('id', $delivery->id)->value('bill_id') === $linked->id, '...while Fuel\'s own door stamped the delivery (§3.1 D5 — Accounting asked)');
+    check((string) DB::table('fuel_purchases')->where('id', $delivery->id)->value('bill_id') === $linked->id, '...while Fuel\'s own door stamped the delivery (D5 — Accounting asked)');
     check(app(UnbilledDeliveries::class)->find((string) $delivery->id) === null, '...so the delivery leaves the unbilled list');
 
     $twiceRefused = '';
@@ -901,7 +901,7 @@ try {
         ->sum(DB::raw('case when direction = \'debit\' then amount_base else -amount_base end'));
 
     check($linkedPaid->allocations()->count() === 1 && $linked->fresh()->balance_amount === 0, 'paying the linked paper clears it from the projection alone');
-    check($netAfter === 1_200_000, '...and the ledger holds exactly that one debit against the bill, the credit being the movement\'s own (§6.9 tie-out material)', "net={$netAfter}");
+    check($netAfter === 1_200_000, '...and the ledger holds exactly that one debit against the bill, the credit being the movement\'s own (tie-out material)', "net={$netAfter}");
 
     $receiptLinked = (app(RecordBill::class))->execute(
         supplierId: $supplier->id,
@@ -918,7 +918,7 @@ try {
 
     $released = (app(VoidBill::class))($receiptLinked, 'Wrong supplier sent this paper', $recorder->id);
 
-    check($released->status === BillLifecycle::Void, 'a linked bill voids without a mirror — there was no entry to reverse (§20.36)');
+    check($released->status === BillLifecycle::Void, 'a linked bill voids without a mirror — there was no entry to reverse');
     check(DB::table('gl_journal_entries')->where('source_type', 'bill_void')->where('source_id', $receiptLinked->id)->count() === 0, '...and wrote no reversing entry either');
     check(DB::table('stock_movements')->where('id', $receipt->id)->value('bill_id') === null, '...the receipt is released back to awaiting the bill');
     check(app(UnbilledReceipts::class)->find((string) $receipt->id) !== null, '...and it is on the unbilled list again');
@@ -934,7 +934,7 @@ try {
         actorId: $recorder->id,
     );
 
-    check($reBilled->id !== $receiptLinked->id && $reBilled->number !== $receiptLinked->number, 'the same receipt can be billed again on a new number — the live-link index released with the void (§20.33\'s lesson, copied)');
+    check($reBilled->id!== $receiptLinked->id && $reBilled->number!== $receiptLinked->number, 'the same receipt can be billed again on a new number — the live-link index released with the void (the lesson, copied)');
 
     $payableTotal = (int) DB::table('gl_journal_lines')
         ->where('account_id', $payableId)

@@ -9,11 +9,11 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * Opens a bulk tank — the yard tank deliveries go into (§4.3 BULK_TANK, §15.2 phase 3).
+ * Opens a bulk tank — the yard tank deliveries go into (BULK_TANK, phase 3).
  *
  * A tank starts empty and worth nothing; its stock only moves through {@see BulkTank::recordMovement()},
  * so there is no way to open one holding fuel nobody can account for. Capacity is a master-data
- * figure: a delivery that would take the tank past it is flagged rather than refused (§7 R7), because
+ * figure: a delivery that would take the tank past it is flagged rather than refused (R7), because
  * the figure is what somebody measured once, and the litres are what the pump delivered.
  */
 final class CreateBulkTank
@@ -21,7 +21,7 @@ final class CreateBulkTank
     public function __invoke(string $name, int $capacityLitres): BulkTank
     {
         if (! Gate::allows('fuel.record')) {
-            throw new InvalidArgumentException('Opening a bulk tank is workshop recording (§9.3).');
+            throw new InvalidArgumentException('Opening a bulk tank is workshop recording.');
         }
 
         $name = trim($name);

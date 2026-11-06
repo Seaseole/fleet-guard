@@ -14,18 +14,18 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * §7.4 / §10.4 — an issued invoice that should never have existed is **voided**, never deleted.
+ * / An issued invoice that should never have existed is **voided**, never deleted.
  *
  * Three rules, and the first is the phase's acceptance test:
  *
  * 1. **A void is refused once a payment exists.** If any allocation still stands against this invoice, the
- *    money is real and applied, so the answer to "this invoice was wrong" is a credit note (§10.5), not a
+ *    money is real and applied, so the answer to "this invoice was wrong" is a credit note, not a
  *    void. The refund path is deliberately not a silent void: it would unpost a receivable against which a
  *    bank credit already sits.
- * 2. **The number stays spent.** The row keeps its number and flips to `void`; §7.4's gap-free promise is
+ * 2. **The number stays spent.** The row keeps its number and flips to `void`; The gap-free promise is
  *    about numbers never being reused, and renumbering a fiscal document is exactly what it forbids. The
  *    domain keeps the reason (the CHECK refuses one shorter than ten characters).
- * 3. **The posting is mirrored, not edited** (§6.4): {@see ReversePosting} writes the opposite entry with
+ * 3. **The posting is mirrored, not edited**: {@see ReversePosting} writes the opposite entry with
  *    `reverses_entry_id`, so the pair nets to zero and both halves remain readable.
  *
  * The delivery is **released** back to `ready` through Operations' own door, because a voided invoice must
@@ -43,7 +43,7 @@ final class VoidInvoice
     public function __invoke(Invoice $invoice, string $reason, ?int $actorId = null): Invoice
     {
         if (! Gate::allows('invoices.void')) {
-            throw new InvalidArgumentException('Voiding an invoice needs the invoices.void ability (§9.3).');
+            throw new InvalidArgumentException('Voiding an invoice needs the invoices.void ability.');
         }
 
         $reason = trim($reason);
@@ -51,7 +51,7 @@ final class VoidInvoice
         if (mb_strlen($reason) < 10) {
             throw new InvalidArgumentException(
                 'A void needs a reason of at least ten characters. It is stored on the document and in the '
-                .'operational trail, because "why" is the only part of a void a later reader cannot reconstruct (§10.1).',
+                .'operational trail, because "why" is the only part of a void a later reader cannot reconstruct.',
             );
         }
 
@@ -72,7 +72,7 @@ final class VoidInvoice
             if ($applied) {
                 throw new InvalidArgumentException(sprintf(
                     'Invoice %s has a payment allocated to it, so it cannot be voided — the money is real and already '
-                    .'applied. Raise a credit note instead (§10.5).',
+                    .'applied. Raise a credit note instead.',
                     $locked->reference(),
                 ));
             }
@@ -90,10 +90,10 @@ final class VoidInvoice
             );
 
             // The lines are released, not deleted: the document keeps its own record, and releasing them is
-            // what lets the same chargeable fund the replacement invoice (§20.33).
+            // what lets the same chargeable fund the replacement invoice.
             $locked->lines()->whereNull('released_at')->update(['released_at' => now()]);
 
-            // The delivery is billable again — through Operations' door, under its own lock (§13 D5).
+            // The delivery is billable again — through Operations' door, under its own lock (D5).
             $chargeableIds = $locked->lines()->pluck('chargeable_id')->filter()->values()->all();
             $tripIds = $locked->lines()->pluck('trip_id')->filter()->unique()->values()->all();
 

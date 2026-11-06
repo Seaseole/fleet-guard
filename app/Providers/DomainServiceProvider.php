@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Domain\Accounting\Actions\ImportOpeningLoans;
+use App\Domain\Accounting\Actions\ImportOpeningPayables;
 use App\Domain\Accounting\Actions\ImportSuppliers;
+use App\Domain\Accounting\Alerts\LoanDueSource;
+use App\Domain\Fleet\Actions\ImportOpeningOdometerReadings;
 use App\Domain\Fleet\Actions\ImportTrailers;
 use App\Domain\Fleet\Actions\ImportTrucks;
+use App\Domain\Fuel\Actions\ImportOpeningTankStock;
 use App\Domain\Invoicing\Actions\ImportCustomers;
+use App\Domain\Invoicing\Actions\ImportOpeningReceivables;
 use App\Domain\Kernel\Alerts\Actions\RaiseAlert;
 use App\Domain\Kernel\Alerts\Contracts\ReminderSource;
 use App\Domain\Kernel\Alerts\Sources\DocumentExpirySource;
@@ -31,6 +37,7 @@ use App\Domain\Operations\Actions\ImportRates;
 use App\Domain\Operations\Actions\ImportRoutes;
 use App\Domain\People\Actions\ImportDrivers;
 use App\Domain\People\Actions\ImportEmployees;
+use App\Domain\People\Actions\ImportOpeningDriverAdvances;
 use App\Domain\People\Alerts\DriverPaperExpirySource;
 use App\Domain\Security\Sessions\EndSessionOnLogout;
 use Egough\LaravelSettings\Contracts\SettingsRepository;
@@ -42,7 +49,7 @@ use Illuminate\Support\ServiceProvider;
 
 /**
  * Bindings and lifecycle hooks for the Kernel's swappable edges. One provider rather than
- * scattered `bind()` calls: §12.1's decision is that a rate feed, a GPS adapter or a PDF
+ * scattered `bind()` calls: The decision is that a rate feed, a GPS adapter or a PDF
  * driver becomes an adapter behind an existing interface, and this is the single place that
  * decides which one.
  */
@@ -52,11 +59,17 @@ final class DomainServiceProvider extends ServiceProvider
     {
         $this->app->bind(RateResolver::class, StoredRateResolver::class);
 
-        // §14.2/T4: settings are company-held, so the package's storage seam is replaced with the
+        // /T4: settings are company-held, so the package's storage seam is replaced with the
         // one over `companies.settings`. `settings()`, its Blade directives and its console
         // commands then speak for the current company instead of a tenant-less table. This is
         // the package's documented extension point, not a fork.
-        $this->app->bind(SettingsRepository::class, CompanySettings::class);
+        //
+        // Scoped, not singleton: the memo inside `CachedSettings` must not survive the request
+        // (or the queued job) that filled it — a worker holds the container for the life of the
+        // process, and a settings write on one job would otherwise be read stale by the next.
+        $this->app->scoped(CachedSettings::class);
+        $this->app->scoped(CompanySettings::class);
+        $this->app->alias(CompanySettings::class, SettingsRepository::class);
 
         // The package answers keys it cannot find from `settings.defaults`. The app's defaults are
         // `config/fleet.php`, so they are mirrored there once: `settings()->get()` and
@@ -66,11 +79,21 @@ final class DomainServiceProvider extends ServiceProvider
             CachedSettings::flatten((array) config('fleet', [])),
         )]);
 
-        // §15.2's master-data datasets, mapped to the module that owns each one. This is the seam
+        // The master-data datasets, mapped to the module that owns each one. This is the seam
         // that keeps D2 true: the engine under `app/Domain/Kernel` asks for a dataset handler and
         // never learns which module answers, while *this* file — the one the architecture lint
-        // allows to name modules — is where the nine names live.
+        // allows to name modules — is where the names live. The two opening party-detail datasets
+        // belong to the modules whose documents they create, not to the cutover engine: an
+        // open receivable is an invoice, and Invoicing is the only door allowed to write one. The
+        // 8c pair follows the same rule by the same route: an unreconciled advance is a
+        // driver's receivable, so People answers it, and a facility is a loan row, so Accounting does.
         $this->app->singleton(CutoverHandlers::class, fn (): CutoverHandlers => new CutoverHandlers($this->app, [
+            CutoverDataset::OpeningReceivables->value => ImportOpeningReceivables::class,
+            CutoverDataset::OpeningPayables->value => ImportOpeningPayables::class,
+            CutoverDataset::OpeningOdometerReadings->value => ImportOpeningOdometerReadings::class,
+            CutoverDataset::OpeningTankStock->value => ImportOpeningTankStock::class,
+            CutoverDataset::OpeningDriverAdvances->value => ImportOpeningDriverAdvances::class,
+            CutoverDataset::OpeningLoans->value => ImportOpeningLoans::class,
             CutoverDataset::Customers->value => ImportCustomers::class,
             CutoverDataset::Suppliers->value => ImportSuppliers::class,
             CutoverDataset::Trucks->value => ImportTrucks::class,
@@ -82,7 +105,7 @@ final class DomainServiceProvider extends ServiceProvider
             CutoverDataset::Parts->value => ImportParts::class,
         ]));
 
-        // §14.4's scan step, chosen by config because §17 Q8 is open: `none` is this machine and any
+        // The scan step, chosen by config because Q8 is open: `none` is this machine and any
         // environment without a sidecar, `clamav` is the Linux design. The upload Action asks for
         // `VirusScanner` and never learns which of the two it got — which is the only reason
         // answering Q8 later is a config edit and not a rewrite of the intake path.
@@ -90,7 +113,7 @@ final class DomainServiceProvider extends ServiceProvider
             /** @var string $driver */
             $driver = (string) config('fleet.documents.scanner', 'none');
 
-            // clamav is the Linux sidecar named in §14.4. The host is a config value because the
+            // clamav is the Linux sidecar named in. The host is a config value because the
             // sidecar's address is a deployment fact, not a domain one.
             if ($driver === 'clamav') {
                 return new ClamAvScanner(
@@ -105,15 +128,16 @@ final class DomainServiceProvider extends ServiceProvider
             return new NoScanner;
         });
 
-        // §14.1's reminder sources, behind a tag rather than a hard-coded array inside the engine.
-        // This is the shape that keeps §13's D2 rule true once Phase 1 ships: the engine resolves
+        // The reminder sources, behind a tag rather than a hard-coded array inside the engine.
+        // This is the shape that keeps the D2 rule true once Phase 1 ships: the engine resolves
         // `reminder_sources` and receives objects implementing an interface it owns, so adding a Fleet or
         // Maintenance source means one line here — in `app/Providers`, which may name modules — and no
         // import anywhere under `app/Domain/Kernel`.
         $this->app->singleton(DocumentExpirySource::class);
         $this->app->singleton(DriverPaperExpirySource::class);
         $this->app->singleton(ServiceDueSource::class);
-        $this->app->tag([DocumentExpirySource::class, DriverPaperExpirySource::class, ServiceDueSource::class], 'reminder_sources');
+        $this->app->singleton(LoanDueSource::class);
+        $this->app->tag([DocumentExpirySource::class, DriverPaperExpirySource::class, ServiceDueSource::class, LoanDueSource::class], 'reminder_sources');
 
         $this->app->bind(ReminderRunner::class, function (): ReminderRunner {
             /** @var array<ReminderSource> $sources */
@@ -139,7 +163,7 @@ final class DomainServiceProvider extends ServiceProvider
             CurrentCompany::forget();
         });
 
-        // §9.2: signing out ends the device's record. The guard fires this before it touches the session
+        // Signing out ends the device's record. The guard fires this before it touches the session
         // store, so the id still belongs to the session that just ended.
         Event::listen(Logout::class, EndSessionOnLogout::class);
     }

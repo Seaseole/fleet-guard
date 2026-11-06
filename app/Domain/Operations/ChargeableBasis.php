@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Operations;
 
 /**
- * §4.1 CHARGEABLE's `basis` — what the amount is per.
+ * CHARGEABLE's `basis` — what the amount is.
  *
  * It mirrors the job's own rate type so the invoice line that Phase 4 builds can print a unit rate
  * and a quantity instead of an unexplained total.

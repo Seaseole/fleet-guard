@@ -46,7 +46,7 @@ new #[Title('Application settings')] class extends Component
             $this->settings[SettingsCatalogue::property($key)] = match (true) {
                 $field['type'] === 'money' => SettingsCatalogue::moneyForInput($key),
                 // The rate's truth is the register, so the field reads from it: an Owner sees the
-                // percentage today's documents actually charge, not a copy in the blob (§20.37).
+                // percentage today's documents actually charge, not a copy in the blob.
                 SettingsCatalogue::store($key) === 'door' => app(EffectiveVat::class)->standardPercent(),
                 default => $settings->get($key),
             };
@@ -81,7 +81,7 @@ new #[Title('Application settings')] class extends Component
             $update($values);
 
             // The one door field goes to its own register, in the same save: a form that wrote the
-            // blob and left the window stale would be two truths with one click (§20.37).
+            // blob and left the window stale would be two truths with one click.
             $setVat->execute((float) $validated['settings'][SettingsCatalogue::property('tax.standard_rate_pct')], auth()->id());
         } catch (DomainException $exception) {
             $this->addError(

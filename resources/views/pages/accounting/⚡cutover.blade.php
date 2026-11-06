@@ -9,6 +9,7 @@ use App\Domain\Kernel\Cutover\CutoverDataset;
 use App\Domain\Kernel\Cutover\Exceptions\CutoverRejected;
 use App\Domain\Kernel\Cutover\Models\CutoverBatch;
 use App\Domain\Kernel\Cutover\Models\CutoverRow;
+use App\Domain\Kernel\Identity\ConfirmsRecentPassword;
 use App\Domain\Kernel\Ledger\Exceptions\PostingRejected;
 use App\Domain\Kernel\Money\Money;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
@@ -24,7 +25,7 @@ use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 
 /*
- * §15.2 — legacy intake: the opening trial balance and Phase 1's master data.
+ * Legacy intake: the opening trial balance and Phase 1's master data.
  *
  * One screen because it is one workflow: choose what the file is, upload it, read the errors, then
  * let the Owner act. The trial balance becomes a journal (`cutover.post`); every other dataset is
@@ -38,6 +39,7 @@ use Livewire\WithPagination;
  */
 new #[Title('Cutover')] class extends Component
 {
+    use ConfirmsRecentPassword;
     use WithFileUploads, WithPagination;
 
     /** The batch being reviewed, carried in the URL so a reload keeps the file in front of you. */
@@ -293,22 +295,15 @@ new #[Title('Cutover')] class extends Component
     }
 
     /**
-     * §9.3 marks `cutover.post` ⚑, and the whole screen is an ordinary read for the accountant, so
-     * the re-auth cannot live on the route. `auth.password_confirmed_at` is the clock Fortify's own
-     * `RequirePassword` writes — the same one the documents delete reads, not a second implementation.
+     * Marks `cutover.post` ⚑, and the whole screen is an ordinary read for the accountant, so
+     * the re-auth cannot live on the route. The trait reads the clock Fortify's own
+     * `RequirePassword` writes, so the batch in the URL is restored after the prompt.
      */
     private function recentlyConfirmed(): bool
     {
-        $confirmed = (int) session()->get('auth.password_confirmed_at', 0);
-
-        if (time() - $confirmed <= (int) config('fleet.identity.reauth_window_seconds')) {
-            return true;
-        }
-
-        session(['url.intended' => url()->current().($this->batchId === '' ? '' : '?batch='.$this->batchId)]);
-        $this->redirectRoute('password.confirm');
-
-        return false;
+        return $this->confirmRecentPassword(
+            url()->current().($this->batchId === '' ? '' : '?batch='.$this->batchId),
+        );
     }
 
     #[Computed]
@@ -404,7 +399,7 @@ new #[Title('Cutover')] class extends Component
 }; ?>
 
     <div class="grid grid-cols-1 gap-6">
-        <header class="grid gap-1">
+        <header class="fg-page-header grid gap-1.5">
             <x-ui.heading size="xl" level="1">{{ __('Cutover') }}</x-ui.heading>
             <x-ui.text>
                 {{ __('Bring the legacy books across in two steps: upload a file and validate it, then let the Owner act. The opening trial balance becomes one journal; master data is applied to the registers. A rejected file is corrected by re-upload — the error report names the lines.') }}
@@ -735,12 +730,12 @@ new #[Title('Cutover')] class extends Component
                     <tr>
                         <x-ui.table.th>{{ __('Batch') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Dataset') }}</x-ui.table.th>
-                        <x-ui.table.th>{{ __('File') }}</x-ui.table.th>
+                        <x-ui.table.th hideBelow="lg">{{ __('File') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Rows') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Debit') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Credit') }}</x-ui.table.th>
-                        <x-ui.table.th>{{ __('When') }}</x-ui.table.th>
+                        <x-ui.table.th hideBelow="lg">{{ __('When') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                     </tr>
                 </thead>
@@ -749,7 +744,7 @@ new #[Title('Cutover')] class extends Component
                         <tr wire:key="cutover-batch-{{ $entry->id }}" @class(['bg-fg-surface-sunk' => $entry->public_id === $batchId])>
                             <x-ui.table.td identifier>#{{ $entry->id }}</x-ui.table.td>
                             <x-ui.table.td nowrap>{{ $entry->dataset->label() }}</x-ui.table.td>
-                            <x-ui.table.td>{{ $entry->original_filename ?? '—' }}</x-ui.table.td>
+                            <x-ui.table.td hideBelow="lg">{{ $entry->original_filename ?? '—' }}</x-ui.table.td>
                             <x-ui.table.td>
                                 <x-ui.badge :tone="$this->statusTone($entry->status)">{{ $entry->status->label() }}</x-ui.badge>
                             </x-ui.table.td>
@@ -758,7 +753,7 @@ new #[Title('Cutover')] class extends Component
                             </x-ui.table.td>
                             <x-ui.table.td numeric>{{ $entry->dataset->isMasterData() ? '—' : $this->money($entry->total_debit, $entry->currency_code) }}</x-ui.table.td>
                             <x-ui.table.td numeric>{{ $entry->dataset->isMasterData() ? '—' : $this->money($entry->total_credit, $entry->currency_code) }}</x-ui.table.td>
-                            <x-ui.table.td nowrap class="text-fg-ink-secondary">{{ $entry->created_at?->format('d M Y H:i') }}</x-ui.table.td>
+                            <x-ui.table.td nowrap class="text-fg-ink-secondary" hideBelow="lg">{{ $entry->created_at?->format('d M Y H:i') }}</x-ui.table.td>
                             <x-ui.table.td numeric>
                                 <x-ui.button variant="ghost" size="sm" wire:click="openBatch('{{ $entry->public_id }}')">{{ __('Open') }}</x-ui.button>
                             </x-ui.table.td>

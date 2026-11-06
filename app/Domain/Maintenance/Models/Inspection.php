@@ -18,7 +18,7 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.3 INSPECTION — one safety check, with the answers that were given.
+ * INSPECTION — one safety check, with the answers that were given.
  *
  * The row is evidence, so it is written once and never edited: a correction is a second inspection,
  * which is what a register of checks needs. `checklist` holds `{item: bool}` for exactly the items

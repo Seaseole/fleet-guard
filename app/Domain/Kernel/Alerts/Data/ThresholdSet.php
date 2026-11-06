@@ -16,7 +16,7 @@ use Illuminate\Support\Collection;
  * company with ten families and four buckets each should not cost forty queries in a nightly job that
  * is supposed to be boring.
  *
- * A family with **no rows here has no reminders**, and that is §14.1 working as written: the rows are
+ * A family with **no rows here has no reminders**, and that is working as written: the rows are
  * the contract, so deleting one deletes the reminder. `reminders:ensure-thresholds` is what gives a
  * company the default set, so an absent family is always an owner's decision rather than an oversight.
  */

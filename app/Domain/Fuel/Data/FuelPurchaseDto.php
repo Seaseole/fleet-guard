@@ -12,14 +12,14 @@ use DateTimeInterface;
 use InvalidArgumentException;
 
 /**
- * One fuel slip as the purchase screen hands it over (§4.3 FUEL_PURCHASE, §5.2).
+ * One fuel slip as the purchase screen hands it over (FUEL_PURCHASE).
  *
  * The amount is the figure **as stated on the slip** — a ZAR receipt at a Beitbridge pump is ZAR —
  * and `rate` is the one conversion that makes it base money. `litresX100` is the spec's scale, so
  * the form's "45.32" arrives as 4532 and the row's arithmetic stays integer.
  *
  * `bulkTankId` is where the delivery went when it is not a slip the trucks draw from: a purchase
- * naming a tank becomes stock the moment it is recorded (§15.2 phase 3), and its litres are no
+ * naming a tank becomes stock the moment it is recorded, and its litres are no
  * longer a slip an issue can drain.
  *
  * `fuelType` is the product the pump sold — the slip's own fact, because a station slip names no

@@ -13,7 +13,7 @@ use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
- * Sets a staff account's role — one role, because §9.2 describes jobs rather than permission piles,
+ * Sets a staff account's role — one role, because the design describes jobs rather than permission piles,
  * and two roles on one account is how a matrix stops being reviewable.
  *
  * `syncRoles()` is the whole write. The team id is never passed: it is read from the tenancy context

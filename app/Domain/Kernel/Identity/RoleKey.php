@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace App\Domain\Kernel\Identity;
 
 /**
- * The seven staff roles of §9.2, with the permission set each one holds.
+ * The seven staff roles of, with the permission set each one holds.
  *
- * The matrix in §9.3 is the source; this enum is that matrix made executable, so "what can a
+ * The matrix in the design is the source; this enum is that matrix made executable, so "what can a
  * Dispatcher do" has one answer in the codebase rather than one in a document and one in a
- * seeder. Two principals in §9.2 are deliberately **not** here: the Kiosk token and System are
+ * seeder. Two principals in the design are deliberately **not** here: the Kiosk token and System are
  * not roles — a token carries scopes on `trip_access_tokens` (ADR-0006) and the scheduler has no
  * interactive session, so neither can be invited, logged in as, or granted a role.
  *
- * Roles are company-keyed rows (§8), so the seeder creates one set per company rather than
+ * Roles are company-keyed rows, so the seeder creates one set per company rather than
  * relying on spatie's global-role escape hatch (`roles.company_id IS NULL`), which this project
  * treats as a bug: a role that exists for every company is a role nobody owns.
  */
@@ -31,7 +31,7 @@ enum RoleKey: string
     public static function invitable(): array
     {
         // The Owner seat is created once by `fleet:setup-owner` and is never granted to an
-        // invitation: §9.3 gives it sole rights over users, roles and permissions, so making it
+        // invitation: The design gives it sole rights over users, roles and permissions, so making it
         // selectable in an invite form is the privilege-escalation path the design closes.
         return [
             self::OperationsManager->value,
@@ -50,7 +50,7 @@ enum RoleKey: string
         $case = self::tryFrom($value);
 
         if ($case === null) {
-            throw new \InvalidArgumentException("Unknown role key '{$value}' (§9.2).");
+            throw new \InvalidArgumentException("Unknown role key '{$value}'.");
         }
 
         return $case;
@@ -122,7 +122,7 @@ enum RoleKey: string
             ],
 
             // "a dispatcher must not see margins": no trips.margin.view, no fleet.cost.view, no
-            // jobs.rate_cost.view, no fuel.variance.view_cost, no reports.export.financial (§9.3).
+            // jobs.rate_cost.view, no fuel.variance.view_cost, no reports.export.financial.
             self::Dispatcher => [
                 'dashboard.view',
                 'fleet.view',
@@ -140,7 +140,7 @@ enum RoleKey: string
                 'gps.view',
                 'documents.view', 'documents.upload',
                 'reports.view', 'reports.export.ops',
-                // §14.1's own example is a `doc_expiry` alert delivered to the Operations Manager *and*
+                // The design's own example is a `doc_expiry` alert delivered to the Operations Manager *and*
                 // the Dispatcher, with both of them acting on it — so the roles the engine delivers to
                 // hold `alerts.acknowledge`. `alerts.resolve` is not in this list: Resolve is terminal
                 // (`alerts_resolved_is_final`), and closing a compliance finding is the Owner's and the
@@ -162,7 +162,7 @@ enum RoleKey: string
                 'documents.view', 'documents.upload', 'documents.download',
                 'reports.view', 'reports.export.workshop',
                 // The roadworthiness and workshop papers are delivered here by the engine's own default
-                // recipients, so this role may acknowledge and mute what it receives (§14.1).
+                // recipients, so this role may acknowledge and mute what it receives.
                 'alerts.view', 'alerts.acknowledge',
             ],
 
@@ -184,7 +184,7 @@ enum RoleKey: string
                 'dashboard.view', 'dashboard.financial',
                 'fleet.view', 'fleet.cost.view',
                 'jobs.view',
-                // §10.2 puts `completed → closed` with the Accountant and the Owner: closing is what
+                // The design puts `completed → closed` with the Accountant and the Owner: closing is what
                 // freezes a period's costs, so it is an accounting act, not a dispatch one.
                 'trips.view', 'trips.close', 'trips.margin.view',
                 'routes.view',
@@ -197,7 +197,7 @@ enum RoleKey: string
                 'accounting.view', 'expenses.create', 'bills.create',
                 'suppliers.view', 'suppliers.manage',
                 'cutover.import',
-                'bank.view', 'bank.manage', 'bank.number.view',
+                'bank.view', 'bank.manage', 'bank.number.view', 'bank.reconcile',
                 'ledger.view', 'ledger.post', 'ledger.journal.manual', 'ledger.period.close',
                 'loans.view', 'loans.manage',
                 'people.view', 'payroll.view', 'payroll.manage', 'settlements.view.own',
@@ -209,9 +209,9 @@ enum RoleKey: string
                 'audit.view', 'alerts.view',
             ],
 
-            // Read-only across the board (§9.2): every row is R, nothing is C/A, and the bank rows
+            // Read-only across the board: every row is R, nothing is C/A, and the bank rows
             // stay masked ("R (masked)"). `bank.number.view` is therefore absent even though the
-            // Auditor sees everything else, and `settings.view` is absent because §9.3 gives the
+            // Auditor sees everything else, and `settings.view` is absent because the design gives the
             // Settings row "–" to this role. The one thing an Auditor holds that no other
             // read-mostly role has is audit.view, which is what the role is for.
             self::Auditor => [
@@ -239,7 +239,7 @@ enum RoleKey: string
     }
 
     /**
-     * §9.1: MFA is mandatory for the Owner and for any role that can see or move money. Derived
+     * MFA is mandatory for the Owner and for any role that can see or move money. Derived
      * from the catalogue category rather than hard-coded per role, so adding a financial
      * permission to a role changes its MFA requirement without anyone remembering to edit a
      * middleware.
@@ -259,7 +259,7 @@ enum RoleKey: string
         return false;
     }
 
-    /** The masked/unmasked rule for bank numbers (§9.3 "R (masked)" rows). */
+    /** The masked/unmasked rule for bank numbers ("R (masked)" rows). */
     public function canSeeBankNumber(): bool
     {
         return in_array('bank.number.view', $this->permissions(), true);

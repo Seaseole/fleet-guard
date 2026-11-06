@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Telematics\Data;
 
 /**
- * What one webhook batch did (§14.3's ingest path).
+ * What one webhook batch did (the ingest path).
  *
  * The three outcomes are kept apart because they mean different things to the person reading a
  * provider's support ticket: `duplicates` is the retry guard working (the message was already on

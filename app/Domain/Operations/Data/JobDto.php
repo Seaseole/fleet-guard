@@ -7,7 +7,7 @@ namespace App\Domain\Operations\Data;
 use InvalidArgumentException;
 
 /**
- * The enquiry a job is created from (§4.1 JOB).
+ * The enquiry a job is created from (JOB).
  *
  * Only the customer, the corridor and the promise dates are required: a quote is a separate decision
  * ({@see JobQuoteDto}) so the enquiry can be booked by a dispatcher before anyone has priced it.

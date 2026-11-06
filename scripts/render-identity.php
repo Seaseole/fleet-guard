@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 /**
  * Renders the Phase 0 identity screens through the real HTTP stack and reports what a browser would
- * get — including the §9.4 gate closing for a role that lacks it, and the §3.2 nav filtering.
+ * get — including the gate closing for a role that lacks it, and the nav filtering.
  *
  * This exists because `view:cache` only *compiles* Blade; it does not parse the PHP it generates, so
- * a render-time ParseError walks straight past the quality gate (§20.2). For a component system the
- * only meaningful check is an actual request, and for §9.4 the only meaningful check is that same
+ * a render-time ParseError walks straight past the quality gate. For a component system the
+ * only meaningful check is an actual request, and for the only meaningful check is that same
  * request made as a role that is supposed to be refused.
  *
- * Not a test suite: tests/ stays out of the repository (§14.6). This is a smoke check, like
+ * Not a test suite: tests/ stays out of the repository. This is a smoke check, like
  * scripts/verify-kernel.php, and it runs against the development database.
  *
  * Run: php scripts/render-identity.php
@@ -21,6 +21,8 @@ require __DIR__.'/../vendor/autoload.php';
 
 use App\Domain\Accounting\Models\BankAccount;
 use App\Domain\Kernel\Identity\RoleKey;
+use App\Domain\Kernel\Settings\Actions\UpdateCompanySettings;
+use App\Domain\Kernel\Settings\CachedSettings;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Security\Actions\ChangeUserRole;
 use App\Models\User;
@@ -30,6 +32,7 @@ use Illuminate\Foundation\Bootstrap\HandleExceptions;
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Livewire\Livewire;
 
 /**
  * @extends TestCase
@@ -40,6 +43,11 @@ final class RenderSweep extends TestCase
 
     /** @var list<string> */
     public array $messages = [];
+
+    /** The tenant's settings blob as the run found it, restored even if a check dies mid-section. */
+    private ?string $themeBefore = null;
+
+    private ?int $themeCompany = null;
 
     public function createApplication(): Application
     {
@@ -55,7 +63,7 @@ final class RenderSweep extends TestCase
         $owner = User::query()->where('email', config('fleet.identity.owner_email'))->first();
 
         if ($owner === null) {
-            $this->note('No Owner row for '.config('fleet.identity.owner_email').' — run php artisan fleet:setup-owner (§9.1).');
+            $this->note('No Owner row for '.config('fleet.identity.owner_email').' — run php artisan fleet:setup-owner.');
 
             return;
         }
@@ -63,29 +71,71 @@ final class RenderSweep extends TestCase
         $dispatcher = $this->staffAs($owner, RoleKey::Dispatcher, 'render-check-dispatcher@fleetguard.local');
         $enrolled = $this->enrolFactor($this->staffAs($owner, RoleKey::Dispatcher, 'render-check-enrolled@fleetguard.local'));
 
-        echo "\nOwner (§9.3: sees everything, holds the ⚑ gates)\n";
+        echo "\nOwner (sees everything, holds the ⚑ gates)\n";
         $this->screen($owner, '/security/users', 'Staff accounts');
         $this->screen($owner, '/security/users', 'Send invitation');
         $this->screen($owner, '/accounting/bank-accounts', 'Bank and cash accounts');
         $this->pageContains($owner, '/accounting/bank-accounts', 'Bank &amp; cash', 'the nav item renders');
 
-        echo "\nDispatcher (§9.3: no users.view, no bank.view, staff nav filtered out)\n";
+        echo "\nDispatcher (no users.view, no bank.view, staff nav filtered out)\n";
 
-        // §9.1 and §9.3 meet here. A Dispatcher whose factor has not been enrolled is *refused* a screen
+        // And meet here. A Dispatcher whose factor has not been enrolled is *refused* a screen
         // they may never open, and *diverted to enrolment* on one they may: if the divert won everywhere,
         // the seat would be told to enrol a factor for a page that still says no afterwards.
         $this->assertForbidden($dispatcher, '/security/users');
         $this->assertForbidden($dispatcher, '/accounting/bank-accounts');
         $this->assertEnrolmentRedirect($dispatcher, '/dashboard');
 
-        // Read as an enrolled seat, because §3.2's filtering is a claim about the rendered nav, and an
+        // Read as an enrolled seat, because the filtering is a claim about the rendered nav, and an
         // un-enrolled one never reaches the nav.
-        $this->pageLacks($enrolled, '/dashboard', 'Users &amp; roles', 'the staff nav entry is filtered (§3.2)');
+        $this->pageLacks($enrolled, '/dashboard', 'Users &amp; roles', 'the staff nav entry is filtered');
+
+        echo "\nCompany settings (the theme everyone opens in, and the rate new documents charge)\n";
+
+        // Both screens sit behind `settings.*` routes the design marks ⚑, so an HTTP request from
+        // a sweep without a fresh password is refused — the component is driven directly, exactly as the
+        // cutover sweep does, and the markup claim below is checked through a page that has no gate.
+        $application = Livewire::actingAs($owner)->test('pages::settings.application');
+
+        $this->attempt('the Owner can set the theme the company opens in', function () use ($application): void {
+            $html = $application->html();
+
+            foreach (['Default theme', 'Standard VAT rate', 'Application settings'] as $needle) {
+                if (! str_contains($html, $needle)) {
+                    throw new Exception("the settings screen did not render '{$needle}'");
+                }
+            }
+        });
+
+        $this->attempt('the personal layer names the company default beside it', function () use ($enrolled): void {
+            $html = Livewire::actingAs($enrolled)->test('pages::settings.appearance')->html();
+
+            foreach (['radiogroup', 'System', 'opens in'] as $needle) {
+                if (! str_contains($html, $needle)) {
+                    throw new Exception("the appearance screen did not render '{$needle}'");
+                }
+            }
+        });
+
+        $this->themeCompany = (int) $owner->company_id;
+        $this->themeBefore = (string) DB::table('companies')->where('id', $this->themeCompany)->value('settings');
+
+        app(UpdateCompanySettings::class)(['appearance.theme' => 'dark']);
+        CurrentCompany::forget();
+        CurrentCompany::force($this->themeCompany);
+
+        // Read on a company page, not the login form: the theme is the *company's* setting, and a guest
+        // has no company to ask. It has to be in the markup, not only in a script — the first
+        // paint of every browser, and any browser that runs none, must not default to light.
+        $this->pageContains($owner, '/accounting/bank-accounts', 'data-theme-default="dark"', 'the rendered page carries the company theme as data for the bootstrap to read');
+        $this->pageContains($owner, '/accounting/bank-accounts', 'class="dark"', '...and as the class on the root element, before any script runs');
+
+        $this->restoreTheme();
 
         echo "\nGuest (registration is off, so an unknown link is the only door)\n";
 
         // Shaped like a real token — the route's own `where()` rejects anything else with a 404, which
-        // would prove nothing about §9.1's no-enumeration promise.
+        // would prove nothing about the no-enumeration promise.
         $this->guestPageContains('/invitations/'.str_repeat('a', 40), 'cannot be used', 'unknown invitation refused without leaking');
     }
 
@@ -106,7 +156,7 @@ final class RenderSweep extends TestCase
         return $user->fresh();
     }
 
-    /** §9.1: an un-enrolled seat on a screen it *is* allowed sees the enrolment door, not the page. */
+    /** An un-enrolled seat on a screen it *is* allowed sees the enrolment door, not the page. */
     private function assertEnrolmentRedirect(User $user, string $path): void
     {
         $this->attempt("{$path} sends an un-enrolled seat to enrolment, not to the page", function () use ($user, $path): void {
@@ -151,7 +201,7 @@ final class RenderSweep extends TestCase
      *
      * Outside a real test run PHPUnit's failure path dies inside its own exporter —
      * `assert(self::$instance instanceof Configuration)` — so every failed check here reported that
-     * internal message instead of the string it could not find (§20.19 records the same masking in
+     * internal message instead of the string it could not find (the design records the same masking in
      * `render-cutover`). A refusal has to name the needle.
      */
     private function pageContains(User $user, string $path, string $needle, string $label): void
@@ -195,7 +245,7 @@ final class RenderSweep extends TestCase
     }
 
     /**
-     * §9.3's matrix is only real if the absence is enforced server-side. A screen that renders the
+     * The matrix is only real if the absence is enforced server-side. A screen that renders the
      * table and hides the columns is a leak waiting for someone to forget a @can.
      */
     private function assertForbidden(User $user, string $path): void
@@ -268,10 +318,31 @@ final class RenderSweep extends TestCase
         }
     }
 
+    private function restoreTheme(): void
+    {
+        if ($this->themeBefore === null || $this->themeCompany === null) {
+            return;
+        }
+
+        DB::table('companies')->where('id', $this->themeCompany)->update(['settings' => $this->themeBefore]);
+        app(CachedSettings::class)->flush($this->themeCompany);
+
+        $this->themeBefore = null;
+    }
+
     private function cleanUp(): void
     {
+        $this->restoreTheme();
+        $checkIds = DB::table('users')->where('email', 'like', 'render-check-%@fleetguard.local')->pluck('id')->all();
+
+        // A probe seat that was refused a screen leaves a security event naming it, and the FK will not
+        // let the account go first — the trail is the reason the table exists (the "who did that").
+        if ($checkIds !== []) {
+            DB::table('security_events')->whereIn('user_id', $checkIds)->delete();
+        }
+
         DB::table('model_has_roles')->where('model_type', User::class)
-            ->whereIn('model_id', DB::table('users')->where('email', 'like', 'render-check-%@fleetguard.local')->pluck('id'))
+            ->whereIn('model_id', $checkIds)
             ->delete();
 
         User::query()->where('email', 'like', 'render-check-%@fleetguard.local')->delete();

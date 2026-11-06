@@ -13,9 +13,9 @@ use DateTimeInterface;
 use InvalidArgumentException;
 
 /**
- * One charge at one gate, as the crossing screen hands it over (§4.4 BORDER_COST).
+ * One charge at one gate, as the crossing screen hands it over (BORDER_COST).
  *
- * The money side is §5.2's foreign amount plus its rate and source — the same three facts a
+ * The money side is the foreign amount plus its rate and source — the same three facts a
  * {@see TripCostDto} carries, because the Action posts through `RecordTripCost` and the ledger must
  * be told exactly what the desk was told. What is *not* here is the FX result: the Action copies the
  * posted trip cost's eight columns rather than converting a second time.

@@ -1,5 +1,5 @@
 {{--
-    Status is never colour alone (DESIGN-SYSTEM.md §1.5): pass an icon and the
+    Status is never colour alone: pass an icon and the
     caller always gets one, defaulting per tone.
 --}}
 @props([
@@ -16,13 +16,13 @@
         'danger' => ['bg' => 'bg-danger-soft text-danger border-danger/25', 'icon' => 'x-circle'],
         'info' => ['bg' => 'bg-info-soft text-info border-info/25', 'icon' => 'information-circle'],
         // 'signal' rather than Heroicons' 'bolt': the registry is generated from the Flux stubs,
-        // which §20.2 uninstalled, so no new glyph can be added until the artwork is vendored.
-        'accent' => ['bg' => 'bg-accent-soft text-accent border-accent/25', 'icon' => 'signal'],
+        // which uninstalled, so no new glyph can be added until the artwork is vendored.
+        'accent' => ['bg' => 'bg-accent-soft text-accent-ink border-accent/25', 'icon' => 'signal'],
     ];
 
     $tone = $tones[$tone] ?? $tones['neutral'];
 
-    $sizes = ['xs' => 'text-[0.6875rem] px-1.5 py-0.5 gap-1', 'sm' => 'text-xs px-2 py-0.5 gap-1.5'];
+    $sizes = ['xs' => 'text-2xs px-1.5 py-0.5 gap-1', 'sm' => 'text-xs px-2 py-0.5 gap-1.5'];
 @endphp
 
 <span

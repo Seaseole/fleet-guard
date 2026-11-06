@@ -8,7 +8,7 @@ use App\Domain\Operations\Models\TripAccessToken;
 use App\Domain\Operations\TripAccessScope;
 
 /**
- * §9.6 — a driver's link, proved against one token, one scope and one PIN.
+ * A driver's link, proved against one token, one scope and one PIN.
  *
  * The comparisons live here rather than in each screen's Action so there is one readable answer to
  * "what does a driver's link prove", and the constructor is private so an authority cannot be minted
@@ -33,7 +33,7 @@ final readonly class KioskAuthority
 
         if (! $token->hasScope($scope)) {
             throw new \InvalidArgumentException(sprintf(
-                'This link does not carry the %s scope (§9.6).',
+                'This link does not carry the %s scope.',
                 $scope->label(),
             ));
         }

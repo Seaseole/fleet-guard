@@ -37,15 +37,15 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
- * §10.4's consolidated billing run: one customer, one period, one document.
+ * The consolidated billing run: one customer, one period, one document.
  *
  * It is the same door as {@see IssueInvoice} seen from the other side. Per-trip invoicing asks "what
  * does this leg owe"; a monthly customer asks "what have I delivered that you have not been billed
- * for", and the answer is a document that bundles several trips (§16 R11). The pieces that must not
+ * for", and the answer is a document that bundles several trips (R11). The pieces that must not
  * be shared are shared: the number comes from the same gap-free `invoice` scope, VAT is rounded per
  * line from the rate effective on the issue date, the charges are claimed under Operations' own row
  * lock, and the ledger entry is one `InvoiceIssued` with a credit per line — because `4100` requires
- * truck, trip and customer (§6.1), a consolidated invoice can never post one lump revenue figure.
+ * truck, trip and customer, a consolidated invoice can never post one lump revenue figure.
  *
  * **What makes it a run rather than a loop over trips.** The customer, the terms and the due date are
  * decided once for the document, the charge window is the caller's (a month, a fortnight, "everything
@@ -55,8 +55,8 @@ use InvalidArgumentException;
  *
  * **The refused cases are the ones a run must never paper over**: no ready charges (a statement for
  * nothing is not a zero-value document), charges in more than one currency (one document states one
- * currency, §5.2), a currency that is not the company's base (FX is a separate slice), and a
- * chargeable whose base figure disagrees with its own amount (§5.3).
+ * currency), a currency that is not the company's base (FX is a separate slice), and a
+ * chargeable whose base figure disagrees with its own amount.
  *
  * Idempotent on `consolidated:{customer}:{from}:{to}`: a retried run returns the document the first
  * one issued rather than spending a second fiscal number on the same month. Charges that become ready
@@ -81,7 +81,7 @@ final class RunConsolidatedBilling
     public function __invoke(int $customerId, DateTimeInterface $from, DateTimeInterface $to, ?int $actorId = null): Invoice
     {
         if (! Gate::allows('invoices.issue')) {
-            throw new InvalidArgumentException('Running a consolidated bill needs the invoices.issue ability (§9.3).');
+            throw new InvalidArgumentException('Running a consolidated bill needs the invoices.issue ability.');
         }
 
         $windowStart = Carbon::instance($from)->startOfDay();
@@ -108,7 +108,7 @@ final class RunConsolidatedBilling
         if ($bills === []) {
             throw new InvalidArgumentException(sprintf(
                 'Customer %s has no ready charges raised between %s and %s, so there is nothing to consolidate. '
-                .'An invoice for nothing is not a zero-value invoice (§10.4).',
+                .'An invoice for nothing is not a zero-value invoice.',
                 $customer->name,
                 $windowStart->toDateString(),
                 $windowEnd->toDateString(),
@@ -120,7 +120,7 @@ final class RunConsolidatedBilling
         if (! PaymentTerms::isValid($terms)) {
             throw new InvalidArgumentException(sprintf(
                 'Customer %s has payment terms "%s", which are not a term the ageing axis can read. Set cash or '
-                .'net_<days> before issuing (§4.1).',
+                .'net_<days> before issuing.',
                 $customer->name,
                 $customer->payment_terms,
             ));
@@ -136,14 +136,14 @@ final class RunConsolidatedBilling
         if (count(array_unique(array_map(static fn (TripBill $bill): string => $bill->currencyCode, $bills))) !== 1) {
             throw new InvalidArgumentException(sprintf(
                 'This customer\'s ready charges are raised in more than one currency. One document states one '
-                .'currency (§5.2), so bill each currency separately.',
+                .'currency, so bill each currency separately.',
             ));
         }
 
         if ($bills[0]->currencyCode !== $baseCurrency) {
             throw new InvalidArgumentException(sprintf(
                 'These charges were quoted in %s and this run can only issue in %s. Foreign-currency issuance '
-                .'arrives with §5.2\'s FX slice — a rate invented here would be a rate nobody agreed.',
+                .'arrives with the FX slice — a rate invented here would be a rate nobody agreed.',
                 $bills[0]->currencyCode,
                 $baseCurrency,
             ));
@@ -155,7 +155,7 @@ final class RunConsolidatedBilling
         $rate = TaxRate::effectiveOn($issuedOn)
             ?? throw new InvalidArgumentException(
                 'No VAT rate applies on '.$issuedOn->toDateString().'. Seed the tax_rates register '
-                .'(TaxRateSeeder provides §17 Q4\'s 12% default) before issuing a tax invoice — an invoice with '
+                .'(TaxRateSeeder provides Q4\'s 12% default) before issuing a tax invoice — an invoice with '
                 .'no rate would silently report zero VAT.',
             );
 
@@ -164,11 +164,11 @@ final class RunConsolidatedBilling
         $outputVat = $accounts[self::OUTPUT_VAT_ACCOUNT] ?? null;
 
         if ($receivable === null) {
-            throw new InvalidArgumentException('Account 1150 Accounts receivable is not in this company\'s chart, so the run cannot be posted (§6.2).');
+            throw new InvalidArgumentException('Account 1150 Accounts receivable is not in this company\'s chart, so the run cannot be posted.');
         }
 
         if ($outputVat === null) {
-            throw new InvalidArgumentException('Account 2125 Output VAT is not in this company\'s chart, so the run cannot be posted (§6.8).');
+            throw new InvalidArgumentException('Account 2125 Output VAT is not in this company\'s chart, so the run cannot be posted.');
         }
 
         $lines = $this->buildLines($bills, $rate, $accounts);
@@ -201,7 +201,7 @@ final class RunConsolidatedBilling
                 ));
             }
 
-            // 2. §7.4 — the same gap-free scope as any other invoice.
+            // 2. The same gap-free scope as any other invoice.
             $number = $this->numbers->allocate('invoice', $issuedOn, $actorId);
 
             $invoice = Invoice::create([
@@ -239,7 +239,7 @@ final class RunConsolidatedBilling
                     'line_kind' => $line['line_kind']->value,
                     'chargeable_id' => $line['chargeable_id'],
                     // Per line, not per document: a statement credits each leg's own revenue account with
-                    // that leg's own truck and trip (§6.1).
+                    // that leg's own truck and trip.
                     'trip_id' => $line['trip_id'],
                     'job_id' => $line['job_id'],
                     'truck_id' => $line['truck_id'],
@@ -304,13 +304,13 @@ final class RunConsolidatedBilling
             foreach ($bill->charges as $charge) {
                 $kind = InvoiceLineKind::tryFrom($charge->type->value)
                     ?? throw new InvalidArgumentException(sprintf(
-                        'Chargeable type "%s" has no invoice line kind (§4.1), so it cannot be billed.',
+                        'Chargeable type "%s" has no invoice line kind, so it cannot be billed.',
                         $charge->type->value,
                     ));
 
                 if (! isset($accounts[$kind->accountCode()])) {
                     throw new InvalidArgumentException(sprintf(
-                        'Account %s is not in this company\'s chart, so a %s line cannot be posted (§6.8).',
+                        'Account %s is not in this company\'s chart, so a %s line cannot be posted.',
                         $kind->accountCode(),
                         $kind->label(),
                     ));
@@ -340,7 +340,7 @@ final class RunConsolidatedBilling
     }
 
     /**
-     * §6.8's `InvoiceIssued` once, with each line's leg on its revenue credit.
+     * The `InvoiceIssued` once, with each line's leg on its revenue credit.
      *
      * The receivable and the VAT credit carry `customer_id` and `invoice_id` only: the document is one
      * party's, and a consolidated AR line cannot sit in one trip's bucket without lying about the other
@@ -378,7 +378,7 @@ final class RunConsolidatedBilling
             $account = $accounts[$line['line_kind']->accountCode()] ?? null;
 
             if ($account === null) {
-                throw new InvalidArgumentException(sprintf('Account %s vanished from the chart between validation and posting (§6.8).', $line['line_kind']->accountCode()));
+                throw new InvalidArgumentException(sprintf('Account %s vanished from the chart between validation and posting.', $line['line_kind']->accountCode()));
             }
 
             $ledgerLines[] = new LineDto(
@@ -438,7 +438,7 @@ final class RunConsolidatedBilling
         foreach ($bill->charges as $charge) {
             if ($charge->currencyCode !== $bill->currencyCode) {
                 throw new InvalidArgumentException(sprintf(
-                    'Trip %s carries charges in both %s and %s. One document states one currency (§5.2).',
+                    'Trip %s carries charges in both %s and %s. One document states one currency.',
                     $bill->tripNo,
                     $bill->currencyCode,
                     $charge->currencyCode,
@@ -453,7 +453,7 @@ final class RunConsolidatedBilling
             if ($charge->baseAmountMinor !== $charge->amountMinor) {
                 throw new InvalidArgumentException(sprintf(
                     'The charge "%s" on trip %s says %d %s but %d in base currency. In one currency those are the '
-                    .'same number, so the chargeable is inconsistent and cannot be billed (§5.3).',
+                    .'same number, so the chargeable is inconsistent and cannot be billed.',
                     $charge->description,
                     $bill->tripNo,
                     $charge->amountMinor,

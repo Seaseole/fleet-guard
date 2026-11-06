@@ -14,14 +14,14 @@ use App\Domain\Operations\TripStatus;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Stops a trip, choosing §10.2's `cancelled` or `aborted` from where it already is.
+ * Stops a trip, choosing the `cancelled` or `aborted` from where it already is.
  *
  * The two exits are different accounting facts, not two words for one thing:
  *
  * - **cancelled** is pre-departure. Nothing happened, no cost is real, and the reservation simply
  *   goes away — the truck was never on a trip, so there is nothing to return;
  * - **aborted** is post-departure. The fuel already went, the border fees were paid, the driver slept
- *   somewhere. §10.2 says plainly that *costs still post and the trip may still be billed*, so the
+ *   somewhere. The design says plainly that *costs still post and the trip may still be billed*, so the
  *   only housekeeping here is the vehicle: release the reservation and bring the truck home, leaving
  *   every fact that was already true.
  *
@@ -52,7 +52,7 @@ final class StopTrip
 
             ($this->releaseAssignment)($locked->id);
 
-            // Only an aborted trip had put its truck on the road; §10.2's cancelled branch never
+            // Only an aborted trip had put its truck on the road; The cancelled branch never
             // reached departure, and EndTruckTrip would rightly refuse to "return" a truck that is
             // still sitting in the yard.
             if ($aborted && $locked->truck_id !== null) {

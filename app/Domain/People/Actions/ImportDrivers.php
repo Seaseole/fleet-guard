@@ -20,14 +20,14 @@ use App\Domain\Security\DataGovernance\SecretMask;
 use InvalidArgumentException;
 
 /**
- * §15.2 Phase 1 — the driver record attached to an employee.
+ * Phase 1 — the driver record attached to an employee.
  *
  * The row is matched by `employee_no`, because a driver is an employee with papers, not a separate
  * person: a file that names an employee nobody has imported is a row error, not a new employee. The
  * licence number follows the national-ID rule — encrypted at validation, decrypted only to be handed
  * to {@see CreateDriver}/{@see UpdateDriver}.
  *
- * Status is applied through {@see ChangeDriverStatus} after the fields, so the §10.1 transition table
+ * Status is applied through {@see ChangeDriverStatus} after the fields, so the transition table
  * still governs it. A driver whose record says `left` cannot be moved back by a file; that is a
  * rehire, which is a new employee row by design.
  */

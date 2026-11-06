@@ -18,10 +18,10 @@ use Carbon\CarbonInterface;
 use Illuminate\Support\LazyCollection;
 
 /**
- * §14.1's `doc_expiry` / `permit_expiry` reminder for a driver's own papers.
+ * The `doc_expiry` / `permit_expiry` reminder for a driver's own papers.
  *
- * Phase 1 stores the licence and PDP expiry **on the driver row** (§4.3), not on the scan of the
- * card, because §10.2's dispatch gate reads one column. This source is what makes that choice safe:
+ * Phase 1 stores the licence and PDP expiry **on the driver row**, not on the scan of the
+ * card, because the dispatch gate reads one column. This source is what makes that choice safe:
  * it raises the same two alert types the document register raises, addressed to the people who book
  * trucks, so moving the dates off the document did not move the reminder off the register.
  *
@@ -55,7 +55,7 @@ final class DriverPaperExpirySource implements ReminderSource
 
         foreach (['licence', 'permit'] as $family) {
             foreach ($buckets as $days) {
-                // §14.1's own example: a `doc_expiry` alert reaches the Operations Manager *and* the
+                // The design's own example: a `doc_expiry` alert reaches the Operations Manager *and* the
                 // Dispatcher, because the person who books the truck is the one who can reassign it.
                 $defaults[] = new Threshold($family, $days, ['operations_manager', 'dispatcher']);
             }
@@ -108,7 +108,7 @@ final class DriverPaperExpirySource implements ReminderSource
                     name: $name,
                     family: 'permit',
                     type: AlertType::PermitExpiry,
-                    paper: 'PDP permit',
+                    paper: 'PRDP permit',
                     expiresOn: CarbonImmutable::instance($driver->permit_expires_on)->startOfDay(),
                     thresholds: $thresholds,
                     businessToday: CarbonImmutable::instance($businessToday)->startOfDay(),
@@ -126,18 +126,17 @@ final class DriverPaperExpirySource implements ReminderSource
      */
     private function driversWithPapersInside(CarbonInterface $horizon): LazyCollection
     {
+        $cutoff = $horizon->toDateString();
+
         return Driver::query()
             ->with('employee')
             ->where('status', '!=', DriverStatus::Left->value)
-            ->where(function ($query) use ($horizon): void {
-                $query->where(function ($licence) use ($horizon): void {
-                    $licence->whereNotNull('licence_expires_on')->whereDate('licence_expires_on', '<=', $horizon);
-                })->orWhere(function ($permit) use ($horizon): void {
-                    $permit->whereNotNull('permit_expires_on')->whereDate('permit_expires_on', '<=', $horizon);
-                });
+            ->where(function ($query) use ($cutoff): void {
+                $query->where('licence_expires_on', '<=', $cutoff)
+                    ->orWhere('permit_expires_on', '<=', $cutoff);
             })
             ->orderBy('licence_expires_on')
-            ->cursor();
+            ->lazy();
     }
 
     private function candidate(

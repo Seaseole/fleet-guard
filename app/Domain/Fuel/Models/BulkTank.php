@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
- * §4.3 BULK_TANK — the yard tank diesel is delivered into (§15.2 phase 3, moving average).
+ * BULK_TANK — the yard tank diesel is delivered into (phase 3, moving average).
  *
  * The moving average is **value over litres**, not an average of averages: a receipt adds its base
  * money and its litres, and the ratio is recomputed. `average_cost_per_litre_minor` is that ratio
@@ -100,7 +100,7 @@ final class BulkTank extends Model
 
     /**
      * What taking this many litres costs at the tank's moving average, in base minor units, rounded
-     * once (§5.5). A drain of everything left costs the value the tank actually holds, so no rounding
+     * once. A drain of everything left costs the value the tank actually holds, so no rounding
      * residue survives an emptiness the book says is worth something.
      */
     public function costForIssue(int $litresX100): int

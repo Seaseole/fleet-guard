@@ -15,10 +15,10 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.1 TRIP_COST — one direct cost against a trip, and the operational half of the journal entry that
- * carries it (§5.2's FX block is on the row, not only on the entry).
+ * TRIP_COST — one direct cost against a trip, and the operational half of the journal entry that
+ * carries it (the FX block is on the row, not only on the entry).
  *
- * `base_amount` is the authoritative figure and never recomputed (§5.3): the rate and the date it was
+ * `base_amount` is the authoritative figure and never recomputed: the rate and the date it was
  * struck travel with the row, so a report next year reads what the money actually cost rather than
  * what today's rate would make it look like. The journal link is `(source_type, source_id)`, and the
  * unique index on the pair is what makes a retried capture one cost.
@@ -68,7 +68,7 @@ final class TripCost extends Model implements AuditableContract
             'cost_type' => TripCostType::class,
             'paid_with' => TripCostPayment::class,
             'amount' => 'integer',
-            // A rate is a dimensionless multiplier, so it is the one decimal in the design (§5.2).
+            // A rate is a dimensionless multiplier, so it is the one decimal in the design.
             'fx_rate' => 'decimal:8',
             'fx_rate_source' => FxRateSource::class,
             'fx_rate_date' => 'date',

@@ -44,10 +44,10 @@ use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 
 /**
- * Phase 0 documents verification (DESIGN.md §20.7).
+ * Phase 0 documents verification.
  *
- * Not the test suite — `tests/` is local-only by owner decision (§14.6). This is the runnable proof
- * of §14.4 and §10.8: that a file is judged by its content, that one version per document is
+ * Not the test suite — `tests/` is local-only by owner decision. This is the runnable proof
+ * of and that a file is judged by its content, that one version per document is
  * current in the database rather than in the code, that a download is signed, refused, audited and
  * uncacheable, and that a version's bytes cannot be edited after the fact.
  *
@@ -216,7 +216,10 @@ $delete = app(DeleteDocumentVersion::class);
 $link = app(DocumentLink::class);
 $audit = app(AuditRecorder::class);
 
-$owner = User::query()->findOrFail(1);
+// The Owner seat is the account the deployment names, not row 1: on a development database row 1
+// may have been re-seated, and a harness that names the wrong seat in its audit rows proves nothing
+// about the seat the deployment actually uses. `FLEET_OWNER_EMAIL` is the documented override.
+$owner = User::query()->where('email', config('fleet.identity.owner_email'))->firstOrFail();
 $createdIds = [];
 $companyIds = [];
 $userIds = [];
@@ -228,7 +231,7 @@ foreach ($files as $label => $path) {
 
 try {
     // ---------------------------------------------------------------- content, not extension
-    echo "\n== §14.4 the file is judged by what it is ==\n";
+    echo "\n== the file is judged by what it is ==\n";
 
     $licence = $register->handle(
         DocumentType::Licence,
@@ -250,13 +253,13 @@ try {
     check($v1->size_bytes === (int) filesize($files['pdf']), 'the size is of the bytes that were stored');
     check(
         (bool) preg_match('#^company/1/licence/unfiled/[0-9A-HJKMNP-TV-Z]{26}/1$#', $v1->path),
-        'the path is company/{id}/{type}/{entity}/{ulid}/{version} (§14.4)',
+        'the path is company/{id}/{type}/{entity}/{ulid}/{version}',
         $v1->path,
     );
     check($store->exists($v1), 'the object is on the private disk');
     check($licence->refresh()->lifecycle === Lifecycle::Current, 'publishing the first version makes the document current');
 
-    // The name says PDF; the bytes say PHP. §14.4's whole sentence is about this file.
+    // The name says PDF; the bytes say PHP. The whole sentence is about this file.
     refuses('a file named .pdf whose content is source code is refused', function () use ($upload, $licence, $files): void {
         $upload->handle($licence, DocumentInput::fromPath($files['php'], 'application/pdf', 'invoice.pdf'));
     }, InvalidDocumentFile::class);
@@ -270,8 +273,8 @@ try {
 
     check((int) DB::table('documents')->where('id', $licence->id)->value('created_at') > 0, 'the document survived its refusals');
 
-    // ---------------------------------------------------------------- §10.8 one current version
-    echo "\n== §10.8 one current version, and the history underneath it ==\n";
+    // ---------------------------------------------------------------- One current version
+    echo "\n== one current version, and the history underneath it ==\n";
 
     $v2 = $upload->handle($licence, DocumentInput::fromPath($files['png']), $owner->id, 're-scanned: first copy was unreadable');
     $createdIds[] = $v2->id;
@@ -340,7 +343,7 @@ try {
     ];
 
     checkRefuses('documents', ['type' => 'warrant_of_fitness'] + $docRow, 'documents_type_allowed refuses a type outside the register');
-    checkRefuses('documents', ['lifecycle' => 'retired'] + $docRow, 'documents_lifecycle_allowed refuses a state §10.8 does not have');
+    checkRefuses('documents', ['lifecycle' => 'retired'] + $docRow, 'documents_lifecycle_allowed refuses a state the design does not have');
     checkRefuses('documents', ['retention_class' => 'forever'] + $docRow, 'documents_retention_allowed refuses an unclassified hold');
     checkRefuses('documents', ['morph_id' => (string) Str::ulid()] + $docRow, 'documents_subject_is_a_pair refuses half a subject');
     checkRefuses('documents', ['lifecycle' => 'archived'] + $docRow, 'documents_retirement_dated refuses an archive with no date');
@@ -365,21 +368,21 @@ try {
     checkRefuses('document_versions', ['mime' => ''] + $versionRow, '…and a version that does not say what it is');
     checkRefuses('document_versions', ['virus_scan_status' => 'clean'] + $versionRow, 'document_versions_scan_recorded refuses a clean claim with no scan behind it');
     checkAccepts('document_versions', ['virus_scan_status' => 'clean', 'scanned_at' => now()] + $versionRow, 'a clean verdict with its time is a legal row');
-    checkAccepts('document_versions', $versionRow, 'a pending verdict with no time is a legal row — that is the state §17 Q8 leaves open');
+    checkAccepts('document_versions', $versionRow, 'a pending verdict with no time is a legal row — that is the state Q8 leaves open');
 
     checkRefuses('security_events', [
         'company_id' => 1, 'kind' => 'document_emailed_outside', 'happened_at' => now(),
     ], 'security_events_kind_known refuses a kind nobody can query for');
     checkAccepts('security_events', [
         'company_id' => 1, 'kind' => 'document_downloaded', 'happened_at' => now(),
-    ], 'and accepts the kind §14.4 writes');
+    ], 'and accepts the kind the design writes');
 
     $eventRow = [
         'company_id' => 1, 'aggregate_type' => 'documents', 'aggregate_id' => (string) Str::ulid(),
         'from_state' => 'current', 'occurred_at' => now(), 'created_at' => now(), 'actor_kind' => 'user',
     ];
 
-    checkRefuses('operational_events', ['to_state' => 'current', 'actor_kind' => 'admin'] + $eventRow, 'operational_events_actor_kind_allowed refuses a principal §9.2 does not define');
+    checkRefuses('operational_events', ['to_state' => 'current', 'actor_kind' => 'admin'] + $eventRow, 'operational_events_actor_kind_allowed refuses a principal the design does not define');
     checkRefuses('operational_events', ['to_state' => 'voided', 'reason' => null] + $eventRow, 'operational_events_destructive_explained refuses a void with a NULL reason');
     checkRefuses('operational_events', ['to_state' => 'voided', 'reason' => ''] + $eventRow, '…and with an empty one');
     checkRefuses('operational_events', ['to_state' => 'voided', 'reason' => '     '] + $eventRow, '…and with whitespace, which is the shape of a form that "answered"');
@@ -387,7 +390,7 @@ try {
     checkAccepts('operational_events', ['to_state' => 'voided', 'reason' => 'licence withdrawn by the authority'] + $eventRow, 'a destructive transition that says why is a legal row');
     checkAccepts('operational_events', ['to_state' => 'current', 'reason' => null] + $eventRow, 'and a non-destructive one is not made to invent a reason');
 
-    echo "\n== §10.8 the bytes a version describes are immutable ==\n";
+    echo "\n== the bytes a version describes are immutable ==\n";
 
     refuses('editing the stored path is refused in code', function () use ($v1): void {
         $v1->forceFill(['path' => 'company/1/licence/somewhere/else/1'])->save();
@@ -406,10 +409,10 @@ try {
     }, LifecycleTransitionRefused::class);
 
     check($licence->refresh()->lifecycle === Lifecycle::Voided, 'the void itself happened before the upload refused');
-    check($licence->voided_at !== null && $licence->void_reason === 'verify: the licence was withdrawn', 'and dated the record (§4.4 retirement_dated)');
+    check($licence->voided_at!== null && $licence->void_reason === 'verify: the licence was withdrawn', 'and dated the record (retirement_dated)');
 
-    // ---------------------------------------------------------------- §4.4 a destructive move needs a reason
-    echo "\n== §4.4 and §10.1 the trail ==\n";
+    // ---------------------------------------------------------------- A destructive move needs a reason
+    echo "\n== and the trail ==\n";
 
     $unvoided = $register->handle(DocumentType::Permit, 'verify: permit that will not be voidable without a reason');
     $createdIds[] = $unvoided->id;
@@ -435,7 +438,7 @@ try {
     check($ops->contains(fn (OperationalEvent $e): bool => $e->to_state === 'voided' && $e->reason === 'verify: the licence was withdrawn'), 'the void carries its reason');
 
     check(SecurityEvent::query()->where('kind', 'document_uploaded')->where('meta->document_id', $licence->id)->count() === 2, 'both accepted uploads were audited', 'count='.(string) SecurityEvent::query()->where('kind', 'document_uploaded')->count());
-    check(SecurityEvent::query()->where('kind', 'document_voided')->where('meta->document_id', $licence->id)->exists(), 'the void is on the security trail too (§4.4)');
+    check(SecurityEvent::query()->where('kind', 'document_voided')->where('meta->document_id', $licence->id)->exists(), 'the void is on the security trail too');
 
     refuses('the audit trail refuses an update', function (): void {
         $event = SecurityEvent::query()->where('kind', 'document_uploaded')->firstOrFail();
@@ -449,7 +452,7 @@ try {
     check(SecurityEventKind::DocumentDownloaded->value === 'document_downloaded', 'the download kind the route writes is the kind the CHECK allows');
 
     // ---------------------------------------------------------------- signed download
-    echo "\n== §14.4 signed, refused, audited, uncacheable ==\n";
+    echo "\n== signed, refused, audited, uncacheable ==\n";
 
     // A live document for the download checks: the voided one must refuse.
     $insurance = $register->handle(DocumentType::Insurance, 'verify: insurance certificate', expiresOn: now()->addDays(20));
@@ -459,7 +462,7 @@ try {
 
     $url = $link->temporaryFor($good);
     check(str_contains($url, 'signature=') && str_contains($url, 'expires='), 'the download URL is signed and time-limited');
-    check($link->ttlSeconds() === 60, 'the default TTL is §14.4 sixty seconds', 'ttl='.(string) $link->ttlSeconds());
+    check($link->ttlSeconds() === 60, 'the default TTL is sixty seconds', 'ttl='.(string) $link->ttlSeconds());
 
     $route = Route::getRoutes()->getByName('documents.download');
     check($route !== null, 'the download route exists');
@@ -509,7 +512,7 @@ try {
     $callback();
     $body = (string) ob_get_clean();
     check($body === (string) file_get_contents($files['pdf']), 'and the bytes are the ones that were stored');
-    check(str_contains((string) $downloaded->headers->get('Cache-Control'), 'no-store'), 'Cache-Control says no-store (§14.4)', (string) $downloaded->headers->get('Cache-Control'));
+    check(str_contains((string) $downloaded->headers->get('Cache-Control'), 'no-store'), 'Cache-Control says no-store', (string) $downloaded->headers->get('Cache-Control'));
     check(str_contains((string) $downloaded->headers->get('Cache-Control'), 'private'), 'and private', (string) $downloaded->headers->get('Cache-Control'));
     check($downloaded->headers->get('X-Content-Type-Options') === 'nosniff', 'and the browser is told not to interpret it');
     check(str_contains((string) $downloaded->headers->get('Content-Disposition'), 'attachment'), 'served as an attachment, never inline');
@@ -526,7 +529,7 @@ try {
     }, DocumentNotDownloadable::class);
 
     // The scan gate, measured rather than assumed: no scanner here, so a pending verdict serves and
-    // an infected one never does (§17 Q8's honest interim rule).
+    // an infected one never does (Q8's honest interim rule).
     $good->forceFill(['virus_scan_status' => ScanVerdict::Infected, 'scanned_at' => now(), 'scan_detail' => 'verify: simulated find'])->save();
     refuses('infected bytes are refused', function () use ($good): void {
         app(DownloadDocument::class)->handle($good);
@@ -535,10 +538,10 @@ try {
         $link->temporaryFor($good);
     }, DocumentNotDownloadable::class);
     $good->forceFill(['virus_scan_status' => ScanVerdict::Pending, 'scanned_at' => null, 'scan_detail' => null])->save();
-    check($good->refresh()->isServable(), 'with no scanner configured, pending bytes serve (§17 Q8 documented in the config)');
+    check($good->refresh()->isServable(), 'with no scanner configured, pending bytes serve (Q8 documented in the config)');
 
     // ---------------------------------------------------------------- integrity sweep
-    echo "\n== §4.4 sha256 means something: documents:verify-integrity ==\n";
+    echo "\n== sha256 means something: documents:verify-integrity ==\n";
 
     $integrity = app(DocumentIntegrityVerifier::class);
 
@@ -549,7 +552,7 @@ try {
     Storage::disk(DocumentStore::Disk)->put($v2->path, 'a different file entirely, with fewer bytes');
     $drift = $integrity->findings();
     check(collect($drift)->contains(fn (array $f): bool => $f['kind'] === 'digest' && $f['version_id'] === $v2->id), 'a replaced object is reported as a digest finding', json_encode($drift));
-    // The command, not just the class: exit 1 is what makes the scheduler alarm rather than log (§14.6).
+    // The command, not just the class: exit 1 is what makes the scheduler alarm rather than log.
     check(Artisan::call('documents:verify-integrity') === 1, 'the scheduled command exits 1 on drift, so the scheduler alarms rather than logs');
 
     Storage::disk(DocumentStore::Disk)->put($v2->path, (string) file_get_contents($files['png']));
@@ -580,7 +583,7 @@ try {
     check($integrity->findings() === [], 'and the archive is clean again');
 
     // ---------------------------------------------------------------- delete
-    echo "\n== §10.8 deleting a version removes the bytes with it ==\n";
+    echo "\n== deleting a version removes the bytes with it ==\n";
 
     $path = $good->path;
     $delete->handle($good, 'verify: superseded by the broker copy', $owner->id);
@@ -593,7 +596,7 @@ try {
     }, InvalidArgumentException::class);
 
     // ---------------------------------------------------------------- tenancy + visibility
-    echo "\n== §8 T3 and §14.4 visibility ==\n";
+    echo "\n== T3 and visibility ==\n";
 
     $other = Company::create([
         'name' => 'Verify Second Fleet',
@@ -610,7 +613,7 @@ try {
     CurrentCompany::force(1);
     check(Document::query()->where('id', $foreign->id)->doesntExist(), 'a scoped read in company 1 cannot see company 2\'s document');
     check(DocumentVersion::query()->where('document_id', $foreign->id)->doesntExist(), 'nor its versions');
-    check(str_starts_with($store->pathFor($foreign, 'x', 1), 'company/'.$other->id.'/'), 'and its bytes would have gone under its own company prefix (§14.4)', $store->pathFor($foreign, 'x', 1));
+    check(str_starts_with($store->pathFor($foreign, 'x', 1), 'company/'.$other->id.'/'), 'and its bytes would have gone under its own company prefix', $store->pathFor($foreign, 'x', 1));
     check(str_starts_with($good->path, 'company/1/'), 'while company 1\'s stayed under company/1', $good->path);
 
     $restricted = $register->handle(
@@ -641,9 +644,25 @@ try {
 
     check(Gate::forUser($auditor)->allows('view', $restricted), 'the named role sees the restricted paper');
     check(Gate::forUser($dispatcher)->denies('view', $restricted), 'a role it does not name does not');
-    check(Gate::forUser($owner)->allows('view', $restricted), 'the Owner is never locked out of their own register (§9.3)');
+    check(Gate::forUser($owner)->allows('view', $restricted), 'the Owner is never locked out of their own register');
     check(Gate::forUser($dispatcher)->allows('view', $licence), 'an unrestricted document stays visible to everyone holding documents.view');
     check(Gate::forUser($dispatcher)->denies('download', $restricted), 'and the download gate asks the same question as the list');
+
+    // The register narrows in SQL (`Document::visibleTo`) so it can paginate. That scope must select
+    // exactly the rows the per-row policy allows — a list that prints a paper its download refuses,
+    // or hides one the policy permits, is the drift two implementations exist to risk.
+    foreach (['owner' => $owner, 'auditor' => $auditor, 'dispatcher' => $dispatcher] as $seat => $user) {
+        $scoped = Document::query()->visibleTo($user)->pluck('id')->all();
+        $allowed = Document::query()->get()
+            ->filter(fn (Document $document): bool => Gate::forUser($user)->allows('view', $document))
+            ->pluck('id')
+            ->all();
+
+        sort($scoped);
+        sort($allowed);
+
+        check($scoped === $allowed, "the SQL visibility scope and the policy select the same register for the {$seat}");
+    }
 } finally {
     echo "\n== cleanup ==\n";
 

@@ -8,7 +8,7 @@ use App\Models\User;
 use App\Providers\IdentityServiceProvider;
 
 /**
- * §9.3, last row: "Users, roles, permissions ⚑ — **F only** (Owner)".
+ *, Last row: "Users, roles, permissions ⚑ — **F only** (Owner)".
  *
  * The Owner's exclusivity is a policy rule, not a UI nicety: `users.manage` is in no other role's
  * permission list, and this class adds the refusals a bare permission check cannot express —
@@ -16,7 +16,7 @@ use App\Providers\IdentityServiceProvider;
  *
  * Registered by {@see IdentityServiceProvider} rather than discovered: the package
  * auto-discovery looks for `App\Policies\UserPolicy`, and this project keeps its policies with
- * their modules (§13).
+ * their modules.
  */
 final class UserPolicy
 {
@@ -37,7 +37,7 @@ final class UserPolicy
 
     /**
      * Changing a role is the action that can create an Owner, so it refuses self-service on top of
-     * the permission: an Accountant with `users.manage` (there is none today, and §9.3 keeps it that
+     * the permission: an Accountant with `users.manage` (there is none today, and the design keeps it that
      * way) must not be able to promote themselves.
      */
     public function changeRole(User $user, User $target): bool

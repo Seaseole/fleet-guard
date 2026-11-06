@@ -10,16 +10,16 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.4 NOTIFICATION_PREFERENCE — per-user opt-out, per type, per channel.
+     * NOTIFICATION_PREFERENCE — per-user opt-out, per type, per channel.
      *
      * **A row's absence means "deliver".** That is the only shape that survives a new alert type: an
-     * opt-in table would silently mute every type its author forgot to insert, and §14.1's whole
+     * opt-in table would silently mute every type its author forgot to insert, and the whole
      * sentence is about the alert reaching somebody. The exception — a critical financial or safety
      * alert cannot be opted out of — is enforced where the delivery decision is made
      * (`AlertType::cannotBeMutedBy`), not here, because it depends on the alert's severity at the
      * moment it fired, not on the type's general character.
      *
-     * `whatsapp_later` appears in §4.4's channel list and is deliberately absent from the CHECK: a row
+     * `whatsapp_later` appears in the channel list and is deliberately absent from the CHECK: a row
      * naming a channel the application cannot send on is a preference that looks saved and does
      * nothing. When the channel ships, the CHECK widens in the same migration that adds the driver.
      */

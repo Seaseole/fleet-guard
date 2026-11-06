@@ -13,14 +13,14 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * Removing one copy of a document, bytes and row together (§9.3's ⚑ documents.delete).
+ * Removing one copy of a document, bytes and row together (the ⚑ documents.delete).
  *
  * Hard delete, and that is the only honest option: a version row exists to point at bytes, so
  * "soft-deleting" it leaves a pointer to a file that is still in the bucket and still downloadable
  * by anything that finds the path. Deleting the bytes without the row is worse — a version that
  * lists, claims a digest and serves nothing.
  *
- * The reason is mandatory even though §4.4 only demands it for a *destructive state transition*:
+ * The reason is mandatory even though only demands it for a *destructive state transition*:
  * deleting the evidence is the most destructive thing a document screen can do, and a trail that
  * records the actor but not the why answers half the question an auditor asks.
  */
@@ -34,10 +34,10 @@ final class DeleteDocumentVersion
     public function handle(DocumentVersion $version, string $reason, ?int $byUserId = null): void
     {
         if (trim($reason) === '') {
-            // Enforced here rather than only in the screen: §9.3's kiosk path, a future API (§14.9)
+            // Enforced here rather than only in the screen: The kiosk path, a future API
             // and this verifier all call the same door, and a reason that is optional at the door is
             // optional.
-            throw new InvalidArgumentException('Deleting a version requires the reason that will appear in the trail (§9.5).');
+            throw new InvalidArgumentException('Deleting a version requires the reason that will appear in the trail.');
         }
 
         /** @var Document $document */
@@ -47,7 +47,7 @@ final class DeleteDocumentVersion
 
         DB::transaction(function () use ($version, $document, $reason, $byUserId, $wasCurrent, $sequence): void {
             if ($wasCurrent) {
-                // Release the §10.8 slot before the row goes: the unique index across `current_slot`
+                // Release the slot before the row goes: the unique index across `current_slot`
                 // is what guarantees one current version, and a document whose last current copy is
                 // deleted legitimately has none — "no copy on file" is a state the register shows.
                 $version->forceFill(['is_current' => false])->save();

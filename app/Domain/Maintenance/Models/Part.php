@@ -23,16 +23,16 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.3 PART — a line in the workshop's catalogue of what it buys and fits, and the shelf behind it.
+ * PART — a line in the workshop's catalogue of what it buys and fits, and the shelf behind it.
  *
- * The class names Fleet's `Truck` because §4.3 gives a part an optional "specific part" vehicle
- * and §3's map already draws MAINT → FLEET; the edge is declared in `scripts/lint-architecture.php`
+ * The class names Fleet's `Truck` because the design gives a part an optional "specific part" vehicle
+ * and the map already draws MAINT → FLEET; the edge is declared in `scripts/lint-architecture.php`
  * rather than hidden. Most parts leave it null and fit anything.
  *
  * Cost is exposed as {@see Money}, not as a raw integer, so the screen cannot print a ZAR part
- * with the Pula symbol (§5.1). The model owns no format of its own.
+ * with the Pula symbol. The model owns no format of its own.
  *
- * The moving average is **value over units**, exactly as a bulk tank keeps it (§20.26): a receipt
+ * The moving average is **value over units**, exactly as a bulk tank keeps it: a receipt
  * adds its base money and its quantity, and the ratio is recomputed. `average_cost_minor` is that
  * ratio rounded for display, while `stock_value_base` is what the shelf is worth. An issue that takes
  * every unit left takes the *exact* remaining value, so a part emptied to nothing is worth nothing
@@ -151,7 +151,7 @@ final class Part extends Model implements AuditableContract
 
     /**
      * What taking this many units costs at the shelf's moving average, in base minor units, rounded
-     * once (§5.5). Taking everything left costs the value the shelf actually holds, so no rounding
+     * once. Taking everything left costs the value the shelf actually holds, so no rounding
      * residue survives an emptiness the book says is worth something.
      */
     public function costForIssue(int $quantityX100): int

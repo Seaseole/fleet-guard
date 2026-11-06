@@ -1,0 +1,5 @@
+employee_no,reference,amount,advanced_on,note
+OPENEMP-1,ADV-2026-077,3500.00,2026-09-18,Cash float issued at the depot for a Beitbridge crossing
+OPENEMP-1,ADV-2026-091,800.00,2026-10-04,Toll money the old slip never closed
+OPENEMP-2,ADV-2026-045,12000.00,2026-08-02,Diesel bought with the advance and never accounted for
+OPENEMP-2,ADV-2026-098,450.00,2026-10-27,Change carried from the last refill

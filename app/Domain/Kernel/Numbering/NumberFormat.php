@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Kernel\Numbering;
 
 /**
- * Renders a document number from its format (§7.1's `format` column), e.g.
+ * Renders a document number from its format (the `format` column), e.g.
  * `INV-{PERIOD}-{SEQ:7}` + period `FY26/27` + value 42 → `INV-FY26/27-0000042`.
  *
  * Padding is a minimum width, never a truncation: a sequence that outgrows its pad prints in

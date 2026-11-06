@@ -15,7 +15,7 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.3 EQUIPMENT — loaders, generators and toolboxes.
+ * EQUIPMENT — loaders, generators and toolboxes.
  *
  * Never `on_trip`: nothing is dispatched on a generator, and its transition table omits the state
  * the DB CHECK also omits for this table.

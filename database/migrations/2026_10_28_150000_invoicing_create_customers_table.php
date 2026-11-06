@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.1 CUSTOMER — the party an invoice is addressed to.
+     * CUSTOMER — the party an invoice is addressed to.
      *
      * `name` is the reference a dispatcher and an accountant both recognise, so it is unique per
      * company; `code` is the stable key a legacy export or a statement import can carry, because a
@@ -19,7 +19,7 @@ return new class extends Migration
      * customer rebrands. It is nullable — a company that has never imported anything is not asked
      * to invent one.
      *
-     * `payment_terms` is deliberately a string, not an ENUM or a CHECK list: §4.1 sketches it as
+     * `payment_terms` is deliberately a string, not an ENUM or a CHECK list: Sketches it as
      * `net_30`, and an owner negotiating `net_45` must not need a migration. The vocabulary
      * (`cash` or `net_<days>`) is validated once, in {@see CustomerDto},
      * which is also the path the Phase 1 importer uses — so the rule holds for typed entry and for

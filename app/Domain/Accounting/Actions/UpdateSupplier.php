@@ -9,7 +9,7 @@ use App\Domain\Accounting\Models\Supplier;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Edits a supplier's master details (§4.2, D1).
+ * Edits a supplier's master details (D1).
  *
  * Retiring a supplier is `active = false` on this path rather than a delete: bills already recorded
  * against them must keep a name to print.

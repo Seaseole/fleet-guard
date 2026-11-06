@@ -14,7 +14,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Carbon;
 
 /**
- * §15.2 Phase 0.5 — commit a validated opening trial balance to the ledger as one real journal.
+ * Phase 0.5 — commit a validated opening trial balance to the ledger as one real journal.
  *
  * The posting goes through {@see PostOpeningBalance} inside the Ledger (D3), carrying the batch's
  * `public_id` and a `posting_event_id` minted at import. A commit interrupted after the entry posts

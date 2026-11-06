@@ -12,7 +12,7 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
- * The delivery of one alert (§14.1) — never the alert itself.
+ * The delivery of one alert — never the alert itself.
  *
  * The distinction is the whole design: one `doc_expiry` alert is delivered to the Operations Manager and
  * the Dispatcher, and both of them acting on it must not double-count the finding, and neither of them
@@ -20,14 +20,14 @@ use Illuminate\Notifications\Notification;
  * `notifications` is one person's copy of it, which is why the bell reads that table and the register
  * reads this one.
  *
- * Queued (§14.3): a nightly sweep over twenty-one trucks' papers must not spend its run on SMTP
+ * Queued: a nightly sweep over twenty-one trucks' papers must not spend its run on SMTP
  * round-trips, and a mail server that is down at 01:40 should delay a reminder rather than fail the scan
  * that produced it.
  *
  * It carries an {@see AlertCopy} rather than the `Alert` model, and that is a measured correction rather
  * than a style choice. A queued notification is rehydrated by a worker that has no company context, and
  * `Alert` is company-scoped — so the model the first version carried could not be found again, and every
- * delivery died with `ModelNotFoundException` on the queue while the same code passed inline. §14.3's
+ * delivery died with `ModelNotFoundException` on the queue while the same code passed inline. The
  * "put anything that can fail slowly on the queue" is only safe when the job carries what it needs to say.
  *
  * The channel list is decided before the job is queued, by {@see

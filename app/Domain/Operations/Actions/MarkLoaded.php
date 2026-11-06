@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * §10.2's `assigned → loaded`: the manifest is complete, and this is where it is measured.
+ * The `assigned → loaded`: the manifest is complete, and this is where it is measured.
  *
  * The gate runs against the *whole* load list, not the row just added, which is why marking a trip
  * loaded is its own Action rather than a side effect of {@see AddLoad}: six parcels of 6 t each are
@@ -24,7 +24,7 @@ use InvalidArgumentException;
  * learns about the missing waybill only after it has re-shuffled the pallets to fix the tonnage
  * loses an hour and starts treating the software as an obstacle.
  *
- * The empty case is refused rather than allowed: §10.2 already gives an empty truck its own path
+ * The empty case is refused rather than allowed: Already gives an empty truck its own path
  * (`assigned → departed`, "no load plan"), so a trip marked loaded with nothing on it is a manifest
  * that has not been typed, not a decision to run light.
  */
@@ -36,7 +36,7 @@ final class MarkLoaded
     {
         if ($trip->status !== TripStatus::Assigned) {
             throw new InvalidArgumentException(sprintf(
-                'Trip %s is %s; only an assigned trip is marked loaded (§10.2).',
+                'Trip %s is %s; only an assigned trip is marked loaded.',
                 $trip->trip_no,
                 $trip->status->label(),
             ));

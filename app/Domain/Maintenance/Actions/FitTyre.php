@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * Opens a fitment: one casing onto one slot of one truck (§4.3 TYRE_POSITION).
+ * Opens a fitment: one casing onto one slot of one truck (TYRE_POSITION).
  *
  * The row is the only place a tyre's whereabouts is recorded, so the three things that must be true
  * are proven here rather than left to the table: the tyre is on the spares rack, the slot is empty and
@@ -25,7 +25,7 @@ use InvalidArgumentException;
  * the second writer fails on the row, not on a check that ran before the first one committed.
  *
  * The odometer is recorded on the fitment and does not move the truck's own reading: odometer entry is
- * its own act with its own permission (§9.3), and a fitter's number is not a substitute for the card.
+ * its own act with its own permission, and a fitter's number is not a substitute for the card.
  */
 final class FitTyre
 {
@@ -37,7 +37,7 @@ final class FitTyre
         int $odometerKm,
     ): TyrePosition {
         if (! Gate::allows('tyres.manage')) {
-            throw new InvalidArgumentException('Fitting a tyre is a workshop act (§9.3).');
+            throw new InvalidArgumentException('Fitting a tyre is a workshop act.');
         }
 
         if ($odometerKm <= 0) {

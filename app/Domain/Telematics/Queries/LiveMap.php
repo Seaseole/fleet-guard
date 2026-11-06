@@ -16,9 +16,9 @@ use Illuminate\Support\Carbon;
  *
  * Both reads go through the projection and the history table respectively, and neither touches another
  * module's models — the trip facts come from Operations' {@see TripsInMotion} DTO and the truck labels
- * from Fleet's {@see FleetDirectory}, the two seams §13 D5 asks for.
+ * from Fleet's {@see FleetDirectory}, the two seams D5 asks for.
  *
- * `vehicles()` reads one row per truck, not one row per fix. That is the whole point of §14.3's
+ * `vehicles()` reads one row per truck, not one row per fix. That is the whole point of the
  * projection: "where are my trucks" stays one small query as the history table grows past a million
  * rows, and the poll that refreshes the map every minute does not get slower with it.
  */
@@ -78,7 +78,7 @@ final class LiveMap
      */
     public function track(string $tripId, int $limit = 200): array
     {
-        return GpsPosition::query()
+        return array_values(GpsPosition::query()
             ->where('trip_id', $tripId)
             ->orderByDesc('fixed_at')
             ->orderByDesc('id')
@@ -86,7 +86,7 @@ final class LiveMap
             ->get()
             ->reverse()
             ->values()
-            ->all();
+            ->all());
     }
 
     /** How many fixes are on file for a trip — the number the track table's footer prints. */

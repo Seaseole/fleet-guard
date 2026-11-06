@@ -17,15 +17,15 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The scheduler's whole job (§14.1): ask every source what is true tonight, record it, tell the people
+ * The scheduler's whole job: ask every source what is true tonight, record it, tell the people
  * the thresholds name.
  *
  * Nothing here reads a module. The sources arrive as {@see ReminderSource} implementations from the
- * container, which is what keeps §13's D2 rule — the Kernel may not import a module — true once Fleet,
+ * container, which is what keeps the D2 rule — the Kernel may not import a module — true once Fleet,
  * Maintenance and Invoicing exist and each of them wants to report something expiring. The engine's list
  * of concerns is exactly as long as the interfaces it owns.
  *
- * **Company context is pinned per company and dropped in a `finally`.** This is the §20.4 queue-worker
+ * **Company context is pinned per company and dropped in a `finally`.** This is the queue-worker
  * leak's own shape: a worker is one long-lived process, so a sweep that pinned company 1 and left it set
  * would run company 2's documents against company 1's thresholds and role holders, and every read would
  * look normal. `CurrentCompany::force()` is also what makes `CompanyTeamResolver` answer with a real
@@ -118,7 +118,7 @@ final class ReminderRunner
             return;
         }
 
-        // The company's own business day, never the storage zone (§2). A licence expiring at midnight in
+        // The company's own business day, never the storage zone. A licence expiring at midnight in
         // Gaborone is not expired at 22:00 UTC the night before, and "your truck is not roadworthy today"
         // is not a rounding error.
         $today = Carbon::now(CurrentCompany::timezone());
@@ -173,7 +173,7 @@ final class ReminderRunner
     }
 
     /**
-     * §10: "muted with an expiry so muting cannot silently become permanent".
+     * "Muted with an expiry so muting cannot silently become permanent".
      *
      * The expiry is only a promise if something acts on it, and that something is this sweep. The mute
      * columns are deliberately *kept*: the row's history says it was muted until a date, and wiping them

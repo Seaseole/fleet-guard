@@ -9,12 +9,12 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §20.36 (Phase 5 slice 5b) — the delivery's own record of the paper that documented it.
+     * (Phase 5 slice 5b) — the delivery's own record of the paper that documented it.
      *
-     * A bulk delivery posts `Cr 2110` at the movement (§20.26); the supplier's bill for the same
+     * A bulk delivery posts `Cr 2110` at the movement; the supplier's bill for the same
      * diesel must attach to that obligation, not create a second one. The stamp lives on Fuel's row
      * and is written only through `Fuel\Actions\MarkDeliveryBilled` — Accounting never reaches into
-     * another module's table (§3.1 D5); it asks, and the door answers.
+     * another module's table (D5); it asks, and the door answers.
      *
      * NULL means "this delivery's bill has not arrived yet", which is the same truth the register's
      * `awaiting the bill` badge has been telling since slice 3a; the column makes it a query.

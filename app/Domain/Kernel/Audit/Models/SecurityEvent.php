@@ -10,13 +10,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
- * §4.4 SECURITY_EVENT — the trail that answers "who touched this, when, from where".
+ * SECURITY_EVENT — the trail that answers "who touched this, when, from where".
  *
  * Append-only in code (layer 1). It has no DB trigger counterpart because the failure this guards
  * against is an application path, not a hand in a SQL client, and a trigger on a table nothing
  * updates by design would be forty lines of SQL protecting a promise already kept.
  *
- * The document kinds (§14.4's per-download audit) live here rather than in `audits` because an
+ * The document kinds (the per-download audit) live here rather than in `audits` because an
  * access trail answers a different question from a before/after diff: "who read this licence" is a
  * list of reads with zero writes, and laravel-auditing has nothing to record for it.
  *
@@ -36,7 +36,7 @@ final class SecurityEvent extends Model
     protected $table = 'security_events';
 
     /**
-     * `happened_at` is the only time on this row (§4.4), and it is the event's own moment rather
+     * `happened_at` is the only time on this row, and it is the event's own moment rather
      * than the insert's: a queued or replayed trail entry must carry when it occurred, not when a
      * worker got to it. So Eloquent's timestamps are off rather than duplicated.
      */

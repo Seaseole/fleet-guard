@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
- * §14.3's `latest_positions` projection — one row per truck, the map's only read.
+ * The `latest_positions` projection — one row per truck, the map's only read.
  *
  * Written inside the ingest transaction, so "where is the truck" and "the last fix is on file" are the
  * same commit. `fixed_at` is the fix's own clock and `updated_at` is when this projection last moved;

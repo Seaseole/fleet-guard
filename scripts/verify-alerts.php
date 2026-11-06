@@ -27,6 +27,7 @@ use App\Domain\Kernel\Documents\Lifecycle;
 use App\Domain\Kernel\Documents\Models\Document;
 use App\Domain\Kernel\Documents\Validity;
 use App\Domain\Kernel\Identity\CompanyTeamResolver;
+use App\Domain\Kernel\Settings\CompanySettings;
 use App\Domain\Kernel\Tenancy\Company;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\Kernel\Tenancy\MissingCompanyContext;
@@ -43,10 +44,10 @@ use Livewire\Component;
 use Spatie\Permission\Models\Role;
 
 /**
- * Phase 0 alerts and reminders verification (DESIGN.md §20.8).
+ * Phase 0 alerts and reminders verification.
  *
- * Not the test suite — `tests/` is local-only by owner decision (§14.6). This is the runnable proof of
- * §14.1 and §10: that one table is the source of truth and the notification is a copy of it, that the
+ * Not the test suite — `tests/` is local-only by owner decision. This is the runnable proof of
+ * And that one table is the source of truth and the notification is a copy of it, that the
  * cooldown is a lookup on a condition's identity rather than a counter that expires, that a mute cannot
  * become permanent, that thresholds are rows and recipients are roles, and that a scheduled self-check
  * failure reaches a human instead of a log file.
@@ -88,7 +89,7 @@ CurrentCompany::force(1);
  * misbehaving when the truth is that a previous run never reached its cleanup. Slice 7 learned this from
  * six runs' worth of audit rows that every check above them still passed over.
  *
- * The register is empty by design between runs (§20.7), so clearing it here costs nothing real. Company 2
+ * The register is empty by design between runs, so clearing it here costs nothing real. Company 2
  * is removed only when it is *this* file's company, never as a blanket "everything but company 1".
  */
 $probeUserIds = DB::table('users')->where('name', 'like', 'Verify %')->pluck('id')->all();
@@ -263,7 +264,7 @@ $createdThresholdIds = [];
  * Two halves, both earned. The queue name is the one {@see AlertDelivery} routes to, so this file does not
  * pop a decade of other people's queued work and report their failures as its own. And the pin has to be
  * re-established: `DomainServiceProvider` drops the company context after every job — which is correct and
- * is exactly §20.4's queue-worker leak closed — so the sweep that continues after a drain is, from its own
+ * is exactly the queue-worker leak closed — so the sweep that continues after a drain is, from its own
  * point of view, a new process.
  */
 function drainAlertQueue(): void
@@ -274,7 +275,7 @@ function drainAlertQueue(): void
 }
 
 /* ------------------------------------------------------------------------- */
-echo "== §4.4 the engine has the constraints the code claims ==\n";
+echo "== the engine has the constraints the code claims ==\n";
 
 /** @var array<int, object> $ddl */
 $ddl = DB::select('show create table alerts');
@@ -300,18 +301,18 @@ foreach ([
 
 check(
     str_contains($create, 'UNIQUE KEY `alerts_company_cooldown_unique` (`company_id`,`cooldown_key`)'),
-    'the cooldown unique leads with company_id — §4.4 wrote it as a bare UK, which would let one tenant swallow another\'s finding'
+    'the cooldown unique leads with company_id — wrote it as a bare UK, which would let one tenant swallow another\'s finding'
 );
 
-check(str_contains($create, '`resolved_by_kind`'), 'alerts carries resolved_by_kind (§14.6\'s scheduler resolution)');
-check(str_contains($create, '`muted_until`'), 'alerts carries muted_until (§10\'s mute must end)');
+check(str_contains($create, '`resolved_by_kind`'), 'alerts carries resolved_by_kind (the scheduler resolution)');
+check(str_contains($create, '`muted_until`'), 'alerts carries muted_until (the mute must end)');
 check(str_contains($create, '`last_seen_at`'), 'alerts carries last_seen_at (the register sorts by how long a condition has lasted)');
 
 $notificationsTable = DB::select("show tables like 'notifications'");
 check(count($notificationsTable) === 1, 'the notifications table exists — User has used Notifiable since slice 5 with nowhere to write');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §4.4 every CHECK measured in both directions ==\n";
+echo "\n== every CHECK measured in both directions ==\n";
 
 $base = [
     'company_id' => 1,
@@ -330,10 +331,10 @@ $base = [
 ];
 
 checkAccepts('alerts', $base, 'a plain open alert is accepted');
-checkAccepts('alerts', ['type' => 'self_check_failure', 'subject_type' => null, 'subject_id' => null] + $base, 'the §14.6 type is accepted with no subject');
-checkRefuses('alerts', ['type' => 'nonsense'] + $base, 'a type outside §4.4\'s list is refused');
+checkAccepts('alerts', ['type' => 'self_check_failure', 'subject_type' => null, 'subject_id' => null] + $base, 'the type is accepted with no subject');
+checkRefuses('alerts', ['type' => 'nonsense'] + $base, 'a type outside the list is refused');
 checkRefuses('alerts', ['severity' => 'urgent'] + $base, 'a severity the schema does not have is refused');
-checkRefuses('alerts', ['state' => 'closed'] + $base, 'a state §10 does not have is refused');
+checkRefuses('alerts', ['state' => 'closed'] + $base, 'a state the design does not have is refused');
 checkRefuses('alerts', ['subject_id' => null] + $base, 'half a subject is refused');
 checkRefuses('alerts', ['subject_type' => null] + $base, 'and so is the other half');
 checkRefuses('alerts', ['acknowledged_at' => '2026-10-27 02:00:00'] + $base, 'a timestamp with nobody behind it is refused');
@@ -344,7 +345,7 @@ checkAccepts('alerts', ['state' => 'resolved', 'resolved_at' => '2026-10-27 02:0
 checkRefuses('alerts', ['state' => 'resolved', 'resolved_at' => '2026-10-27 02:00:00', 'resolved_by_kind' => 'user', 'resolve_reason' => 'fixed'] + $base, 'a user resolution that names no user is refused');
 checkRefuses('alerts', ['state' => 'resolved', 'resolved_at' => '2026-10-27 04:00:00', 'resolved_by' => 1, 'resolved_by_kind' => 'user', 'resolve_reason' => 'x', 'acknowledged_at' => '2026-10-27 05:00:00', 'acknowledged_by' => 1] + $base, 'resolving before the acknowledgement it answers is refused');
 checkRefuses('alerts', ['state' => 'muted', 'muted_until' => '2026-11-30 00:00:00', 'muted_by' => 1] + $base, 'a mute with no reason is refused');
-checkRefuses('alerts', ['state' => 'muted', 'muted_by' => 1, 'mute_reason' => 'busy'] + $base, 'a mute with no end is refused — §10\'s permanent silence');
+checkRefuses('alerts', ['state' => 'muted', 'muted_by' => 1, 'mute_reason' => 'busy'] + $base, 'a mute with no end is refused — the permanent silence');
 checkAccepts('alerts', ['state' => 'muted', 'muted_until' => '2026-11-30 00:00:00', 'muted_by' => 1, 'mute_reason' => 'off the road'] + $base, 'a mute with an end and a reason is accepted');
 checkRefuses('alerts', ['first_seen_at' => '2026-10-27 03:00:00', 'last_seen_at' => '2026-10-27 01:00:00'] + $base, 'a condition seen again before it was first seen is refused');
 
@@ -364,7 +365,7 @@ DB::table('companies')->insert([
     'updated_at' => now(),
 ]);
 
-checkAccepts('alerts', ['company_id' => 2] + $base, 'the same key in another company is accepted — the per-company unique §4.4 needed');
+checkAccepts('alerts', ['company_id' => 2] + $base, 'the same key in another company is accepted — the per-company unique needed');
 DB::table('alerts')->where('cooldown_key', 'like', 'probe:%')->delete();
 
 checkRefuses('reminder_thresholds', [
@@ -383,7 +384,7 @@ checkRefuses('reminder_thresholds', [
     'company_id' => 1, 'family' => 'doc_expiry', 'days_before' => 30,
     'recipients' => json_encode(['owner']), 'active' => true,
     'created_at' => now(), 'updated_at' => now(),
-], 'an alert type used as a threshold family is refused — the two vocabularies §4.4 wrote as one column');
+], 'an alert type used as a threshold family is refused — the two vocabularies wrote as one column');
 
 checkAccepts('reminder_thresholds', [
     'company_id' => 1, 'family' => 'licence', 'days_before' => 45,
@@ -392,7 +393,7 @@ checkAccepts('reminder_thresholds', [
 ], 'a band outside 60/30/14/7 is accepted — the rows are the contract, not the defaults');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10 the machine, from the enum that is supposed to be the only table ==\n";
+echo "\n== the machine, from the enum that is supposed to be the only table ==\n";
 
 check(
     AlertState::Open->allowedTransitions() === [AlertState::Acknowledged, AlertState::Muted, AlertState::Resolved],
@@ -402,22 +403,22 @@ check(
     AlertState::Acknowledged->allowedTransitions() === [AlertState::Muted, AlertState::Resolved],
     'acknowledged may be muted or resolved, and is never put back to open'
 );
-check(AlertState::Muted->canTransitionTo(AlertState::Open), 'a mute whose end has passed can be reopened — §10: muting cannot become permanent');
+check(AlertState::Muted->canTransitionTo(AlertState::Open), 'a mute whose end has passed can be reopened — muting cannot become permanent');
 check(AlertState::Resolved->allowedTransitions() === [], 'resolved is final; a recurrence is a new row');
 check(! AlertState::Resolved->isLive() && AlertState::Muted->isLive(), 'isLive() means "still needs attention", and a muted row still does');
 check(
     ! AlertState::Acknowledged->requiresReason()
     && AlertState::Muted->requiresReason()
     && AlertState::Resolved->requiresReason(),
-    'the two exits that make a claim about the world need a reason; having seen it does not (§10.1)'
+    'the two exits that make a claim about the world need a reason; having seen it does not'
 );
 check(
     AlertType::DocExpiry->respectsOptOut(AlertSeverity::Warning)
     && ! AlertType::DocExpiry->respectsOptOut(AlertSeverity::Critical),
-    'a critical alert outranks an opt-out (§14.1)'
+    'a critical alert outranks an opt-out'
 );
 
-echo "\n== §10 the Actions are the only way a state moves ==\n";
+echo "\n== the Actions are the only way a state moves ==\n";
 
 $transition = app(TransitionAlert::class);
 $raise = app(RaiseAlert::class);
@@ -439,7 +440,7 @@ $muted = $transition->handle($acknowledged, AlertState::Muted, 'vehicle off the 
 check($muted->state === AlertState::Muted, 'an acknowledged alert may be muted, with a reason and an end');
 
 $reopenReport = app(ReminderRunner::class)->runOne(1);
-check($reopenReport->mutesReopened === 1, 'the sweep reopens a mute whose end has passed (§10, measured rather than promised)');
+check($reopenReport->mutesReopened === 1, 'the sweep reopens a mute whose end has passed (measured rather than promised)');
 check($muted->fresh()->state === AlertState::Open, '...and the row says open again');
 
 $reopenEvents = OperationalEvent::query()->where('aggregate_type', 'alert')->where('aggregate_id', (string) $muted->id)->get();
@@ -461,7 +462,7 @@ $reopened = $reopenEvents->first(
 
 check(
     (string) $reopened?->actor_kind === ActorKind::Scheduler->value,
-    '...attributed to the scheduler, not to whoever happened to be signed in (§20.4\'s leak, refused at the door)'
+    '...attributed to the scheduler, not to whoever happened to be signed in (the leak, refused at the door)'
 );
 check(
     $reopened !== null && $reopened->actor_id === null,
@@ -475,14 +476,14 @@ check(
 $unguarded = Alert::query()->findOrFail($muted->id);
 $unguarded->fill(['state' => AlertState::Resolved->value, 'resolved_at' => now(), 'notify_count' => 99]);
 $unguarded->save();
-check($unguarded->fresh()->state !== AlertState::Resolved, 'a screen cannot mass-assign state — the transitions belong to the Actions (§4.4)');
+check($unguarded->fresh()->state!== AlertState::Resolved, 'a screen cannot mass-assign state — the transitions belong to the Actions');
 check($unguarded->fresh()->notify_count === 0, '...and cannot invent a delivery count');
 
-echo "\n== §14.1 the cooldown is a lookup on the condition, not a counter ==\n";
+echo "\n== the cooldown is a lookup on the condition, not a counter ==\n";
 
 $second = $raise->handle(candidate());
 check(! $second->isNew && $second->refreshed, 'the same condition seen the next night refreshes instead of duplicating');
-check(! $second->shouldDeliver(), '...and tells nobody again — the fourteen emails §14.1 forbids');
+check(! $second->shouldDeliver(), '...and tells nobody again — the fourteen emails the design forbids');
 check($second->alert->id === $probeAlert->id, '...on the same row, not a new one');
 
 $escalated = $raise->handle(candidate([
@@ -531,7 +532,7 @@ try {
 
 check($episodes, 'a condition resolved and re-raised twelve times stops rather than filling the register with a fight');
 
-echo "\n== §14.1 thresholds are rows, and rows mean what they say ==\n";
+echo "\n== thresholds are rows, and rows mean what they say ==\n";
 
 $repository = app(ThresholdRepository::class);
 $sources = iterator_to_array(app()->tagged('reminder_sources'));
@@ -555,9 +556,9 @@ $extra->forceFill(['active' => false])->save();
 check($repository->forCurrentCompany()->find('licence', 21) === null, 'switching a row off stops that reminder without deleting the history of it');
 
 $empty = ThresholdSet::fromRows(ReminderThreshold::query()->whereRaw('1 = 0')->get());
-check(! $empty->has('licence'), 'no rows means no reminders — the reading §14.1 commits to');
+check(! $empty->has('licence'), 'no rows means no reminders — the reading the design commits to');
 
-echo "\n== §14.1 recipients are roles, resolved inside a company ==\n";
+echo "\n== recipients are roles, resolved inside a company ==\n";
 
 $holder = User::create([
     'name' => 'Verify Operations Manager',
@@ -589,7 +590,7 @@ CurrentCompany::force(null);
 
 // Measured, not assumed: the first version of this check expected an empty list. With
 // `permission.teams` on, spatie resolves a role *within* the current team, so an unpinned lookup throws
-// instead. The resolver now asks for the context by name so the message is §8's, and the behaviour worth
+// instead. The resolver now asks for the context by name so the message is the, and the behaviour worth
 // recording is that an unpinned sweep cannot quietly notify nobody.
 refuses(
     'with no tenant pinned the lookup fails loudly instead of answering nobody',
@@ -607,7 +608,7 @@ refuses('a threshold naming a role that does not exist throws instead of silentl
 
 NotificationPreference::create(['user_id' => $holder->id, 'type' => 'doc_expiry', 'channel' => 'mail', 'enabled' => false]);
 check(! $resolver->wants($holder, AlertType::DocExpiry, 'mail', AlertSeverity::Warning), 'a warning respects the mail opt-out');
-check($resolver->wants($holder, AlertType::DocExpiry, 'mail', AlertSeverity::Critical), 'a critical alert does not — §14.1\'s exception is not a checkbox');
+check($resolver->wants($holder, AlertType::DocExpiry, 'mail', AlertSeverity::Critical), 'a critical alert does not — the exception is not a checkbox');
 check($resolver->wants($holder, AlertType::DocExpiry, 'database', AlertSeverity::Warning), 'the opt-out is per channel: the bell still gets it');
 
 $noMail = User::create(['name' => 'Verify No Mail', 'email' => '', 'password' => Str::random(32)]);
@@ -616,7 +617,7 @@ $noMail->assignRole(Role::query()->where('name', 'dispatcher')->where('company_i
 $createdUserIds[] = (int) $noMail->id;
 check(! $resolver->wants($noMail, AlertType::DocExpiry, 'mail', AlertSeverity::Critical), 'nobody is mailed at an address that is not there, even for a critical alert');
 
-echo "\n== §10.8/§14.1 what the expiry source reports ==\n";
+echo "\n== / what the expiry source reports ==\n";
 
 $today = Carbon::now(CurrentCompany::timezone())->startOfDay();
 $source = app(DocumentExpirySource::class);
@@ -638,7 +639,7 @@ foreach ($source->candidates($repository->forCurrentCompany(), $today) as $each)
 check(count($found) === 5, 'one candidate per live expiring paper — not one per threshold band it is inside');
 check(! isset($found[$createdDocumentIds[5]]), 'a draft is not a paper anyone is relying on, so it does not alert');
 check(! isset($found[$createdDocumentIds[6]]), 'a superseded document is evidence of what was on file; its successor alerts instead');
-check(! isset($found[$createdDocumentIds[7]]), 'a POD is an event that happened, so it is not in the expiry machine at all (§10.8)');
+check(! isset($found[$createdDocumentIds[7]]), 'a POD is an event that happened, so it is not in the expiry machine at all');
 
 $expected = [
     59 => [60, AlertSeverity::Info],
@@ -664,7 +665,7 @@ foreach ([59 => 0, 29 => 1, 13 => 2, 0 => 3, -3 => 4] as $offset => $index) {
 
 check(
     ($found[$createdDocumentIds[4]]->payload['validity'] ?? '') === 'expired',
-    'the already-lapsed paper is reported as expired, and Validity is what said so — no column holds that word (§10.8)'
+    'the already-lapsed paper is reported as expired, and Validity is what said so — no column holds that word'
 );
 
 check(
@@ -681,7 +682,7 @@ $boundary = fixtureDocument(['expires_on' => $today->copy()->addDays(60)->toDate
 
 check(
     Validity::derive($boundary->expires_on, $today, 60) === Validity::ExpiringSoon,
-    'a paper exactly on the horizon is inside the band — §10.8 says inclusive, and the offset said not'
+    'a paper exactly on the horizon is inside the band — the design says inclusive, and the offset said not'
 );
 check(
     Validity::derive($today->copy()->addDays(61)->startOfDay(), $today, 60) === Validity::Valid,
@@ -690,6 +691,63 @@ check(
 check(
     Validity::daysUntil($boundary->expires_on, $today) === 60,
     '...with a days_until_expiry that agrees with the state printed beside it (it reported 59 for this row)'
+);
+
+// The three doors the screens ask through, proved here rather than only through a browser: the anchor a
+// caller names, the ranking a row edge and an option both take, and the words that go beside them. Every
+// date below is placed *relative to the company's own window*, so the checks say something true at sixty
+// days and at thirty — a harness that pinned the window would be testing the seed.
+$window = (int) app(CompanySettings::class)->get('documents.expiry_warning_days');
+
+check(
+    Validity::on($today->copy()->addDays($window)->startOfDay(), $today) === Validity::ExpiringSoon,
+    'on() honours the company’s window at its boundary — a picker never reads the knob itself',
+    (string) $window
+);
+check(
+    Validity::on($today->copy()->addDays($window + 1)->startOfDay(), $today) === Validity::Valid,
+    '...and one day past it is outside, exactly as derive() says'
+);
+check(
+    Validity::worstOf([Validity::Valid, Validity::ExpiringSoon, Validity::Expired]) === Validity::Expired,
+    'the worse of several papers is the one a reader has to act on'
+);
+check(
+    Validity::worstOf([Validity::Valid, Validity::Perpetual]) === Validity::Perpetual,
+    '...a gap in the file outranks a clean paper without outranking a lapse'
+);
+check(
+    Validity::distance($today->copy()->subDays(3)->startOfDay(), $today) === '3 days ago',
+    'and the distance is phrased once, in the words every band prints beside it',
+    Validity::distance($today->copy()->subDays(3)->startOfDay(), $today)
+);
+
+$picker = Validity::paperFlags([
+    ['label' => 'licence', 'date' => $today->copy()->addDays($window)->startOfDay()],
+    ['label' => 'permit', 'date' => null],
+    ['label' => 'insurance', 'date' => $today->copy()->addDays($window + 30)->startOfDay()],
+], $today);
+
+check(count($picker) === 2, 'paperFlags prints only the papers that are not clean — silence is the answer for a good one', (string) count($picker));
+check(
+    ($picker[0]['tone'] ?? '') === 'warning' && ($picker[0]['state'] ?? '') === 'Expiring soon',
+    '...in the band’s own word, for the paper inside the window',
+    json_encode($picker[0] ?? null)
+);
+check(
+    ($picker[1]['tone'] ?? '') === 'danger' && ($picker[1]['state'] ?? '') === 'no date on file',
+    '...and a missing paper is danger on a list that commits work, which is where the register differs',
+    json_encode($picker[1] ?? null)
+);
+check(
+    Validity::optionTone($picker) === 'danger',
+    'one tone for the whole option, the worse paper speaking',
+    Validity::optionTone($picker)
+);
+check(
+    str_contains(Validity::optionNote($picker), 'permit no date on file'),
+    '...with the reason in words, because colour is not a channel everyone shares',
+    Validity::optionNote($picker)
 );
 
 $boundaryFound = [];
@@ -731,12 +789,12 @@ check(
     'and company 1\'s run never reports it — the alert row\'s company_id is not a guess'
 );
 
-echo "\n== §14.1 a nightly run, end to end ==\n";
+echo "\n== a nightly run, end to end ==\n";
 
 Alert::query()->where('subject_id', '01VERIFYALERT00000000001')->delete();
 
 // A second holder of the same role, so the delivery is measured between two people rather than inside
-// one mailbox. §14.1's whole claim is that one alert reaching two recipients leaves two independent
+// one mailbox. The whole claim is that one alert reaching two recipients leaves two independent
 // unread states on one finding — which nothing else in this file can see, and a single recipient makes
 // "nobody else's dot moved" unassertable.
 $other = User::create([
@@ -777,7 +835,7 @@ check(
     'not one alert delivery failed on the worker — the bug this check exists for was a queued job that re-read the company-scoped Alert and could not find it'
 );
 
-check($delivered > $beforeDeliveries, 'the role holder received a delivery of each one (§14.1: notification is a delivery of an alert)');
+check($delivered > $beforeDeliveries, 'the role holder received a delivery of each one (notification is a delivery of an alert)');
 check(
     (int) Alert::query()->where('company_id', 1)->where('notify_count', '>', 0)->count() === $live->where('notify_count', '>', 0)->count(),
     '...and every alert that reached somebody counts exactly one delivery, not one per sighting'
@@ -796,7 +854,7 @@ check(
 $unread = Alert::countUnreadDeliveriesFor($holder);
 $otherUnread = Alert::countUnreadDeliveriesFor($other);
 check($unread > 0, 'the bell counts unread deliveries of live alerts');
-check((int) $holder->unread_alerts_count === $unread, '...through the one accessor the topbar is allowed to use (§DESIGN-SYSTEM §7)');
+check((int) $holder->unread_alerts_count === $unread, '...through the one accessor the topbar is allowed to use');
 check($otherUnread === $unread, '...and the second holder of the same role sees the same findings, as their own rows');
 
 $again = Artisan::call('reminders:run', ['--company' => 1]);
@@ -809,7 +867,7 @@ check(
 );
 check(
     $holder->notifications()->where('type', AlertRaised::class)->count() === $delivered,
-    '...and tells nobody twice (§14.1\'s fourteen emails, refused)'
+    '...and tells nobody twice (the fourteen emails, refused)'
 );
 
 $one = $holder->notifications()->where('type', AlertRaised::class)->latest('id')->first();
@@ -822,7 +880,7 @@ check(
 );
 check(
     Alert::countUnreadDeliveriesFor($other) === $otherUnread,
-    '...and nobody else\'s — the other recipient of that same alert has not read theirs (§14.1: the finding '
+    '...and nobody else\'s — the other recipient of that same alert has not read theirs (the finding '
         .'is one row, the dots are per person)'
 );
 
@@ -837,7 +895,7 @@ check(
     '...while the person who had already read it sees no further change, because resolving is not reading'
 );
 
-echo "\n== §14.1 a reminder that reaches nobody is a defect, not a quiet success ==\n";
+echo "\n== a reminder that reaches nobody is a defect, not a quiet success ==\n";
 
 $orphan = ReminderThreshold::create(['family' => 'insurance', 'days_before' => 25, 'recipients' => ['auditor']]);
 $createdThresholdIds[] = $orphan->id;
@@ -860,7 +918,7 @@ check(
     '...the alert is on the register regardless — the finding is not lost, only the delivery is'
 );
 
-echo "\n== §8/§14.1 one unprovisioned tenant cannot silence the others ==\n";
+echo "\n== / one unprovisioned tenant cannot silence the others ==\n";
 
 // Company 2 has thresholds and no staff, which is the normal state of a company on its first week. The
 // first version of the resolver asked spatie for the role by name and let it throw — so the nightly sweep
@@ -881,7 +939,7 @@ check(
     str_contains($wholeOutput, 'company #2') && str_contains($wholeOutput, 'nobody was told'),
     '...and the run says so out loud, naming the tenant, with a non-zero exit, rather than passing silently'
 );
-check($wholeRun === 1, '...a sweep that raised something nobody received is a failed run (§14.1\'s promise kept by the exit code)');
+check($wholeRun === 1, '...a sweep that raised something nobody received is a failed run (the promise kept by the exit code)');
 check(
     ! str_contains($wholeOutput, 'RoleDoesNotExist') && ! str_contains($wholeOutput, 'Exception'),
     '...and it got there without throwing: one tenant\'s missing staffing is a finding, not an abort'
@@ -889,7 +947,7 @@ check(
 
 CurrentCompany::force(1);
 
-echo "\n== §14.6 every scheduled self-check failure raises an alert ==\n";
+echo "\n== every scheduled self-check failure raises an alert ==\n";
 
 $alerter = app(SelfCheckAlerter::class);
 
@@ -929,7 +987,7 @@ check($flap['raised'] === 1, 'a check that fails again after being cleared raise
 
 // Two measurements, in the order that makes each one honest. The fixture register is deliberately broken
 // paper — `fixtureDocument()` files a `current` document with no version at all — so the real integrity
-// sweep *must* fail on it, and §14.6 says that failure has to reach the register rather than stdout. The
+// sweep *must* fail on it, and the design says that failure has to reach the register rather than stdout. The
 // "still passes" claim describes a different database state, so it is measured after the fixtures are
 // gone. Asserting it while they were still filed measured nothing but the fixture.
 $integrityExit = Artisan::call('documents:verify-integrity');
@@ -981,17 +1039,17 @@ check(
     '...and not one of them failed on the worker'
 );
 
-echo "\n== §9.3 the doors ==\n";
+echo "\n== the doors ==\n";
 
 check(Route::has('alerts.index'), 'the register route exists — which is what lets the topbar bell render at all');
 
 $route = Route::getRoutes()->getByName('alerts.index');
 $middleware = $route === null ? [] : $route->gatherMiddleware();
-check(in_array('can:alerts.view', $middleware, true), 'the gate is on the route where a reviewer can see it (§9.4), not in a component that might remember');
+check(in_array('can:alerts.view', $middleware, true), 'the gate is on the route where a reviewer can see it, not in a component that might remember');
 
 CurrentCompany::force(1);
 
-// The read-only role §9.2 describes as "reads everything, changes nothing" is the one that proves the
+// The read-only role the design describes as "reads everything, changes nothing" is the one that proves the
 // register's third permission means something: every role can see the alert list, so `alerts.view` alone
 // would let the Auditor resolve a compliance finding.
 $reader = User::create([
@@ -1004,12 +1062,12 @@ $reader->assignRole(Role::query()->where('name', 'auditor')->where('company_id',
 $createdUserIds[] = (int) $reader->id;
 
 check(Gate::forUser($holder)->allows('alerts.view'), 'the role that runs the trucks may see the register');
-check(Gate::forUser($holder)->allows('alerts.acknowledge'), '...and may acknowledge or mute what §14.1 delivers to it');
+check(Gate::forUser($holder)->allows('alerts.acknowledge'), '...and may acknowledge or mute what the design delivers to it');
 check(Gate::forUser($holder)->allows('alerts.resolve'), '...and may close one, with a reason');
-check(Gate::forUser($noMail)->allows('alerts.view'), 'a dispatcher may see it (§9.3: alerts.view is granted to every role)');
-check(Gate::forUser($noMail)->allows('alerts.acknowledge'), '...and may act on it — §14.1\'s own example is the Ops Manager *and* the Dispatcher both acting on one alert');
+check(Gate::forUser($noMail)->allows('alerts.view'), 'a dispatcher may see it (alerts.view is granted to every role)');
+check(Gate::forUser($noMail)->allows('alerts.acknowledge'), '...and may act on it — the design\'s own example is the Ops Manager *and* the Dispatcher both acting on one alert');
 check(! Gate::forUser($noMail)->allows('alerts.resolve'), '...but may not reach the terminal state, which the engine cannot undo (`alerts_resolved_is_final`)');
-check(Gate::forUser($reader)->allows('alerts.view'), 'the Auditor reads the register (§9.2)');
+check(Gate::forUser($reader)->allows('alerts.view'), 'the Auditor reads the register');
 check(! Gate::forUser($reader)->allows('alerts.acknowledge'), '...and holds neither write');
 check(! Gate::forUser($reader)->allows('alerts.resolve'), '...including the one that is final');
 
@@ -1017,7 +1075,7 @@ $navigation = (array) config('navigation');
 $flat = json_encode($navigation);
 check(is_string($flat) && str_contains($flat, 'alerts.index'), 'the register is in the sidebar, gated on alerts.view');
 
-echo "\n== §9.4 the screens a passing gate cannot see ==\n";
+echo "\n== the screens a passing gate cannot see ==\n";
 
 // Three defects in this slice were invisible to every assertion above — including `Gate::forUser()` and
 // `Route::has()` — and all three were found by loading the URL in a browser: the register defined
@@ -1026,10 +1084,10 @@ echo "\n== §9.4 the screens a passing gate cannot see ==\n";
 // first query while the route, the middleware and the gate all still read correct); the Muted badge named
 // `speaker-wave`, which is not in the icon registry, and `x-ui/icon` throws on an unknown name rather than
 // drawing nothing — only on the one row shape that is muted; and both reason fields omitted the `name`
-// prop `x-ui.input` uses to look a validation error up, so §10.1's mandatory reason refused the submit and
+// prop `x-ui.input` uses to look a validation error up, so the mandatory reason refused the submit and
 // said nothing on screen.
 //
-// The screen is rendered in the browser pass, which is where they were caught (§20.8). An in-process
+// The screen is rendered in the browser pass, which is where they were caught. An in-process
 // render was tried and dropped: `AuthenticateSession` rightly drops a guard with no session row behind it,
 // so the tenancy middleware has no user to read a company from and the gate script fails for being a
 // script. What it *can* own is the shape, across every page rather than only this one.
@@ -1141,13 +1199,13 @@ foreach ($sources as $file => $blade) {
 check(
     $anonymousInputs === [],
     'every wire:model-bound x-ui.input can show its own validation error — both reason fields on the '
-        .'register omitted `name`, so §10.1\'s mandatory reason said nothing',
+        .'register omitted `name`, so the mandatory reason said nothing',
     mb_substr(implode(' | ', $anonymousInputs), 0, 300)
 );
 
 echo "\n== cleanup, and the proof it worked ==\n";
 
-// By type rather than by the accounts this file created: §14.6's self-check alerts are delivered to the
+// By type rather than by the accounts this file created: The self-check alerts are delivered to the
 // real Owner, whose rows a `whereIn($createdUserIds)` would leave behind — a bell dot for a finding that
 // no longer exists, on an account that is not a fixture.
 DB::table('notifications')->where('type', AlertRaised::class)->delete();
@@ -1167,7 +1225,7 @@ check((int) DB::table('alerts')->count() === 0, 'no alert rows survive this run'
 check((int) DB::table('notifications')->count() === 0, 'no delivery rows survive');
 check((int) DB::table('jobs')->where('queue', 'alerts')->count() === 0, 'no delivery is still queued for an alert that no longer exists');
 check((int) DB::table('operational_events')->where('aggregate_type', 'alert')->count() === 0, 'no alert trail rows survive');
-check((int) Document::query()->withoutGlobalScopes()->count() === 0, 'no fixture documents survive — the register is empty by design (§20.7)');
+check((int) Document::query()->withoutGlobalScopes()->count() === 0, 'no fixture documents survive — the register is empty by design');
 check((int) DB::table('users')->whereIn('id', $createdUserIds)->count() === 0, 'no temporary staff accounts survive');
 check((int) DB::table('companies')->where('id', '!=', 1)->count() === 0, 'the probe company is gone');
 check(

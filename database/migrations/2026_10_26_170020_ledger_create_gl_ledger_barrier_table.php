@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §6.3 layer 3 — `gl_ledger_barrier`, the documented emergency hatch.
+     * Layer 3 — `gl_ledger_barrier`, the documented emergency hatch.
      *
      * The table is normally EMPTY, and that is the state the immutability triggers test for: no row
      * means no UPDATE or DELETE on `gl_journal_*`. A maintenance migration lifts the guard by

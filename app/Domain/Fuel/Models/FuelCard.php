@@ -11,8 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * §4.3's `fuel_card_id` needs a row: a pump card the fleet holds, named by an alias a clerk can
- * recognise and a §9.5 trio that never owns the number in a plain column.
+ * The `fuel_card_id` needs a row: a pump card the fleet holds, named by an alias a clerk can
+ * recognise and a trio that never owns the number in a plain column.
  *
  * The write path for the trio arrives with the card-management screen; until then nothing in this
  * build creates a card, and the table's CHECK refuses a row whose "encrypted" column is no longer

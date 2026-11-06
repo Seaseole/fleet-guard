@@ -11,12 +11,12 @@ declare(strict_types=1);
  * A door that is correct in a script and unusable on the screen is a paper still sitting in a drawer.
  *
  * The other half of what this file watches is who may not: a Dispatcher without `accounting.view` is
- * refused the register outright (§9.1), and the record card is rendered only for the seat that holds
- * `bills.create` (§9.2 — the Action asks again, and verify-bills proves that half).
+ * refused the register outright, and the record card is rendered only for the seat that holds
+ * `bills.create` (the Action asks again, and verify-bills proves that half).
  *
- * Not a test suite: `tests/` stays out of the repository (§14.6). Fixtures live in the `RENDER-BILL`
+ * Not a test suite: `tests/` stays out of the repository. Fixtures live in the `RENDER-BILL`
  * namespace on the development database; everything created is removed and then asserted removed,
- * journals through the ledger's own hatch, and every counter this run could advance is rewound (§20.8).
+ * journals through the ledger's own hatch, and every counter this run could advance is rewound.
  *
  * Run: php scripts/render-bills.php
  */
@@ -32,11 +32,11 @@ use App\Domain\Accounting\Models\SupplierPayment;
 use App\Domain\Fleet\Actions\CreateTruck;
 use App\Domain\Fleet\Data\TruckDto;
 use App\Domain\Fleet\FuelType;
-use App\Domain\Invoicing\Models\TaxRate;
 use App\Domain\Fuel\Actions\CreateBulkTank;
 use App\Domain\Fuel\Actions\CreateFuelPurchase;
 use App\Domain\Fuel\Data\FuelPurchaseDto;
 use App\Domain\Fuel\Queries\UnbilledDeliveries;
+use App\Domain\Invoicing\Models\TaxRate;
 use App\Domain\Kernel\Identity\EnsureMultiFactorAuthentication;
 use App\Domain\Kernel\Identity\RoleKey;
 use App\Domain\Kernel\Ledger\Models\LedgerBarrier;
@@ -82,7 +82,7 @@ final class BillsRenderSweep extends TestCase
         $owner = User::query()->where('email', config('fleet.identity.owner_email'))->first();
 
         if ($owner === null) {
-            $this->note('No Owner row for '.config('fleet.identity.owner_email').' — run php artisan fleet:setup-owner (§9.1).');
+            $this->note('No Owner row for '.config('fleet.identity.owner_email').' — run php artisan fleet:setup-owner.');
 
             return;
         }
@@ -90,7 +90,7 @@ final class BillsRenderSweep extends TestCase
         $this->ownerCompany = $owner->company_id;
         CurrentCompany::force($owner->company_id);
 
-        // §9.1's MFA gate is asserted where it belongs (render-identity); this sweep is about the
+        // The MFA gate is asserted where it belongs (render-identity); this sweep is about the
         // bills screens' authorisation and rendering, so that one middleware steps aside here.
         $this->withoutMiddleware(EnsureMultiFactorAuthentication::class);
 
@@ -101,7 +101,7 @@ final class BillsRenderSweep extends TestCase
         $accountant = $this->staffAs($owner, RoleKey::Accountant, 'render-bill-accountant@fleetguard.local');
         $dispatcher = $this->staffAs($owner, RoleKey::Dispatcher, 'render-bill-dispatcher@fleetguard.local');
 
-        // staffAs() releases the context on its way out (§4.3 fail-closed); the fixtures below are
+        // staffAs() releases the context on its way out (fail-closed); the fixtures below are
         // scoped reads and writes, so the company has to be re-established before them.
         CurrentCompany::force($owner->company_id);
 
@@ -119,7 +119,7 @@ final class BillsRenderSweep extends TestCase
         echo "\nThe register renders for the seats that own it, and refuses the one that does not\n";
         $this->pageContains($accountant, '/accounting/bills', 'Record a supplier bill', 'the Accountant sees the record card');
         $this->pageContains($accountant, '/accounting/bills', 'Outstanding payable', '...and reads the register total');
-        // §9.3: the Dispatcher is the seat that reads this app all day and holds no `accounting.view`.
+        // The Dispatcher is the seat that reads this app all day and holds no `accounting.view`.
         // (Every other seeded role does hold it, so there is no second refusal to prove, and the dev
         // box's owner row carries an unstable role state from a past phase's seat probe — the sweep
         // asserts through its own accounts rather than editing anyone's staff row.)
@@ -173,7 +173,7 @@ final class BillsRenderSweep extends TestCase
             $net = 50_000 + 125_050 + 90_000;
             $tax = 0;
 
-            // The register's own percentage, not a hard-coded 12%: §20.37 made the standard rate a
+            // The register's own percentage, not a hard-coded 12%: Made the standard rate a
             // runtime figure, so a sweep that assumes one is a sweep that fails the week it changes.
             $rateX = (int) (TaxRate::effectiveOn(Carbon::now())->rate_x10000 ?? 0);
 
@@ -241,7 +241,7 @@ final class BillsRenderSweep extends TestCase
                 $mirror = DB::table('gl_journal_entries')->where('source_type', 'bill_void')->where('source_id', $this->lastBillId)->first();
 
                 if ($mirror === null) {
-                    throw new Exception('the void wrote no mirror entry (§6.4)');
+                    throw new Exception('the void wrote no mirror entry');
                 }
 
                 if (DB::table('bill_lines')->where('bill_id', $this->lastBillId)->whereNull('released_at')->exists()) {
@@ -255,7 +255,7 @@ final class BillsRenderSweep extends TestCase
         echo "\nThe register lists what the page wrote\n";
         $this->pageContains($accountant, '/accounting/bills', 'RENDER-BILL Garage', 'the supplier names its row in the register');
         $this->pageContains($accountant, '/accounting/bills?state=void', 'BILL-', 'the state filter finds the voided document');
-        $this->pageContains($accountant, '/accounting/bills', 'This paper is', 'and the panel asks which shape the next document takes (§20.36)');
+        $this->pageContains($accountant, '/accounting/bills', 'This paper is', 'and the panel asks which shape the next document takes');
 
         echo "\nSlice 5b: the paper for a delivery the ledger already owes, and the money that clears it\n";
 
@@ -264,7 +264,7 @@ final class BillsRenderSweep extends TestCase
         $workshop = $this->staffAs($owner, RoleKey::Owner, 'render-bill-workshop@fleetguard.local');
 
         // The doors ask the authenticated seat, not an actor id, so the probe has to be logged in for
-        // the fixture to be real (§9.2). Livewire's own actingAs covers the component tests below.
+        // the fixture to be real. Livewire's own actingAs covers the component tests below.
         Auth::login($workshop);
         CurrentCompany::force($owner->company_id);
 
@@ -299,7 +299,7 @@ final class BillsRenderSweep extends TestCase
         if ($obligationId !== null) {
             $this->attempt('the register offers that delivery as a shape, at the book\'s figure', function () use ($accountant): void {
                 // The rendered body is read rather than `assertSee`d: outside a real PHPUnit run the
-                // assertion's failure path dies inside its own exporter (§20.20) and hides the needle.
+                // assertion's failure path dies inside its own exporter and hides the needle.
                 $html = Livewire::actingAs($accountant)
                     ->test('pages::accounting.bills')
                     ->set('shape', 'fuel_delivery')
@@ -348,7 +348,7 @@ final class BillsRenderSweep extends TestCase
                 }
 
                 if ((int) DB::table('gl_journal_entries')->where('source_type', 'bill')->where('source_id', $bill->id)->count() !== 0) {
-                    throw new Exception('the linked bill posted an entry — the same diesel would be funded twice (§20.36)');
+                    throw new Exception('the linked bill posted an entry — the same diesel would be funded twice');
                 }
 
                 if ((int) DB::table('gl_journal_entries')->where('company_id', 1)->count() !== $entriesBefore) {
@@ -402,7 +402,7 @@ final class BillsRenderSweep extends TestCase
             });
 
             $this->pageContains($accountant, '/accounting/bills/'.$this->lastBillId, 'Money that has gone out', '...and the detail lists the payments that decided it');
-            $this->pageContains($accountant, '/accounting/bills/'.$this->lastBillId, 'cannot be voided', '...while the void door refuses a bill the bank has already cleared (§20.33)');
+            $this->pageContains($accountant, '/accounting/bills/'.$this->lastBillId, 'cannot be voided', '...while the void door refuses a bill the bank has already cleared');
             $this->pageLacks($accountant, '/accounting/bills/'.$this->lastBillId, 'Void this bill', '...and the card is not rendered at all, not merely disabled');
         }
     }
@@ -452,7 +452,7 @@ final class BillsRenderSweep extends TestCase
     /**
      * Reads the rendered body rather than calling PHPUnit's `assertSee`.
      *
-     * Outside a real test run PHPUnit's failure path dies inside its own exporter (§20.20), and that
+     * Outside a real test run PHPUnit's failure path dies inside its own exporter, and that
      * AssertionError is what a stale needle used to print. A missing string has to say which one.
      */
     private function pageContains(User $user, string $path, string $needle, string $label): void
@@ -614,7 +614,7 @@ final class BillsRenderSweep extends TestCase
         DB::table('model_has_roles')->where('model_type', User::class)->whereIn('model_id', $checkIds ?: [0])->delete();
         DB::table('users')->whereIn('id', $checkIds ?: [0])->delete();
 
-        // §20.8: nothing this run burned may stay burned without a document surviving behind it.
+        // Nothing this run burned may stay burned without a document surviving behind it.
         $rewind = function (string $scope, string $table, string $column): void {
             foreach (DB::table('number_sequences')->where('company_id', $this->ownerCompany ?? 1)->where('scope', $scope)->get() as $row) {
                 $highest = DB::table($table)->where('company_id', $this->ownerCompany ?? 1)->whereNotNull($column)

@@ -7,7 +7,7 @@ namespace App\Domain\Invoicing\Data;
 use DateTimeImmutable;
 
 /**
- * One customer's line in the receivables ageing report (§10.4, §10.6).
+ * One customer's line in the receivables ageing report.
  *
  * The five money figures are the same five `AgeingBucket` derives per invoice, summed here so the report
  * is a query rather than a walk from the screen. `oldestDueOn` is carried because the number a credit

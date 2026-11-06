@@ -9,18 +9,18 @@ use App\Domain\Kernel\Ledger\LedgerService;
 use App\Domain\Kernel\Money\Money;
 
 /**
- * One line of a proposed posting (§6.2). Immutable value object: the ledger's inputs are DTOs,
+ * One line of a proposed posting. Immutable value object: the ledger's inputs are DTOs,
  * and the only door that turns them into rows is {@see LedgerService}.
  *
  * `$base` is the authoritative amount (ADR-0004 #3) and is always in the company base currency;
  * `$foreign` is the amount as the invoice, bill or fuel slip actually stated it, in the entry's
  * input currency. A line with only `$foreign` is not accepted — the poster converts, because
- * conversion is where the rounding rule lives (§5.5).
+ * conversion is where the rounding rule lives.
  */
 final class LineDto
 {
     /**
-     * @param  array<string, scalar|null>  $dimensions  keyed by the §6.2 column name: truck_id, trip_id, …
+     * @param  array<string, scalar|null>  $dimensions  keyed by the column name: truck_id, trip_id, …
      * @param  array<string, scalar|null>  $dimensionExtra  the long tail (permit_id, tyre_id, route_id)
      */
     public function __construct(
@@ -33,7 +33,7 @@ final class LineDto
         public readonly array $dimensionExtra = [],
     ) {
         // Fail at construction rather than at the DB: a mistyped dimension key would otherwise be
-        // silently dropped, and a dimension that quietly disappears is §6.1's fuel-line bug.
+        // silently dropped, and a dimension that quietly disappears is the fuel-line bug.
         foreach (array_keys($dimensions) as $column) {
             if (! in_array($column, self::typedColumns(), true)) {
                 throw UnknownDimension::key((string) $column);
@@ -42,7 +42,7 @@ final class LineDto
     }
 
     /**
-     * Every typed dimension column in §4.2 — wider than the {@see Dimension} mask, which only
+     * Every typed dimension column in wider than the {@see Dimension} mask, which only
      * covers the five dimensions an account can *require*.
      *
      * @return list<string>

@@ -15,13 +15,13 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.1 LOAD — one parcel of freight on a trip's leg.
+ * LOAD — one parcel of freight on a trip's leg.
  *
  * The tonnage is a decimal (`tonnes_10_2`), not an integer, for the reason Phase 1 recorded for
  * `trucks.capacity_tonnes_10_2`: D6's integer rule exists for money, and a load is not money. Rounding
  * 3.5 t up to 4 t to satisfy it would make the capacity gate lie by an eighth of a load.
  *
- * Auto-increment id, not a ULID: a load is never addressed from outside its trip — §2 reserves ULIDs
+ * Auto-increment id, not a ULID: a load is never addressed from outside its trip — reserves ULIDs
  * for externally-referenced aggregates, and the POD that references a load reaches it through the trip.
  *
  * @property int $id

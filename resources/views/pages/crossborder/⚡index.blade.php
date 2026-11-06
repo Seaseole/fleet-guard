@@ -19,10 +19,10 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /*
- * The cross-border register (§3.2, §4.4) — every gate the fleet uses, and every crossing that has
+ * The cross-border register — every gate the fleet uses, and every crossing that has
  * been planned against one.
  *
- * The screen is a register, not a workflow: the acts that move a crossing along (§10.9's enter,
+ * The screen is a register, not a workflow: the acts that move a crossing along (the enter,
  * exit, capture and finish) happen on the trip, where the truck, the driver and the money are on one
  * page. What this register answers is the question a dispatcher asks before planning a corridor —
  * "which gates do we actually use, and what is still open at them" — and the accountant's "what did
@@ -187,11 +187,11 @@ new #[Title('Cross-border')] class extends Component {
 }; ?>
 
 <div class="grid gap-6">
-    <header class="flex flex-wrap items-end justify-between gap-3">
+    <header class="fg-page-header flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div class="grid gap-1">
             <x-ui.heading size="xl" level="1">{{ __('Cross-border') }}</x-ui.heading>
             <x-ui.text>
-                {{ __('The gates we use and the crossings on our trips. Entering, exiting and charging a gate happen on the trip itself (§10.9).') }}
+                {{ __('The gates we use and the crossings on our trips. Entering, exiting and charging a gate happen on the trip itself.') }}
             </x-ui.text>
         </div>
 
@@ -235,7 +235,7 @@ new #[Title('Cross-border')] class extends Component {
             <tr wire:key="crossing-{{ $crossing->id }}">
                 <x-ui.table.td nowrap>
                     @if ($crossing->trip !== null)
-                        <a href="{{ route('operations.trip', $crossing->trip) }}" class="fg-identifier text-sm text-accent">{{ $crossing->trip->trip_no }}</a>
+                        <a href="{{ route('operations.trip', $crossing->trip) }}" class="fg-identifier text-sm text-accent-ink underline-offset-4 transition duration-(--t-fast) ease-(--ease-standard) hover:text-accent-hover hover:underline">{{ $crossing->trip->trip_no }}</a>
                     @else
                         <span class="fg-identifier text-sm text-fg-ink-muted">{{ $crossing->trip_id }}</span>
                     @endif
@@ -280,7 +280,7 @@ new #[Title('Cross-border')] class extends Component {
     </div>
 
     {{-- The gate register: master data, so it is a flat list rather than a screen of its own. --}}
-    <section class="grid gap-4 rounded-fg-lg border border-fg-line bg-fg-surface p-5">
+    <section class="grid gap-4 fg-panel p-5">
         <x-ui.subheading>{{ __('Gates on file') }}</x-ui.subheading>
 
         @if ($this->posts === [])

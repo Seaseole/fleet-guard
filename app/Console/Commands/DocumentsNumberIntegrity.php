@@ -10,7 +10,7 @@ use App\Domain\Kernel\Numbering\NumberIntegrityChecker;
 use Illuminate\Console\Command;
 
 /**
- * Nightly proof that the sequences and the documents still agree (§7.4).
+ * Nightly proof that the sequences and the documents still agree.
  *
  * Exit code 1 on drift, so a scheduler entry or a deploy hook can alarm rather than log.
  */
@@ -64,8 +64,8 @@ class DocumentsNumberIntegrity extends Command
         $drift = count(array_filter($findings, fn (Finding $f) => $f->isDrift()));
         $unchecked = count(array_filter($findings, fn (Finding $f) => $f->isUnchecked()));
 
-        // §14.6: a scheduled check that finds something raises an alert, and a later clean run closes it.
-        // Only drift raises one: §7.4 alarms on drift, and `unchecked` is its honest "we did not look at
+        // A scheduled check that finds something raises an alert, and a later clean run closes it.
+        // Only drift raises one: Alarms on drift, and `unchecked` is its honest "we did not look at
         // this scope yet" — a module that has not shipped rather than a problem with one, and paging the
         // Owner for the invoicing table existing later would train everyone to ignore the register.
         $resolved = 0;

@@ -10,10 +10,10 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 BULK_TANK — the yard tank diesel is delivered into before a truck takes it (§15.2 phase 3).
+     * BULK_TANK — the yard tank diesel is delivered into before a truck takes it.
      *
      * Three figures are stored, and only two of them are independent. `stock_value_base` is the
-     * money the stock is worth, `stock_litres_x100` is the quantity (§5.5's two decimals), and
+     * money the stock is worth, `stock_litres_x100` is the quantity (the two decimals), and
      * `average_cost_per_litre_minor` is their ratio **rounded for display** — the average a person
      * reads, not the number the issue cost is derived from. Deriving a cost from a rounded average
      * and then storing that cost would leave litres and value disagreeing by a cent per issue, so the

@@ -10,9 +10,9 @@ use App\Domain\Kernel\Alerts\Data\ThresholdSet;
 use App\Domain\Kernel\Alerts\Models\ReminderThreshold;
 
 /**
- * Reading and establishing `reminder_thresholds` for the company in context (§14.1).
+ * Reading and establishing `reminder_thresholds` for the company in context.
  *
- * `ensureDefaults()` exists because §14.1 made thresholds data: the moment a rule is a row, "the company
+ * `ensureDefaults()` exists because made thresholds data: the moment a rule is a row, "the company
  * has no rows yet" is indistinguishable from "the company turned this off". The ensure command gives each
  * company the set its sources declare, once, so an absent family afterwards means what it says — the
  * Owner removed it.

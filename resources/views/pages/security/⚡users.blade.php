@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Kernel\Identity\ConfirmsRecentPassword;
 use App\Domain\Kernel\Identity\RoleKey;
 use App\Domain\Security\Actions\ChangeUserRole;
 use App\Domain\Security\Actions\InviteUser;
@@ -16,6 +17,7 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 new #[Title('Users and roles')] class extends Component {
+    use ConfirmsRecentPassword;
     use WithPagination;
 
     #[Url]
@@ -55,6 +57,10 @@ new #[Title('Users and roles')] class extends Component {
     {
         abort_unless(Gate::allows('users.manage'), 403);
 
+        if (! $this->confirmRecentPassword()) {
+            return;
+        }
+
         $validated = $this->validate([
             'inviteEmail' => ['required', 'email:rfc', 'max:191'],
             'inviteRole' => ['required', 'string', 'in:'.implode(',', RoleKey::invitable())],
@@ -86,6 +92,10 @@ new #[Title('Users and roles')] class extends Component {
 
         abort_unless(Gate::allows('users.manage'), 403);
 
+        if (! $this->confirmRecentPassword()) {
+            return;
+        }
+
         /** @var User $target */
         $target = User::query()->findOrFail($userId);
 
@@ -102,12 +112,16 @@ new #[Title('Users and roles')] class extends Component {
     {
         abort_unless(Gate::allows('users.manage'), 403);
 
+        if (! $this->confirmRecentPassword()) {
+            return;
+        }
+
         /** @var Invitation $invitation */
         $invitation = Invitation::query()->findOrFail($invitationId);
 
         // Deleting the row is the revoke: a link whose hash no longer resolves is dead. An
-        // invitation is not a posted financial record, so §9.5's no-delete rule does not reach it —
-        // and its history belongs to the audit trail (§9.5), not to this table.
+        // invitation is not a posted financial record, so the no-delete rule does not reach it —
+        // and its history belongs to the audit trail, not to this table.
         $invitation->delete();
 
         unset($this->pendingInvitations);
@@ -145,16 +159,16 @@ new #[Title('Users and roles')] class extends Component {
 }; ?>
 
     <div class="grid gap-6">
-        <header class="grid gap-1">
+        <header class="fg-page-header grid gap-1.5">
             <x-ui.heading size="xl" level="1">{{ __('Users and roles') }}</x-ui.heading>
             <x-ui.text>
-                {{ __('Staff accounts are invited. There is no sign-up form on this system (§9.1).') }}
+                {{ __('Staff accounts are invited. There is no sign-up form on this system.') }}
             </x-ui.text>
         </header>
 
         <x-ui.card
             :title="__('Staff accounts')"
-            :description="__('A role is a job, not a pile of permissions (§9.2). One role per person.')"
+            :description="__('A role is a job, not a pile of permissions. One role per person.')"
         >
             <div class="mb-4 grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]">
                 <x-ui.input wire:model.live.debounce.400ms="search" name="search" :label="__('Search')" :hint="__('Name or email')" />
@@ -239,7 +253,7 @@ new #[Title('Users and roles')] class extends Component {
                                     :title="$this->hasFilters() ? __('No staff match these filters') : __('No staff accounts yet')"
                                     :description="$this->hasFilters()
                                         ? __('Clear the search or role filter to see the rest of the register.')
-                                        : __('Invite the first person from the form below. The Owner account is created during first-run setup (§9.1).')"
+                                        : __('Invite the first person from the form below. The Owner account is created during first-run setup.')"
                                 />
                             </x-ui.table.td>
                         </tr>
@@ -264,7 +278,7 @@ new #[Title('Users and roles')] class extends Component {
         @can('users.manage')
             <x-ui.card
                 :title="__('Invite a staff account')"
-                :description="__('The link works once and expires. Nothing is created until it is accepted (§9.1).')"
+                :description="__('The link works once and expires. Nothing is created until it is accepted.')"
             >
                 <form class="grid gap-4" wire:submit="invite">
                     <div class="grid gap-4 sm:grid-cols-2">
@@ -298,7 +312,7 @@ new #[Title('Users and roles')] class extends Component {
                             <p class="break-all font-mono text-xs">{{ $issuedLink }}</p>
 
                             <x-ui.text size="xs" color="muted" class="mt-2">
-                                {{ __('Shown once because only the hash is stored (§9.6). Email delivery is the normal path; this is the fallback when it fails.') }}
+                                {{ __('Shown once because only the hash is stored. Email delivery is the normal path; this is the fallback when it fails.') }}
                             </x-ui.text>
                         </x-ui.alert>
                     </div>

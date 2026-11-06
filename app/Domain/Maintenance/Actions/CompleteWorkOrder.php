@@ -26,11 +26,11 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * §10.6's `in_progress → completed`: the vehicle is released, and the odometer at fitment is recorded.
+ * The `in_progress → completed`: the vehicle is released, and the odometer at fitment is recorded.
  *
  * The reading is recorded through Fleet's own door ({@see RecordOdometerReading}) rather than written
  * onto the truck here, so the measurement keeps its provenance row and the truck's projection moves by
- * the same monotonic rule every other reading follows. §4.3's source list has no `workshop` value, so
+ * the same monotonic rule every other reading follows. The source list has no `workshop` value, so
  * the reading is `manual`: it is a person reading a gauge and typing it, not the kiosk or a trip.
  *
  * A completion below the truck's recorded odometer is refused instead of stored as `suspect`: a
@@ -42,7 +42,7 @@ use InvalidArgumentException;
  * later — and the `service_due` alerts it raised are resolved in the same transaction, because the job
  * they were asking for is the job that just finished.
  *
- * §10.6's edge is "vehicle released", so the truck leaves `in_workshop` here through Fleet's own door.
+ * The edge is "vehicle released", so the truck leaves `in_workshop` here through Fleet's own door.
  * `StartWorkOrder` took it off the road; if completion did not put it back, a truck that visited the
  * workshop once would stay unpickable to dispatch forever, and the register would be lying about which
  * vehicles can be booked.
@@ -62,11 +62,11 @@ final class CompleteWorkOrder
         ?int $actorId = null,
     ): WorkOrder {
         if (! Gate::allows('work_orders.create')) {
-            throw new InvalidArgumentException('Completing a job is a workshop act (§9.3).');
+            throw new InvalidArgumentException('Completing a job is a workshop act.');
         }
 
         if ($odometerKm <= 0) {
-            throw new InvalidArgumentException('Completing a work order needs the odometer reading at fitment (§10.6).');
+            throw new InvalidArgumentException('Completing a work order needs the odometer reading at fitment.');
         }
 
         if ($engineHours !== null && $engineHours < 0) {
@@ -79,7 +79,7 @@ final class CompleteWorkOrder
 
             if ($locked->status !== WorkOrderStatus::InProgress) {
                 throw new InvalidArgumentException(sprintf(
-                    '%s is %s. A vehicle is released from work under way (§10.6).',
+                    '%s is %s. A vehicle is released from work under way.',
                     $locked->wo_no,
                     strtolower($locked->status->label()),
                 ));

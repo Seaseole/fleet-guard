@@ -10,7 +10,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Creates the numbering sequence rows a company needs for its current periods (§7.2 amended).
+ * Creates the numbering sequence rows a company needs for its current periods (amended).
  *
  * Runs at install, on deploy, and nightly, so the first document of a new fiscal year finds its
  * row instead of trying to create it under a lock.

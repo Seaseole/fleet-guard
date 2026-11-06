@@ -10,19 +10,19 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.2 — the act of saying which invoice a payment was for.
+     * The act of saying which invoice a payment was for.
      *
-     * An allocation is its own row (and, per §6.8, its own ledger seam) because the design refuses to
+     * An allocation is its own row (and, its own ledger seam) because the design refuses to
      * "adjust" an invoice when a customer overpays: the money is real, the invoice is not, so the residue
      * sits in `2150 Unapplied customer cash` until a later allocation finds it. `payment_id` is therefore
      * not a one-to-one attribute of an invoice — one receipt can settle three invoices and one invoice can
      * be settled by four receipts.
      *
-     * **The residue rule lives in the Action, and the table is what makes it provable.** §5.5 allocates in
+     * **The residue rule lives in the Action, and the table is what makes it provable.** Allocates in
      * FIFO order of invoice age and lets the *last* allocation absorb the ±1 minor-unit residue so a paid
      * invoice's balance reaches exactly zero. That is only checkable if each row carries its own
      * currency-native amount beside its base amount, which is why both are stored rather than deriving the
-     * currency figure from `base ÷ rate` at read time (§5.3: a historical amount re-derived from a current
+     * currency figure from `base ÷ rate` at read time (a historical amount re-derived from a current
      * rate is a rewritten history).
      *
      * `settled` marks the allocation that closed the invoice — the one the residue was absorbed into — so
@@ -43,7 +43,7 @@ return new class extends Migration
             $table->unsignedBigInteger('base_amount');
 
             // The difference between this allocation's base and the same figure at the invoice's own rate.
-            // Stored, not recomputed at report time, because §5.5's realised gain or loss is a fact about
+            // Stored, not recomputed at report time, because the realised gain or loss is a fact about
             // the day the money moved.
             $table->boolean('has_fx_difference')->default(false);
             $table->unsignedBigInteger('fx_difference_base')->default(0);

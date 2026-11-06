@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Domain\Accounting;
 
 /**
- * What a supplier supplies (§4.2 `BILL.category`).
+ * What a supplier supplies (`BILL.category`).
  *
- * The six values are §4.2's own, not a new list: Phase 5 will default a bill's category from the
+ * The six values are the design's own, not a new list: Phase 5 will default a bill's category from the
  * supplier, and a bill is what carries the expense account. Adding a value here without adding it
  * there would leave the bill form unable to accept what the master row claims.
  */
@@ -32,7 +32,7 @@ enum SupplierCategory: string
         };
     }
 
-    /** The `ui/badge` tone for the register (DESIGN-SYSTEM.md §1.5). */
+    /** The `ui/badge` tone for the register. */
     public function tone(): string
     {
         return match ($this) {

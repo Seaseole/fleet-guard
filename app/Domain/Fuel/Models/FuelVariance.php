@@ -17,11 +17,11 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §10.9's consumption variance: the trip burned more (or less) diesel than its distance and load
+ * The consumption variance: the trip burned more (or less) diesel than its distance and load
  * explain, and somebody has to say what they think of that.
  *
  * The row stores its **inputs** — distance, litres, tonnes, and the expected rate the company was
- * running at — next to the figures derived from them, because §5.5's rule is that a printed number
+ * running at — next to the figures derived from them, because the rule is that a printed number
  * must be the number that was decided on. Re-deriving the percentage months later would use a
  * different expected rate and quietly change the story the acknowledgement was about.
  *

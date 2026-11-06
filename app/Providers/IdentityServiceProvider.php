@@ -15,16 +15,16 @@ use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
 
 /**
- * Wires the identity layer: the five §9.4 field gates, plus the policy for the one model the
+ * Wires the identity layer: the five field gates, plus the policy for the one model the
  * starter kit owns.
  *
  * The gates are registered from the {@see FieldGate} enum rather than
  * listed here, so adding a gate means adding one enum case and one policy method. A provider that
- * named each gate separately would be a second list to keep in step — the failure mode §9.4 exists
+ * named each gate separately would be a second list to keep in step — the failure mode exists
  * to avoid.
  *
  * `BankAccount` and `Invitation` are absent on purpose: they carry `#[UsePolicy(…)]`, which is how
- * Laravel 13 finds a policy that lives beside its module (§13) rather than in `App\Policies`.
+ * Laravel 13 finds a policy that lives beside its module rather than in `App\Policies`.
  * `User` is registered by hand because auto-discovery would look for `App\Policies\UserPolicy`,
  * and this project does not put a Security rule in a kit-shaped directory.
  */

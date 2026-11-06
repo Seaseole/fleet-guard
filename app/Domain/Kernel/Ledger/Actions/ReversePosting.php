@@ -17,13 +17,13 @@ use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 
 /**
- * §6.4's correction, behind the ledger door: a posted entry is mirrored from its own lines, never
+ * The correction, behind the ledger door: a posted entry is mirrored from its own lines, never
  * edited or deleted.
  *
  * It lives in the Ledger rather than in the module that corrects something because reading
  * `gl_journal_lines` is exactly the internals D3 keeps outside modules. The caller hands over the
  * entry it is correcting and the source triple for the mirror; this class decides the sides, the
- * date and the reference (§6.4: opposite sides, `reverses_entry_id`, posted today), and the
+ * date and the reference (opposite sides, `reverses_entry_id`, posted today), and the
  * dimensions travel with each line so the mirror lands in the same truck/trip buckets the original
  * did — a reversal that lost its trip would net the account but leave the trip reading a cost that
  * no longer exists.
@@ -46,7 +46,7 @@ final class ReversePosting
             ->where('source_id', $originalSourceId)
             ->where('status', JournalEntry::Posted)
             ->first()
-            ?? throw new InvalidArgumentException('The journal entry to reverse is missing or no longer posted, so there is nothing to mirror (§6.4).');
+            ?? throw new InvalidArgumentException('The journal entry to reverse is missing or no longer posted, so there is nothing to mirror.');
 
         $base = CurrentCompany::model()->base_currency_code;
         $today = Carbon::now(CurrentCompany::timezone());
@@ -72,7 +72,7 @@ final class ReversePosting
      */
     private function mirror(JournalEntry $original, string $base): array
     {
-        return $original->lines()->get()->map(function (JournalLine $line) use ($base): LineDto {
+        return array_values($original->lines()->get()->map(function (JournalLine $line) use ($base): LineDto {
             $dimensions = [];
 
             foreach (LineDto::typedColumns() as $column) {
@@ -91,6 +91,6 @@ final class ReversePosting
                 dimensions: $dimensions,
                 dimensionExtra: $line->dimension_extra ?? [],
             );
-        })->all();
+        })->all());
     }
 }

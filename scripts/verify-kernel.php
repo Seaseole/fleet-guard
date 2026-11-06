@@ -19,9 +19,9 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Phase 0 Kernel verification (DESIGN.md §20.4).
+ * Phase 0 Kernel verification.
  *
- * This is not the test suite — tests are local-only by owner decision (§14.6). It is the
+ * This is not the test suite — tests are local-only by owner decision. It is the
  * substitute for the parts of the contract that a database constraint or a unit test would
  * otherwise prove: money cannot become a float, a rolled-back allocation must not burn a
  * number, and a scoped read with no tenant must throw rather than widen.
@@ -41,7 +41,7 @@ $allocator = new NumberAllocator;
 DB::table('number_sequences')->delete();
 
 // Sequence rows are created ahead of allocation (NumberSequenceRegistry), never inside it —
-// that ordering is the deadlock fix recorded in DESIGN.md §20.4.
+// that ordering is the deadlock fix recorded in DESIGN.md.
 (app(NumberSequenceRegistry::class))->ensureAll();
 
 $pass = 0;
@@ -71,7 +71,7 @@ function check(string $label, bool $ok, string $detail = ''): void
 
 // ─── money ────────────────────────────────────────────────────────────────────
 
-echo PHP_EOL.'Money (ADR-0004, §5)'.PHP_EOL;
+echo PHP_EOL.'Money'.PHP_EOL;
 
 check('minor units round-trip', Money::ofMinor(125000, 'BWP')->format('BWP') === 'P 1 250,00');
 
@@ -156,7 +156,7 @@ check('resolver accepts a 1-day-old rate', ! $resolver->isStale('ZAR', Carbon::p
 
 // ─── tenancy ──────────────────────────────────────────────────────────────────
 
-echo PHP_EOL.'Tenancy fail-closed (§8 T1-T5)'.PHP_EOL;
+echo PHP_EOL.'Tenancy fail-closed (T1-T5)'.PHP_EOL;
 
 CurrentCompany::forget();
 
@@ -174,7 +174,7 @@ CurrentCompany::force(1);
 
 // ─── numbering ────────────────────────────────────────────────────────────────
 
-echo PHP_EOL.'Numbering (ADR-0002, §7)'.PHP_EOL;
+echo PHP_EOL.'Numbering'.PHP_EOL;
 
 check('allocation outside a transaction refused', (function () use ($allocator): bool {
     try {

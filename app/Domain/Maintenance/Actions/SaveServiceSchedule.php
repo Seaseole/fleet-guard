@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * Creates or edits a service schedule (§4.3, §15.2 phase 3).
+ * Creates or edits a service schedule.
  *
  * The next due point is always recomputed here rather than typed by a person: a schedule whose due
  * figure disagrees with its own interval is one the register cannot explain, and the daily job would
@@ -34,7 +34,7 @@ final class SaveServiceSchedule
     public function __invoke(ServiceScheduleDto $dto, ?ServiceSchedule $existing = null, ?int $actorId = null): ServiceSchedule
     {
         if (! Gate::allows('work_orders.create')) {
-            throw new InvalidArgumentException('Service schedules belong to the workshop (§9.3 gives `work_orders.create` to it).');
+            throw new InvalidArgumentException('Service schedules belong to the workshop (the design gives `work_orders.create` to it).');
         }
 
         return DB::transaction(function () use ($dto, $existing): ServiceSchedule {

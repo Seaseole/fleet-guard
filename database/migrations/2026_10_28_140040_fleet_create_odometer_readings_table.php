@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 ODOMETER_READING — every measurement, kept as a measurement.
+     * ODOMETER_READING — every measurement, kept as a measurement.
      *
      * A reading is evidence, so it is never edited to match the truck; the truck's
      * `odometer_km` follows the highest plausible reading. That is why `plausibility` and `source`
@@ -18,7 +18,7 @@ return new class extends Migration
      * that runs backwards is a `suspect` row to investigate, not a silent correction.
      *
      * `recorded_by` is nullable because a kiosk or an import can write a reading without a user
-     * session (§9.2's non-user principals).
+     * session (the non-user principals).
      */
     public function up(): void
     {

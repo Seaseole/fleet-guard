@@ -7,7 +7,7 @@ namespace App\Domain\Telematics\Data;
 use Carbon\CarbonImmutable;
 
 /**
- * One normalised GPS fix — the adapter's output and the ingest Action's input (§4.4 GPS_POSITION).
+ * One normalised GPS fix — the adapter's output and the ingest Action's input (GPS_POSITION).
  *
  * The DTO is already provider-agnostic: `providerMessageId` is the provider's own dedupe key, and
  * everything else is the column set the map and the reports read. `raw` keeps the provider's message

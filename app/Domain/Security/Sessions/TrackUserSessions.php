@@ -16,7 +16,7 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * §9.2's session clock, and the only place the 12-hour absolute bound has ever existed in this
+ * The session clock, and the only place the 12-hour absolute bound has ever existed in this
  * application — `config/session.lifetime` is an idle timeout, so a tab that gets clicked every hour has
  * never expired.
  *
@@ -82,7 +82,7 @@ final class TrackUserSessions
     {
         $revoked = $row->isRevoked();
 
-        // §11.2 puts this table's kind as `session_revoked` and the DB CHECK will not accept another
+        // The design puts this table's kind as `session_revoked` and the DB CHECK will not accept another
         // word, so `reason` carries the distinction the reviewer asks for: was a person or a clock
         // responsible?
         $this->audit->security(SecurityEventKind::SessionRevoked, [

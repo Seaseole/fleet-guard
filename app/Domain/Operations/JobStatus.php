@@ -7,9 +7,9 @@ namespace App\Domain\Operations;
 use App\Domain\Operations\Support\JobProgress;
 
 /**
- * The commercial lifecycle of a job (§10.3).
+ * The commercial lifecycle of a job.
  *
- * Only states a person can set appear here. §10.3 names four more — `all_trips_completed`,
+ * Only states a person can set appear here. The design names four more — `all_trips_completed`,
  * `ready_to_invoice`, `invoiced`, `settled` — and calls them derived aggregates: they are answers
  * about the job's trips and invoices, not decisions, so they are computed by
  * {@see JobProgress} and rendered as badges. A storable enum with a
@@ -43,7 +43,7 @@ enum JobStatus: string
         };
     }
 
-    /** The `ui/badge` tone for the jobs board (DESIGN-SYSTEM.md §1.5). */
+    /** The `ui/badge` tone for the jobs board. */
     public function tone(): string
     {
         return match ($this) {
@@ -58,13 +58,13 @@ enum JobStatus: string
         };
     }
 
-    /** Trips exist only against work the customer has agreed to (§4.1: job → trips). */
+    /** Trips exist only against work the customer has agreed to (job → trips). */
     public function mayRunTrips(): bool
     {
         return $this === self::Accepted || $this === self::InExecution;
     }
 
-    /** §10.3's "any pre-completion state" — the states a suspension may be lifted from. */
+    /** The "any pre-completion state" — the states a suspension may be lifted from. */
     public function isPreCompletion(): bool
     {
         return in_array($this, [self::Accepted, self::InExecution, self::Suspended], true);

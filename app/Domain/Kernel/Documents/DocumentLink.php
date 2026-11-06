@@ -9,7 +9,7 @@ use App\Domain\Kernel\Documents\Models\DocumentVersion;
 use Illuminate\Support\Facades\URL;
 
 /**
- * §14.4's short-lived signed download URL.
+ * The short-lived signed download URL.
  *
  * The TTL is the control, and there is deliberately no token store behind it. A redemption table
  * would buy one thing — revoking a link nobody has used yet — at the cost of a row per click, a
@@ -61,7 +61,7 @@ final class DocumentLink
 
     /**
      * Two verdicts refuse, and they are different sentences: infected means the bytes are dangerous,
-     * unscanned means nobody has said they are not. Telling them apart is what makes §17 Q8 an
+     * unscanned means nobody has said they are not. Telling them apart is what makes Q8 an
      * open question with a visible answer instead of a mystery error.
      */
     private function assertServable(DocumentVersion $version): void

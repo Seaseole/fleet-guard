@@ -9,11 +9,11 @@ use App\Domain\Operations\Data\TripInMotion;
 use Carbon\CarbonImmutable;
 
 /**
- * One truck's last known place, ready for the map (§14.3's projection, joined to the trip it is on).
+ * One truck's last known place, ready for the map (the projection, joined to the trip it is on).
  *
  * The trip fields are nullable on purpose: a truck in the yard has a fix and no journey, and the map
  * shows it rather than hiding it. What the row never carries is money, crew or customer — the live map
- * is `gps.view`, and §9.3 keeps that permission away from the figures a Dispatcher may not see.
+ * is `gps.view`, and the design keeps that permission away from the figures a Dispatcher may not.
  */
 final readonly class LiveVehicle
 {

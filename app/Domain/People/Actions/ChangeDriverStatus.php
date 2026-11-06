@@ -10,7 +10,7 @@ use App\Domain\People\Models\Driver;
 use Illuminate\Support\Facades\DB;
 
 /**
- * The only path a driver's status moves through (§10.1, D1).
+ * The only path a driver's status moves through (D1).
  *
  * The trait writes the `operational_events` row before the column changes; this Action only wraps
  * the pair in a transaction and hands the reason through. A missing reason on a move into

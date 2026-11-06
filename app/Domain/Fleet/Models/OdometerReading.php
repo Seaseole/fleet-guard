@@ -17,7 +17,7 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.3 ODOMETER_READING — one measurement, kept as measured.
+ * ODOMETER_READING — one measurement, kept as measured.
  *
  * The truck's `odometer_km` is a projection of the highest plausible reading, maintained by
  * {@see RecordOdometerReading}. It is never the source of truth: a reading

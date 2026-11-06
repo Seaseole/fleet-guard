@@ -7,15 +7,15 @@ namespace App\Domain\Operations\Data;
 use InvalidArgumentException;
 
 /**
- * One load as the loading schedule enters it (§4.1 LOAD).
+ * One load as the loading schedule enters it (LOAD).
  *
  * `tonnes` arrives as the typed **string** a person entered and is parsed exactly once, here — the same
- * §20.4 rule the money columns follow, applied to the one physical quantity that decides whether a
+ * Rule the money columns follow, applied to the one physical quantity that decides whether a
  * truck crosses a weighbridge. The parsed float is the only tonnage the rest of the system ever sees,
  * so a limit check cannot disagree with the validation message above it.
  *
  * A zero-tonnage load is refused rather than rounded away: an empty row on the schedule is how a
- * waybill line gets lost, and §10.2's gate measures against the total.
+ * waybill line gets lost, and the gate measures against the total.
  */
 final readonly class LoadDto
 {

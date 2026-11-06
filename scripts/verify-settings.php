@@ -7,17 +7,20 @@ use App\Domain\Accounting\Actions\RecordBill;
 use App\Domain\Accounting\BillCategory;
 use App\Domain\Accounting\Data\BillLineInput;
 use App\Domain\Accounting\Data\SupplierDto;
+use App\Domain\Accounting\Models\Bill;
 use App\Domain\Fleet\Actions\CreateTruck;
+use App\Domain\Fleet\Actions\RecordOdometerReading;
+use App\Domain\Fleet\Data\OdometerReadingDto;
 use App\Domain\Fleet\Data\TruckDto;
+use App\Domain\Fleet\OdometerSource;
 use App\Domain\Invoicing\Actions\SetStandardVatRate;
 use App\Domain\Invoicing\Models\TaxRate;
 use App\Domain\Invoicing\Queries\EffectiveVat;
 use App\Domain\Invoicing\TaxRateKind;
 use App\Domain\Kernel\Identity\RoleKey;
 use App\Domain\Kernel\Ledger\Models\LedgerBarrier;
-use App\Domain\Kernel\Settings\CachedSettings;
 use App\Domain\Kernel\Settings\Actions\UpdateCompanySettings;
-use App\Domain\Kernel\Settings\CompanySettings;
+use App\Domain\Kernel\Settings\CachedSettings;
 use App\Domain\Kernel\Settings\SettingsCatalogue;
 use App\Domain\Kernel\Settings\Theme;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
@@ -25,14 +28,13 @@ use App\Domain\Security\Actions\ChangeUserRole;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Contracts\Console\Kernel;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
 /*
- * §20.37 verification — the two things an Owner can now set at runtime, and the odometer column.
+ * Verification — the two things an Owner can now set at runtime, and the odometer column.
  *
  *  - the standard VAT rate is a field on Application settings, and it is a **door** onto the dated
  *    register rather than a second copy in the settings blob: changing it closes a window and opens
@@ -87,6 +89,14 @@ function cleanUp(): void
 
     CurrentCompany::force(1);
 
+    // First, before anything that can throw: this run sets a theme on the tenant row, and a harness that
+    // dies mid-purge would leave the company's default theme changed for every seat — which is
+    // exactly the bug this line used to be reachable past.
+    if ($themeBefore !== null) {
+        DB::table('companies')->where('id', 1)->update(['settings' => $themeBefore]);
+        app(CachedSettings::class)->flush(1);
+    }
+
     // Bills, suppliers and the truck this run billed against.
     $supplierIds = DB::table('suppliers')->where('code', 'like', 'SET-VERIFY%')->pluck('id')->all();
     $billIds = $supplierIds === [] ? [] : DB::table('bills')->whereIn('supplier_id', $supplierIds)->pluck('id')->all();
@@ -134,18 +144,14 @@ function cleanUp(): void
         ]);
     }
 
-    // The theme knob and the probe seats. The blob row is put back byte for byte, and the read cache
-    // is dropped through its own door so no later request in this database sees this run's theme.
-    DB::table('companies')->where('id', 1)->update(['settings' => $themeBefore]);
-    app(CachedSettings::class)->flush(1);
-
+    // The probe seats. The blob row was put back above, and the read cache dropped with it.
     $probeIds = DB::table('users')->where('email', 'like', 'verify-set-%@fleetguard.local')->pluck('id')->all();
 
     if ($probeIds !== []) {
         DB::table('number_sequences')->whereIn('last_used_by', $probeIds)->update(['last_used_by' => null]);
         DB::table('model_has_roles')->where('model_type', User::class)->whereIn('model_id', $probeIds)->delete();
         // The rate-change trail names the probe as its actor, so the events go before the seats: a
-        // foreign key is a rule, and `delete` would fail rather than cascade silently (§6.3's lesson).
+        // foreign key is a rule, and `delete` would fail rather than cascade silently (the lesson).
         DB::table('security_events')->whereIn('user_id', $probeIds)->delete();
         DB::table('users')->whereIn('id', $probeIds)->delete();
     }
@@ -177,7 +183,7 @@ register_shutdown_function(static function (): void {
 
 echo "== A: the catalogue knows the difference between a blob value and a door ==\n";
 
-check(in_array('appearance.theme', SettingsCatalogue::keys(), true), 'the default theme is an editable company setting (§20.37)');
+check(in_array('appearance.theme', SettingsCatalogue::keys(), true), 'the default theme is an editable company setting');
 check(in_array('tax.standard_rate_pct', SettingsCatalogue::keys(), true), '...and the standard VAT rate is a field an Owner can reach');
 check(SettingsCatalogue::store('tax.standard_rate_pct') === 'door', 'the VAT field is declared as a door, not a blob key');
 check(! in_array('tax.standard_rate_pct', SettingsCatalogue::blobKeys(), true), '...so the settings writer never receives it');
@@ -218,7 +224,7 @@ $accountant = $accountant->fresh();
 
 Auth::login($owner);
 
-check(Theme::defaultMode() === 'system', 'an unset company answers system — the deployment default, not a blank (§20.37)', Theme::defaultMode());
+check(Theme::defaultMode() === 'system', 'an unset company answers system — the deployment default, not a blank', Theme::defaultMode());
 check(Theme::htmlClass() === null, '...which renders no class, because only the device knows its own preference');
 
 app(UpdateCompanySettings::class)(['appearance.theme' => 'dark']);
@@ -268,7 +274,7 @@ try {
     $gateRefused = $refused->getMessage();
 }
 
-check(! Gate::forUser($accountant)->allows('settings.manage'), 'the Accountant does not hold the ability this door asks for (§9.3)');
+check(! Gate::forUser($accountant)->allows('settings.manage'), 'the Accountant does not hold the ability this door asks for');
 check(str_contains($gateRefused, 'settings.manage'), '...so the rate change is refused and the refusal names the ability', $gateRefused);
 check((int) DB::table('tax_rates')->count() === count($idsBefore), '...and the refused attempt wrote no window at all');
 
@@ -292,10 +298,13 @@ check($movedPercent !== $standard, 'a real change moves the rate to a new figure
 check(app(EffectiveVat::class)->standardPercent() === $movedPercent, '...and the door the field reads answers the new figure immediately', sprintf('door=%s(%s) moved=%s(%s)', var_export(app(EffectiveVat::class)->standardPercent(), true), get_debug_type(app(EffectiveVat::class)->standardPercent()), var_export($movedPercent, true), get_debug_type($movedPercent)));
 check((int) DB::table('tax_rates')->where('kind', 'standard')->whereNull('ends_on')->count() === $openBefore, '...with still exactly one open standard window', 'open='.$openBefore);
 
+// The baseline is taken after `$moved`, not before it: a real change closes the standing window and
+// opens a new one, so the second change on the same day must add nothing to *that* count.
+$rowsBeforeAmend = (int) DB::table('tax_rates')->count();
 $sameDay = $setVat->execute($movedPercent + 1, $owner->id);
 check($sameDay->id === $moved->id, 'a second change on the same day amends the window that opened today instead of colliding with the unique (company, code, starts_on) key');
 check((int) DB::table('tax_rates')->where('id', $moved->id)->value('rate_x10000') === (int) (($movedPercent + 1) * 10_000), '...in place, because nothing was issued between the two clicks');
-check((int) DB::table('tax_rates')->count() === count($idsBefore), '...which is why no extra row exists');
+check((int) DB::table('tax_rates')->count() === $rowsBeforeAmend, '...which is why no extra row exists');
 
 $past = Carbon::now()->subYears(2)->startOfDay();
 $oldWindow = TaxRate::effectiveOn($past, TaxRateKind::Standard);
@@ -323,7 +332,7 @@ try {
 check(str_contains($fineRefused, 'decimal places'), 'and a rate finer than the register stores is refused rather than rounded away', $fineRefused);
 
 $trail = (int) DB::table('security_events')->where('kind', 'settings_changed')->where('meta', 'like', '%tax.standard_rate_pct%')->count();
-check($trail > 0, 'every rate change is in the security trail, because §9.3 marks settings ⚑', "rows={$trail}");
+check($trail > 0, 'every rate change is in the security trail, because marks settings ⚑', "rows={$trail}");
 
 /* ------------------------------------------------------------------ D: the doors use it */
 echo "\n== D: the documents actually charge the new rate ==\n";
@@ -336,7 +345,7 @@ $truck = (app(CreateTruck::class))(new TruckDto(registrationNo: 'B 994 SV1', fle
 
 $net = 100_000; // P1,000.00
 
-/** @var \App\Domain\Accounting\Models\Bill $bill */
+/** @var Bill $bill */
 $bill = (app(RecordBill::class))->execute(
     supplierId: $supplier->id,
     lines: [new BillLineInput(description: 'Clutch repair', category: BillCategory::Labour, netMinor: $net, truckId: $truck->id)],
@@ -349,12 +358,12 @@ $bill = (app(RecordBill::class))->execute(
 $expectedTax = (int) round($net * $rateNow / 100);
 
 check($bill->tax_amount === $expectedTax, 'the bill door charges the rate the settings field shows, per line', sprintf('tax=%d expected=%d at %s%%', $bill->tax_amount, $expectedTax, $rateNow));
-check((int) $bill->lines()->value('tax_amount') === $expectedTax, '...and the percentage is frozen on the line, not re-read later (§5.5)');
+check((int) $bill->lines()->value('tax_amount') === $expectedTax, '...and the percentage is frozen on the line, not re-read later');
 
 $next = $rateNow >= 19 ? $rateNow - 3 : $rateNow + 3;
 $setVat->execute((float) $next, $owner->id);
 
-/** @var \App\Domain\Accounting\Models\Bill $second */
+/** @var Bill $second */
 $second = (app(RecordBill::class))->execute(
     supplierId: $supplier->id,
     lines: [new BillLineInput(description: 'Second clutch repair', category: BillCategory::Labour, netMinor: $net, truckId: $truck->id)],
@@ -370,14 +379,14 @@ check((int) $bill->fresh()->lines()->value('tax_amount') === $expectedTax, '...w
 /* ------------------------------------------------------------------ E: the odometer column */
 echo "\n== E: a reading says how far the truck actually went ==\n";
 
-$record = app(\App\Domain\Fleet\Actions\RecordOdometerReading::class);
+$record = app(RecordOdometerReading::class);
 
 foreach ([41_000, 41_250, 41_900] as $index => $km) {
-    $record(new \App\Domain\Fleet\Data\OdometerReadingDto(
+    $record(new OdometerReadingDto(
         truckId: (int) $truck->id,
         odometerKm: $km,
         readOn: Carbon::now()->subDays(30 - $index)->toDateString(),
-        source: \App\Domain\Fleet\OdometerSource::Manual,
+        source: OdometerSource::Manual,
     ));
 }
 

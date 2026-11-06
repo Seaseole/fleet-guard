@@ -7,7 +7,7 @@ namespace App\Domain\Fuel;
 use App\Domain\Operations\Kiosk\KioskAuthority;
 
 /**
- * §4.3 FUEL_ISSUE `source` — where the fuel came from.
+ * FUEL_ISSUE `source` — where the fuel came from.
  *
  * `bulk_tank` is a real source from slice 3b: the issue names the yard tank it drew from, its cost is
  * the tank's moving average at that moment, and the journal credits `1180 Bulk fuel stock` rather

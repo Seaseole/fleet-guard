@@ -9,7 +9,7 @@ use InvalidArgumentException;
 /**
  * The validated input behind the employee Actions (D1).
  *
- * `nationalId` is plaintext only for the length of the request; the Action turns it into the §9.5
+ * `nationalId` is plaintext only for the length of the request; the Action turns it into the
  * trio and the DTO is discarded. An edit that posted the mask back unchanged must not re-encrypt
  * it — {@see preservesMaskedNationalId()} is the same guard as the bank-account form, and for the
  * same reason: the mask is not the secret.

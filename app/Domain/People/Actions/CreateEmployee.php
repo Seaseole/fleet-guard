@@ -9,10 +9,10 @@ use App\Domain\People\Models\Employee;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Adds a person to the books (§4.3, D1).
+ * Adds a person to the books (D1).
  *
  * The ordering is the point: the national ID exists as plaintext only inside the DTO, is turned
- * into the §9.5 trio by {@see Employee::changeNationalId()} before the row is saved, and is never
+ * into the trio by {@see Employee::changeNationalId()} before the row is saved, and is never
  * assigned to a mass-fill attribute that an exception or a validation error could print.
  */
 final class CreateEmployee

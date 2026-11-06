@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace App\Domain\Operations;
 
 /**
- * §9.6 — what a driver's field capture may write.
+ * What a driver's field capture may write.
  *
  * Four scopes because the kiosk surface is four screens, and a token is deliberately narrower than a
  * user: it opens the one thing a driver does on the road, not the account they do not have (ADR-0006).
  *
  * The vocabulary has been stable since Phase 2; which of the four a build can honour changes as its
  * Actions land, and {@see self::implemented()} is the single answer. A scope that is named but not
- * built refuses at issue time rather than promising a form that cannot save (§9.6).
+ * built refuses at issue time rather than promising a form that cannot save.
  */
 enum TripAccessScope: string
 {
@@ -47,7 +47,10 @@ enum TripAccessScope: string
         return [self::Pod, self::Fuel];
     }
 
-    /** @param list<string> $values */
+    /**
+     * @param  list<TripAccessScope|string>  $values
+     * @return list<self>
+     */
     public static function fromList(array $values): array
     {
         $scopes = [];
@@ -71,6 +74,7 @@ enum TripAccessScope: string
         return implode(',', array_map(static fn (self $scope): string => $scope->value, $scopes));
     }
 
+    /** @return list<self> */
     public static function fromCsv(?string $csv): array
     {
         if ($csv === null || trim($csv) === '') {

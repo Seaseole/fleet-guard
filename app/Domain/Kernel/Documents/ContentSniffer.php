@@ -8,7 +8,7 @@ use App\Domain\Kernel\Documents\Exceptions\InvalidDocumentFile;
 use finfo;
 
 /**
- * §14.4's "type validation by MIME sniff *of the content*, not the extension", in one place.
+ * The "type validation by MIME sniff *of the content*, not the extension", in one place.
  *
  * `finfo` reads magic bytes, so this is the answer the allowlist is compared against and the client's
  * `Content-Type` is only ever a claim checked against it. That is not ceremony: the extension and
@@ -29,7 +29,7 @@ final class ContentSniffer
     public function __construct(?finfo $finfo = null)
     {
         if (! extension_loaded('fileinfo')) {
-            throw InvalidDocumentFile::unreadable('ext-fileinfo is not loaded, so content cannot be sniffed and §14.4 cannot be honoured.');
+            throw InvalidDocumentFile::unreadable('ext-fileinfo is not loaded, so content cannot be sniffed and cannot be honoured.');
         }
 
         $this->finfo = $finfo ?? new finfo(FILEINFO_MIME_TYPE);

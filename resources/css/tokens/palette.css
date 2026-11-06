@@ -1,0 +1,121 @@
+/*
+ | Tier 1 — the palette. Every literal colour, size and duration in the design system lives here and nowhere
+ | else, in the light reading theme. `tokens/themes.css` re-points the same names for dark; `tokens/roles.css`
+ | maps them onto the shadcn contract that copied snippets expect.
+ |
+ | Nothing in this file is a role: a name here says what the value *is* (`fg-ink-muted`), not what a component
+ | owes it. A component reads the alias layer, and the alias layer reads this one.
+ |
+ | THE RATIOS IN THE COMMENTS ARE NOT THE EVIDENCE. `php scripts/contrast-table.php` measures every pair from
+ | these two files and fails the build under 4.5:1 for text or 3:1 for a non-text affordance; the numbers
+ | written beside a value are a note about what that run printed. `scripts/tmp-contrast.php` carried hexes
+ | copied from a palette that had already been replaced, which is the whole argument for measuring from the
+ | source instead of annotating it.
+ |
+ | Borders are the documented exception to the 4.5 floor: `fg-line` and `fg-line-strong` are separators, never
+ | the sole signal that a control exists — the field carries a label and keyboard focus paints `--color-focus`
+ | above 3:1 on every surface, so the affordance that has to be perceivable is the one being measured.
+ */
+@theme {
+    /* One sans voice for navigation and headings; mono preserves ledger and identifier alignment. */
+    --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-display: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+
+    /*
+     * Type roles for the two sizes the component table documents but the default scale never had, and
+     * the tracking values components carried as arbitrary literals. `text-2xs` is the 11 px micro-label
+     * (badge, avatar initials, topbar meta); `text-dense` is the 13 px dense register row. Both are only
+     * legal at AA contrast — ink and ink-secondary, never ink-muted.
+     */
+    --text-2xs: 0.6875rem;
+    --text-2xs--line-height: 1rem;
+    --text-dense: 0.8125rem;
+    --text-dense--line-height: 1.125rem;
+
+    --tracking-label: 0.02em;      /* small caps meta over figures and labels */
+    --tracking-tight: -0.011em;    /* heading display sizes */
+    --tracking-figure: -0.025em;   /* the one Display figure of a view */
+    --tracking-otp: 0.5em;         /* a code read one glyph at a time */
+
+    /* Elevation order, so a bare z-50 never decides what sits above what. */
+    --z-sticky: 30;
+    --z-header: 40;
+    --z-menu: 50;
+    --z-modal: 60;
+    --z-toast: 100;
+
+    /* Neutrals — a cool reading desk: pale ground, white card, one step up for overlays, and grey wells for
+       data. The gap between canvas and sunk is deliberately wide (59 milli-luminance, not 8): a `secondary`
+       control is a sunk fill with no border, so on a canvas that nearly matches it the button simply
+       disappears — which is what the first styleguide pass on this palette caught. */
+    --color-fg-canvas: #f7f8f7;
+    --color-fg-surface: #ffffff;
+    --color-fg-surface-raised: #ffffff;
+    --color-fg-surface-sunk: #eef1ef;
+    --color-fg-surface-hover: #e5eae6;
+    --color-fg-ink: #181c19;
+    --color-fg-ink-secondary: #4b554e;
+    --color-fg-ink-muted: #59655d;
+    --color-fg-line: #e3e8e4;
+    --color-fg-line-strong: #89968d;
+
+    --color-accent: #118344;
+    --color-accent-hover: #0d6c37;
+    --color-accent-soft: #eaf6ee;
+    --color-on-accent: #ffffff;
+    --color-accent-ink: #0d6c37;
+
+    /* Semantic state, never mood. Danger moved to a crimson so the signal orange and a loss can sit in the
+       same field and not read as the same thing — 21° of hue apart, and nothing else changed. */
+    --color-success: #067647;
+    --color-success-soft: #ecfdf3;
+    --color-warning: #8a5a00;
+    --color-warning-soft: #fdf6e3;
+    --color-danger: #b3122b;
+    --color-danger-hover: #980f24;
+    --color-danger-soft: #fceef1;
+    --color-on-danger: #ffffff;              /* 6.91:1 on fg-danger */
+    --color-info: #175cd3;
+    --color-info-soft: #eff6ff;
+    --color-neutral-badge: #5f656d;          /* 5.38:1 on canvas, 5.76:1 on surface */
+
+    --color-focus: #176b44;
+
+    --radius-fg-xs: 3px;         /* the 10 px legend swatch; at the 6 px floor it reads as a bead */
+    --radius-fg-sm: 6px;
+    --radius-fg-md: 8px;
+    --radius-fg-lg: 12px;
+    --radius-fg-xl: 16px;
+
+    /* Elevation — border-first: a card is carried by its 1 px hairline, and a shadow belongs to an overlay.
+       The tint is the ink hue, so a shadow on cool paper never goes brown. */
+    --shadow-fg-1: 0 1px 2px rgb(24 28 25 / 0.03), 0 4px 14px rgb(24 28 25 / 0.02);
+    --shadow-fg-2: 0 1px 3px rgb(15 17 19 / 0.08), 0 4px 10px rgb(15 17 19 / 0.06);
+    --shadow-fg-3: 0 4px 8px rgb(15 17 19 / 0.08), 0 16px 40px rgb(15 17 19 / 0.14);
+
+    /*
+     * Motion (use with duration-(--t-*) / ease-(--ease-*)).
+     *
+     * Four curves, each answering a different question, and `--ease-standard` is not the answer to all of
+     * them. It is an ease-*in-out*: it leaves slowly, which is exactly the frame the user is watching when
+     * they press a trigger. Use it where something is already in place and changing state (a selected tab,
+     * a hover, a field border). Where an element is **arriving or leaving** — a menu, a toast, a page — use
+     * `--ease-enter`, which starts at speed and decelerates into its resting frame. At the same 120 ms an
+     * element on `--ease-enter` reads as faster than one on `--ease-standard`, because the delay is at the
+     * end of the motion rather than the start.
+     *
+     * `--ease-drawer` is the iOS/ionic panel curve — it settles hard against the edge of the screen instead
+     * of floating to a stop, which is what a panel dragged out of an edge should do. It needs `--t-drawer`,
+     * not `--t-base`: 180 ms is right for a 200 px menu and wrong for a panel crossing 85 % of a phone.
+     * A drawer is the one surface allowed past the UI duration ceiling because its travel is its meaning.
+     */
+    --t-fast: 120ms;
+    --t-base: 180ms;
+    --t-slow: 240ms;
+    --t-drawer: 320ms;
+    --ease-standard: cubic-bezier(0.2, 0, 0.1, 1);
+    --ease-emphasis: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --ease-enter: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}

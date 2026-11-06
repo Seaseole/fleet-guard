@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Domain\Kernel\Documents\DocumentInput;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
+use App\Domain\Fleet\Models\Truck;
 use App\Domain\Operations\Actions\CaptureProofOfDelivery;
 use App\Domain\Operations\Actions\RedeemKioskToken;
 use App\Domain\Operations\Models\ProofOfDelivery;
@@ -21,10 +22,10 @@ use Livewire\Component;
 use Livewire\WithFileUploads;
 
 /*
- * §9.6 — the driver's proof-of-delivery screen. One page, no login, one trip.
+ * The driver's proof-of-delivery screen. One page, no login, one trip.
  *
  * Written to be used on a shared phone in a yard or at a border post, which sets every decision on it:
- * the fields are the four §10.2's gate actually asks about (who received it, how much arrived, what went
+ * the fields are the four the gate actually asks about (who received it, how much arrived, what went
  * wrong, and the picture and signature that say so) and nothing else — a long form on a cracked screen
  * with one bar of signal is how the exceptions column ends up empty;
  * the client UUID is minted once per page load so a retry after a timeout lands on the same row instead of
@@ -106,7 +107,7 @@ new #[Layout('layouts::auth')] #[Title('Proof of delivery')] class extends Compo
             'receiverName' => ['required', 'string', 'max:120'],
             'quantityTonnes' => ['required', 'numeric', 'gt:0', 'lt:100000'],
             'pin' => ['required', 'string', 'size:6', 'regex:/\A\d{6}\z/'],
-            // §10.2 names the photo alongside the signature, and the Action refuses without one — asked
+            // The design names the photo alongside the signature, and the Action refuses without one — asked
             // here so the driver sees which field is missing rather than a refusal about "the proof".
             'photo' => ['required', 'file', 'max:15728', 'mimes:jpg,jpeg,png,webp'],
             'signatureData' => ['required', 'string', 'min:80'],
@@ -141,7 +142,7 @@ new #[Layout('layouts::auth')] #[Title('Proof of delivery')] class extends Compo
                     'receiver_name' => $this->receiverName,
                     'quantity_tonnes' => $this->quantityTonnes,
                     // An empty list with the box ticked is "nothing went wrong"; an empty list without it
-                    // is a blank answer, and §10.2's gate refuses to treat those as the same fact.
+                    // is a blank answer, and the gate refuses to treat those as the same fact.
                     'exceptions' => $this->nothingWrong ? [] : ($declared === [] ? null : $declared),
                     'none_declared' => $this->nothingWrong,
                 ],
@@ -159,10 +160,22 @@ new #[Layout('layouts::auth')] #[Title('Proof of delivery')] class extends Compo
         $this->dispatch('toast', message: __('Sent. The office signs it off.'), kind: 'success');
     }
 
-    /** The trip this link is bound to — the only trip this page can speak about (§9.6). */
+    /** The trip this link is bound to — the only trip this page can speak about. */
     public function tripFor(): ?Trip
     {
         return $this->token()?->trip;
+    }
+
+    /** The plate the signature is being attached to — the fuel screen's own rule, kept identical here. */
+    public function truckLabel(): string
+    {
+        $trip = $this->tripFor();
+
+        if ($trip?->truck_id === null) {
+            return __('this trip’s truck');
+        }
+
+        return Truck::query()->whereKey($trip->truck_id)->first()?->label() ?? __('this trip’s truck');
     }
 
     /**
@@ -249,7 +262,7 @@ new #[Layout('layouts::auth')] #[Title('Proof of delivery')] class extends Compo
      *
      * A canvas hands over a data URL, and the document module takes a path it can read — so the image is
      * written to a temporary file the sniffer can inspect like any other upload. Storing the base64 string
-     * in a column instead would put the signature outside §10.8's retention, MIME-truth and signed-download
+     * in a column instead would put the signature outside the retention, MIME-truth and signed-download
      * rules, which is the one thing a POD must not be.
      */
     private function signatureInput(): DocumentInput
@@ -284,12 +297,17 @@ new #[Layout('layouts::auth')] #[Title('Proof of delivery')] class extends Compo
 <div class="mx-auto grid w-full max-w-xl gap-5">
     @php($trip = $this->tripFor())
 
-    <header class="grid gap-1">
+    <header class="grid gap-2">
         <x-ui.heading size="lg" level="1">{{ __('Proof of delivery') }}</x-ui.heading>
 
         @if ($trip !== null)
-            <p class="text-sm text-fg-ink-secondary">
-                {{ __('Trip :trip · :loads', ['trip' => $trip->trip_no, 'loads' => $trip->loads->count()]) }}
+            {{-- The identity strip DESIGN-SYSTEM.md §6 demands — same shape as the fuel screen, so a driver
+                 moving between the two recognises the rule rather than relearning the page. --}}
+            <p class="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-fg-md bg-fg-surface-sunk px-4 py-3">
+                <span class="text-sm text-fg-ink-secondary">{{ __('Signing for') }}</span>
+                <span class="fg-identifier text-base font-medium text-fg-ink">{{ $trip->trip_no }}</span>
+                <span class="text-fg-ink-muted" aria-hidden="true">·</span>
+                <span class="fg-identifier text-base font-medium text-fg-ink">{{ $this->truckLabel() }}</span>
             </p>
         @endif
     </header>
@@ -436,6 +454,10 @@ new #[Layout('layouts::auth')] #[Title('Proof of delivery')] class extends Compo
             >
                 <span id="signature-label" class="text-xs font-medium text-fg-ink-secondary">{{ __('Signature — draw with a finger or stylus') }}</span>
 
+                {{-- Deliberately not tabbable, and no `tabindex` here: drawing a signature needs a finger or a
+                     stylus, so a focus stop that cannot be operated from the keyboard promises more than it
+                     delivers. The keyboard route on this screen is the buttons around it. A typed-name
+                     alternative is the honest answer for a driver who cannot draw, and it is not built. --}}
                 <canvas
                     x-ref="c"
                     role="img"

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Maintenance;
 
 /**
- * §4.3 BREAKDOWN `cause` — whose fault the roadside stop was, as far as anyone can tell.
+ * BREAKDOWN `cause` — whose fault the roadside stop was, as far as anyone can tell.
  *
  * The cause is a claim about the world, not about the ledger: a `mechanical` breakdown is the fleet's
  * own wear, `road` and `load` are conditions the driver met, and `driver` is the only cause a company
@@ -34,7 +34,7 @@ enum BreakdownCause: string
         };
     }
 
-    /** Only a driver-caused stop can be recovered from the driver (§4.3's CHECK). */
+    /** Only a driver-caused stop can be recovered from the driver (the CHECK). */
     public function allowsDriverRecovery(): bool
     {
         return $this === self::Driver;

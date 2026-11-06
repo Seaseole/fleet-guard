@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Operations;
 
 /**
- * §10.9's border-crossing machine: `planned → entered → exited → costs_captured`, and the two Phase 6
+ * The border-crossing machine: `planned → entered → exited → costs_captured`, and the two Phase 6
  * states after it.
  *
  * The last two are in the enum because the database CHECK lists the full vocabulary, but no Action in
@@ -34,7 +34,7 @@ enum BorderCrossingStatus: string
         };
     }
 
-    /** @return 'neutral'|'warning'|'success'|'danger' */
+    /** @return 'neutral'|'warning'|'success'|'accent' */
     public function tone(): string
     {
         return match ($this) {
@@ -46,7 +46,7 @@ enum BorderCrossingStatus: string
         };
     }
 
-    /** Whether this build's Actions may move a crossing into the given state (§15.2 keeps Phase 6 shut). */
+    /** Whether this build's Actions may move a crossing into the given state (the design keeps Phase 6 shut). */
     public function isReachableHere(): bool
     {
         return in_array($this, [self::Entered, self::Exited, self::CostsCaptured], true);

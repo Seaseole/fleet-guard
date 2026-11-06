@@ -32,21 +32,21 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /*
- * The workshop register (§3.2, §4.3, §10.6): the schedules that say when a truck is due, and the
+ * The workshop register: the schedules that say when a truck is due, and the
  * work orders that say what the workshop is doing about it.
  *
- * The schedule's state is printed, never stored (§10.8): `due_soon` is a function of the row, the
+ * The schedule's state is printed, never stored: `due_soon` is a function of the row, the
  * truck's odometer or hours and today's date, and a state column would be right only until the truck
  * next moved. That is why the badge is computed on render and the alert engine asks the same question
  * the same way — one rule, two readers.
  *
  * Two dialogs are separate because they write different things. A schedule is the rule (every
  * 25,000 km, every 90 days); a work order is one visit against it, priced line by line because
- * §10.6's approval threshold measures the estimate the workshop actually thinks it will spend. A
+ * The approval threshold measures the estimate the workshop actually thinks it will spend. A
  * raise started from a schedule row pre-fills the truck and the service but still asks for the first
  * line: an order with no estimate is one whose price nobody considered.
  *
- * Reading is `maintenance.view` for every seat §9.3 names. Writing is the Actions' own gates —
+ * Reading is `maintenance.view` for every seat the design names. Writing is the Actions' own gates —
  * `work_orders.create` for schedules and orders, `work_orders.approve` for the spend — so a
  * dispatcher can see that the truck is due without being able to book it in.
  */
@@ -596,7 +596,7 @@ new #[Title('Maintenance')] class extends Component {
         return [$scaled, $last];
     }
 
-    /** "45.32" → 4532, without ever building a float (§20.4). */
+    /** "45.32" → 4532, without ever building a float. */
     private function scaledHundredths(string $input, string $label): int
     {
         $text = trim(str_replace([' ', ','], ['', '.'], $input));
@@ -630,18 +630,17 @@ new #[Title('Maintenance')] class extends Component {
 }; ?>
 
 <div class="grid gap-6">
-    <header class="flex flex-wrap items-end justify-between gap-3">
-        <div class="grid gap-1">
-            <x-ui.heading size="xl" level="1">{{ __('Maintenance') }}</x-ui.heading>
-            <x-ui.text>
-                {{ __('What the fleet is due for, and what the workshop is doing about it. A schedule is the rule; a work order is one visit against it, priced before anyone picks up a spanner.') }}
-            </x-ui.text>
-        </div>
-
+    <x-shell.nameplate
+        :title="__('Maintenance')"
+        :stamped="true"
+        :description="__('What the fleet is due for, and what the workshop is doing about it. A schedule is the rule; a work order is one visit against it, priced before anyone picks up a spanner.')"
+    >
         @if ($this->canCreate())
-            <x-ui.button wire:click="openRaise">{{ __('Raise a work order') }}</x-ui.button>
+            <x-slot:action>
+                <x-ui.button wire:click="openRaise">{{ __('Raise a work order') }}</x-ui.button>
+            </x-slot:action>
         @endif
-    </header>
+    </x-shell.nameplate>
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         @foreach ($this->stats as $card)
@@ -680,8 +679,8 @@ new #[Title('Maintenance')] class extends Component {
                 <x-slot name="head">
                     <x-ui.table.th>{{ __('Service') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Truck') }}</x-ui.table.th>
-                    <x-ui.table.th>{{ __('Interval') }}</x-ui.table.th>
-                    <x-ui.table.th>{{ __('Last done') }}</x-ui.table.th>
+                    <x-ui.table.th hideBelow="lg">{{ __('Interval') }}</x-ui.table.th>
+                    <x-ui.table.th hideBelow="lg">{{ __('Last done') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Next due') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('Remaining') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('State') }}</x-ui.table.th>
@@ -700,13 +699,13 @@ new #[Title('Maintenance')] class extends Component {
                         </x-ui.table.td>
                         <x-ui.table.td>
                             @if ($schedule->truck !== null)
-                                <a href="{{ route('fleet.show', ['truck' => $schedule->truck->id]) }}" wire:navigate class="text-fg-ink hover:text-accent">{{ $schedule->truck->label() }}</a>
+                                <a href="{{ route('fleet.show', ['truck' => $schedule->truck->id]) }}" wire:navigate class="text-fg-ink underline-offset-4 hover:text-accent-ink hover:underline">{{ $schedule->truck->label() }}</a>
                             @else
                                 <span class="text-xs text-fg-ink-muted">{{ __('No truck') }}</span>
                             @endif
                         </x-ui.table.td>
-                        <x-ui.table.td nowrap>{{ $schedule->intervalLabel() }}</x-ui.table.td>
-                        <x-ui.table.td nowrap>{{ $this->lastDoneLabel($schedule) }}</x-ui.table.td>
+                        <x-ui.table.td nowrap hideBelow="lg">{{ $schedule->intervalLabel() }}</x-ui.table.td>
+                        <x-ui.table.td nowrap hideBelow="lg">{{ $this->lastDoneLabel($schedule) }}</x-ui.table.td>
                         <x-ui.table.td nowrap>{{ $schedule->dueLabel() }}</x-ui.table.td>
                         <x-ui.table.td numeric nowrap>
                             @if ($state === App\Domain\Maintenance\ServiceDueState::Blocked)
@@ -773,8 +772,8 @@ new #[Title('Maintenance')] class extends Component {
             <x-slot name="head">
                 <x-ui.table.th>{{ __('Work order') }}</x-ui.table.th>
                 <x-ui.table.th>{{ __('Truck') }}</x-ui.table.th>
-                <x-ui.table.th>{{ __('Kind') }}</x-ui.table.th>
-                <x-ui.table.th>{{ __('Opened') }}</x-ui.table.th>
+                <x-ui.table.th hideBelow="lg">{{ __('Kind') }}</x-ui.table.th>
+                <x-ui.table.th hideBelow="lg">{{ __('Opened') }}</x-ui.table.th>
                 <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
                 <x-ui.table.th numeric>{{ __('Estimate') }}</x-ui.table.th>
                 <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
@@ -783,7 +782,7 @@ new #[Title('Maintenance')] class extends Component {
             @forelse ($this->orders as $order)
                 <tr wire:key="work-order-{{ $order->id }}">
                     <x-ui.table.td>
-                        <a href="{{ route('maintenance.work_order', ['workOrder' => $order->id]) }}" wire:navigate class="font-medium text-fg-ink hover:text-accent">{{ $order->wo_no }}</a>
+                        <a href="{{ route('maintenance.work_order', ['workOrder' => $order->id]) }}" wire:navigate class="font-medium text-fg-ink underline-offset-4 hover:text-accent-ink hover:underline">{{ $order->wo_no }}</a>
                         <span class="block text-xs text-fg-ink-muted">{{ $order->title }}</span>
                         @if ($order->schedule !== null)
                             <span class="block text-xs text-fg-ink-muted">{{ __('for :service', ['service' => $order->schedule->name]) }}</span>
@@ -791,15 +790,15 @@ new #[Title('Maintenance')] class extends Component {
                     </x-ui.table.td>
                     <x-ui.table.td>
                         @if ($order->truck !== null)
-                            <a href="{{ route('fleet.show', ['truck' => $order->truck->id]) }}" wire:navigate class="text-fg-ink hover:text-accent">{{ $order->truck->label() }}</a>
+                            <a href="{{ route('fleet.show', ['truck' => $order->truck->id]) }}" wire:navigate class="text-fg-ink underline-offset-4 hover:text-accent-ink hover:underline">{{ $order->truck->label() }}</a>
                         @else
                             <span class="text-xs text-fg-ink-muted">{{ __('Truck #:id', ['id' => $order->truck_id]) }}</span>
                         @endif
                     </x-ui.table.td>
-                    <x-ui.table.td>
+                    <x-ui.table.td hideBelow="lg">
                         <x-ui.badge :tone="$order->kind->isUrgent() ? 'danger' : 'neutral'">{{ $order->kind->label() }}</x-ui.badge>
                     </x-ui.table.td>
-                    <x-ui.table.td nowrap>{{ $order->opened_on?->format('d M Y') ?? '—' }}</x-ui.table.td>
+                    <x-ui.table.td nowrap hideBelow="lg">{{ $order->opened_on?->format('d M Y') ?? '—' }}</x-ui.table.td>
                     <x-ui.table.td>
                         <x-ui.badge :tone="$order->status->tone()">{{ $order->status->label() }}</x-ui.badge>
                         @if ($order->status === App\Domain\Maintenance\WorkOrderStatus::OnHold && $order->hold_reason !== null)

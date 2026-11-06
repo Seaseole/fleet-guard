@@ -11,17 +11,17 @@ use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
 /**
- * §14.4's path contract — `company/{id}/{type}/{entity}/{ulid}/{version}` on the private disk — and
+ * The path contract — `company/{id}/{type}/{entity}/{ulid}/{version}` on the private disk — and
  * the only code that touches those bytes.
  *
  * The layout is not decoration. `{company_id}` first means a bucket policy can do the tenant
- * isolation the database already does (§8 T3), so a leaked path is not a cross-tenant read.
+ * isolation the database already does (T3), so a leaked path is not a cross-tenant read.
  * `{type}/{entity}` makes a manual spot-check of the archive legible to a human. And `{ulid}` as the
  * directory is what stops two versions of the same paper colliding over each other's file, which an
  * extension-only or name-only layout eventually guarantees.
  *
  * Nothing else may call `Storage::disk('documents_private')`. This is the one door, and it is also
- * where the §10.8 digest is measured — from the bytes as they arrived, because a `sha256` computed
+ * where the digest is measured — from the bytes as they arrived, because a `sha256` computed
  * from anything else is a claim about a file nobody checked.
  */
 final class DocumentStore
@@ -60,7 +60,7 @@ final class DocumentStore
      * Write the bytes and report what they measured.
      *
      * The digest and the size are taken from the source before the write and asserted against the
-     * stored copy afterwards, because the thing §10.8 needs is a hash of *what is on the disk*. A
+     * stored copy afterwards, because the thing the design needs is a hash of *what is on the disk*. A
      * local write is atomic enough that this never trips; on a bucket it is the one check that
      * catches a truncated upload being filed as a complete document.
      *
@@ -87,7 +87,7 @@ final class DocumentStore
 
         if ($disk->exists($path)) {
             // The version id is a ULID and it is in the path, so this is not bad luck — it is a
-            // caller trying to replace a stored version, which §10.8 forbids.
+            // caller trying to replace a stored version, which the design forbids.
             throw new RuntimeException("Refusing to overwrite the existing document path {$path}: versions are appended, never replaced.");
         }
 

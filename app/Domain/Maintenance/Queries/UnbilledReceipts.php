@@ -12,9 +12,9 @@ use Illuminate\Support\Facades\DB;
 use stdClass;
 
 /**
- * The stores' read door for slice 5b: receipts that already posted `Dr 1190 / Cr 2110` (§20.29) and
+ * The stores' read door for slice 5b: receipts that already posted `Dr 1190 / Cr 2110` and
  * are still waiting for the supplier's paper. Fuel's twin is `Fuel\Queries\UnbilledDeliveries`; both
- * answer Accounting's `UnbilledObligation` so the bills picker lists one shape (§3.1 D5).
+ * answer Accounting's `UnbilledObligation` so the bills picker lists one shape (D5).
  */
 final class UnbilledReceipts
 {

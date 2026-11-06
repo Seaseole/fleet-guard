@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Fleet;
 
 /**
- * The shared lifecycle of a physical asset (§4.3, §10.1).
+ * The shared lifecycle of a physical asset.
  *
  * One enum for trucks, trailers and equipment because the states are the same words and the badge
  * should read the same way on every register. Equipment simply never enters `on_trip` — nothing is
@@ -31,7 +31,7 @@ enum FleetStatus: string
         };
     }
 
-    /** The `ui/badge` tone for a register (DESIGN-SYSTEM.md §1.5). */
+    /** The `ui/badge` tone for a register. */
     public function tone(): string
     {
         return match ($this) {
@@ -43,7 +43,7 @@ enum FleetStatus: string
         };
     }
 
-    /** Only an available asset can be named on a new assignment (§10.2). */
+    /** Only an available asset can be named on a new assignment. */
     public function mayBeDispatched(): bool
     {
         return $this === self::Available;

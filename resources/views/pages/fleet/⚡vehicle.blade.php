@@ -13,7 +13,12 @@ use App\Domain\Fleet\Models\Trailer;
 use App\Domain\Fleet\Models\Truck;
 use App\Domain\Fleet\Models\VehicleAssignment;
 use App\Domain\Fleet\Plausibility;
+use App\Domain\Fuel\FuelIssueStatus;
+use App\Domain\Fuel\Models\FuelIssue;
 use App\Domain\Kernel\Documents\Models\Document;
+use App\Domain\Kernel\Documents\Validity;
+use App\Domain\Kernel\Formatter;
+use App\Domain\Kernel\Identity\ConfirmsRecentPassword;
 use App\Domain\Kernel\Money\Money;
 use App\Domain\Maintenance\Models\Breakdown;
 use App\Domain\Maintenance\Models\Inspection;
@@ -35,18 +40,20 @@ use Livewire\Component;
 
 /*
  * One truck's record: its details, who holds it, what the odometer has said, and the paper attached
- * to it (§4.3, §10.1, §14.4).
+ * to it.
  *
  * The four write panels are four separate permissions on purpose — assigning is `fleet.update`,
  * recording mileage is `fleet.odometer.record`, disposing is `fleet.sell`, and reading the purchase
  * price is a field gate. A single "edit this truck" form would have made every one of them the same
- * permission, which is exactly what §9.3 splits them to avoid.
+ * permission, which is exactly what splits them to avoid.
  *
  * The odometer form is not an edit form for `trucks.odometer_km`. Readings are evidence, the truck's
  * number is their projection, and a typed correction would erase the drop that is worth
  * investigating — so a lower reading is stored `suspect` and the projection keeps the higher number.
  */
 new #[Title('Vehicle')] class extends Component {
+    use ConfirmsRecentPassword;
+
     #[Locked]
     public int $truckId = 0;
 
@@ -75,7 +82,7 @@ new #[Title('Vehicle')] class extends Component {
         $this->truckId = $truck->id;
 
         // A local wall time, because the office records "he took it at 06:30" in the company's day.
-        // The Action stores UTC; this screen converts on the way in and out (§2).
+        // The Action stores UTC; this screen converts on the way in and out.
         $this->fromAt = now(CurrentCompany::timezone())->format('Y-m-d\TH:i');
         $this->readOn = now(CurrentCompany::timezone())->toDateString();
         $this->odometerKm = (string) $truck->odometer_km;
@@ -97,6 +104,10 @@ new #[Title('Vehicle')] class extends Component {
 
         if ($target === FleetStatus::Sold) {
             abort_unless(Gate::allows('sell', $truck), 403);
+
+            if (! $this->confirmRecentPassword()) {
+                return;
+            }
         }
 
         try {
@@ -278,6 +289,70 @@ new #[Title('Vehicle')] class extends Component {
         ));
     }
 
+    /**
+     * The day the truck is handed over — the day the papers have to cover.
+     *
+     * The picker is asked before the form is posted, so an empty "From" is read as today, which is what
+     * {@see \App\Domain\Fleet\Actions\AssignVehicle} will anchor its own refusal on.
+     */
+    #[Computed]
+    public function assignmentDay(): CarbonInterface
+    {
+        return $this->fromAt === ''
+            ? CarbonImmutable::now(CurrentCompany::timezone())
+            : CarbonImmutable::parse($this->fromAt, CurrentCompany::timezone());
+    }
+
+    /**
+     * The papers of one option that are not clean on the handover day.
+     *
+     * The bands, their words and their tones are {@see Validity::paperFlags()}'s, shared with the dispatch
+     * board and the inspection list; this method only names the two papers and the day they must cover.
+     *
+     * @return list<array{paper: string, tone: string, state: string, days: string, on: string}>
+     */
+    public function driverPapers(DriverOption $option): array
+    {
+        return Validity::paperFlags([
+            ['label' => __('licence'), 'date' => $option->licenceExpiresOn],
+            ['label' => __('PRDP permit'), 'date' => $option->permitExpiresOn],
+        ], $this->assignmentDay);
+    }
+
+    /** The tone of the worst paper, shared by the option's class and the widget's row. */
+    public function driverOptionTone(DriverOption $option): string
+    {
+        return Validity::optionTone($this->driverPapers($option));
+    }
+
+    /** The class one `<option>` carries — a select cannot hold a badge, so the text takes the tone. */
+    public function driverOptionClass(DriverOption $option): string
+    {
+        $tone = $this->driverOptionTone($option);
+
+        return $tone === '' ? '' : 'text-'.$tone;
+    }
+
+    /**
+     * The second line of one driver row.
+     *
+     * When the handover day would refuse the driver it says why, in {@see Validity::optionNote()}'s words.
+     * When it would not, the two dates the day has to cover go there instead: the picker is asked before
+     * the form is posted, and "who expires soonest" is the question a dispatcher is actually working
+     * through while the list is open.
+     */
+    public function driverOptionNote(DriverOption $option): string
+    {
+        $note = Validity::optionNote($this->driverPapers($option));
+
+        if ($note !== '') {
+            return $note;
+        }
+
+        return __('licence').' '.($option->licenceExpiresOn?->format('d M Y') ?? __('none on file'))
+            .' · '.__('permit').' '.($option->permitExpiresOn?->format('d M Y') ?? __('none on file'));
+    }
+
     /** @return Collection<int, Trailer> */
     #[Computed]
     public function availableTrailers(): Collection
@@ -303,13 +378,44 @@ new #[Title('Vehicle')] class extends Component {
     }
 
     /**
+     * The truck's shape of filling: the twelve latest fuel issues in time order, litres at one
+     * decimal. Read from the same `FuelIssue` rows the fuel log aggregates — the sparkline is a shape,
+     * the log stays the truth, and neither recomputes the other (docs/REDESIGN-CONCEPT.md §4).
+     *
+     * @return array{gated?: bool, values?: list<float>, count?: int, latest?: string}
+     */
+    #[Computed]
+    public function fillTrend(): array
+    {
+        if (! Gate::allows('fuel.view')) {
+            return ['gated' => true];
+        }
+
+        $rows = FuelIssue::query()
+            ->where('truck_id', $this->truckId)
+            ->where('status', '!=', FuelIssueStatus::Reversed->value)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(12)
+            ->pluck('litres_x100')
+            ->reverse()
+            ->values();
+
+        return [
+            'values' => $rows->map(fn ($hundredths): float => round((int) $hundredths / 100, 1))->all(),
+            'count' => $rows->count(),
+            'latest' => $rows->isEmpty() ? null : Formatter::number((int) $rows->last() / 100, 1),
+        ];
+    }
+
+    /**
      * Kilometres between each reading and the one before it, keyed by reading id.
      *
      * Computed over the truck's whole history rather than the twenty rows on show: the oldest row on
      * the screen still needs the reading that fell off the page to answer "how far was this leg", and
      * a column that silently blanks for the last row is a column nobody trusts.
      *
-     * A reading **below** its predecessor has no distance to report. It is kept as evidence (§7 R7) and
+     * A reading **below** its predecessor has no distance to report. It is kept as evidence (R7) and
      * the Trust badge says what it is; inventing a kilometres figure out of a measurement the truck
      * contradicts would put a fabricated number in the same row as a real one.
      *
@@ -419,7 +525,7 @@ new #[Title('Vehicle')] class extends Component {
 <div class="grid gap-6">
     @php($truck = $this->truck)
 
-    <header class="flex flex-wrap items-start justify-between gap-3">
+    <header class="fg-page-header flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div class="grid gap-1">
             <x-ui.link :href="route('fleet.index', ['tab' => 'trucks'])">{{ __('← Fleet register') }}</x-ui.link>
 
@@ -430,6 +536,29 @@ new #[Title('Vehicle')] class extends Component {
                 @if ($truck->year) · {{ $truck->year }} @endif
                 · {{ __('Registration :no', ['no' => $truck->registration_no]) }}
             </x-ui.text>
+
+            @php($fillTrend = $this->fillTrend)
+            @if ($fillTrend['gated'] ?? false)
+                <p class="flex items-center gap-1.5 pt-1 text-xs leading-4 text-fg-ink-muted">
+                    <x-ui.icon name="lock-closed" size="4" />
+                    {{ __('Fill history is not available to your role') }}
+                </p>
+            @elseif ($fillTrend['count'] >= 2)
+                {{-- Masked rather than hidden above; here it earns its line only from two points up —
+                     one fill is a number, not a shape. --}}
+                <div class="flex items-center gap-2.5 pt-1">
+                    <x-patterns.sparkline
+                        :values="$fillTrend['values']"
+                        :label="__('Sparkline of the :n latest fills for :truck', ['n' => $fillTrend['count'], 'truck' => $truck->label()])"
+                    />
+                    <p class="text-xs leading-4 text-fg-ink-muted">
+                        {{ __(':n latest fills · newest :latest l', [
+                            'n' => $fillTrend['count'],
+                            'latest' => $fillTrend['latest'],
+                        ]) }}
+                    </p>
+                </div>
+            @endif
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
@@ -497,7 +626,7 @@ new #[Title('Vehicle')] class extends Component {
             <div class="grid gap-0.5">
                 <dt class="text-xs font-medium text-fg-ink-muted">{{ __('Purchase price') }}</dt>
                 <dd class="text-sm text-fg-ink">
-                    <x-ui.gated gate="seeVehicleCost" :label="__('the purchase price')">
+                    <x-ui.gated :can="auth()->user()->can('seeVehicleCost')" :label="__('the purchase price')">
                         {{ $truck->purchase_amount_base === 0
                             ? '—'
                             : \App\Domain\Kernel\Money\Money::ofMinor($truck->purchase_amount_base, $this->currencyCode)->format($this->currencyCode) }}
@@ -544,7 +673,7 @@ new #[Title('Vehicle')] class extends Component {
                     </div>
 
                     {{-- Outline: this transition has to carry its reason, and the odometer form below is the
-                         action this page exists for (§4.3: one reading, one owner). --}}
+                         action this page exists for (one reading, one owner). --}}
                     <x-ui.button variant="outline" type="submit">{{ __('Move status') }}</x-ui.button>
                 @endif
             </form>
@@ -581,7 +710,7 @@ new #[Title('Vehicle')] class extends Component {
             @can('create', \App\Domain\Fleet\Models\VehicleAssignment::class)
                 <form class="grid gap-4" wire:submit="assign">
                     <div class="grid gap-4 sm:grid-cols-2">
-                        <x-ui.input wire:model="fromAt" name="fromAt" type="datetime-local" :label="__('From')" required />
+                        <x-ui.input wire:model.live.debounce.500ms="fromAt" name="fromAt" type="datetime-local" :label="__('From')" required />
 
                         <div class="grid gap-1.5">
                             <label for="assignment-trailer" class="text-xs font-medium text-fg-ink-secondary">{{ __('Trailer (optional)') }}</label>
@@ -602,18 +731,38 @@ new #[Title('Vehicle')] class extends Component {
                         <div class="grid gap-1.5">
                             <label for="assignment-driver" class="text-xs font-medium text-fg-ink-secondary">{{ __('Driver (optional)') }}</label>
 
-                            <x-ui.select name="driverId" id="assignment-driver" wire:model="driverId">
+                            {{-- The tone rides on the `<option>`, and the reason rides beside it, because a
+                                 coloured option is only visible while the list is open: the line under the
+                                 control is what a seat still reads after it has chosen. The widget
+                                 reads the same three values and paints them as a row. --}}
+                            <x-ui.select name="driverId" id="assignment-driver" wire:model.live="driverId" template="fg-paper" template-selection="fg-name">
                                 <option value="">{{ __('No driver') }}</option>
                                 @foreach ($this->assignableDrivers as $option)
-                                    <option value="{{ $option->id }}">
-                                        {{ $option->name }}
-                                        — {{ __('licence') }} {{ $option->licenceExpiresOn?->format('d M Y') ?? __('none on file') }}
-                                        · {{ __('permit') }} {{ $option->permitExpiresOn?->format('d M Y') ?? __('none on file') }}
+                                    <option value="{{ $option->id }}"
+                                        class="{{ $this->driverOptionClass($option) }}"
+                                        data-name="{{ $option->name }}"
+                                        data-note="{{ $this->driverOptionNote($option) }}"
+                                        data-tone="{{ $this->driverOptionTone($option) }}">
+                                        {{ $option->name }} — {{ $this->driverOptionNote($option) }}
                                     </option>
                                 @endforeach
                             </x-ui.select>
 
-                            <p class="text-xs text-fg-ink-muted">{{ __('A driver whose status or papers do not cover the start date is refused.') }}</p>
+                            @php($picked = $this->driverId === '' ? null : ($this->driverDirectory[(int) $this->driverId] ?? null))
+
+                            @if ($picked !== null && ($flags = $this->driverPapers($picked)) !== [])
+                                <div class="flex flex-wrap items-center gap-1.5 pt-1" role="status">
+                                    <span class="text-xs text-fg-ink-secondary">{{ $picked->name }}</span>
+
+                                    @foreach ($flags as $flag)
+                                        <x-ui.badge size="xs" :tone="$flag['tone']">
+                                            {{ $flag['paper'] }} · {{ $flag['state'] }}@if ($flag['days'] !== '') · {{ $flag['days'] }}@endif
+                                        </x-ui.badge>
+                                    @endforeach
+                                </div>
+                            @endif
+
+                            <p class="text-xs text-fg-ink-muted">{{ __('A driver whose status or papers do not cover :day is refused.', ['day' => $this->assignmentDay->format('d M Y')]) }}</p>
 
                         </div>
 
@@ -770,7 +919,7 @@ new #[Title('Vehicle')] class extends Component {
                                 @foreach ($this->workshopOrders as $order)
                                     <li wire:key="truck-order-{{ $order->id }}" class="flex items-center justify-between gap-3 rounded-fg-sm px-2 py-2 hover:bg-fg-surface-sunk">
                                         <div class="grid min-w-0 gap-0.5">
-                                            <a href="{{ route('maintenance.work_order', ['workOrder' => $order->id]) }}" wire:navigate class="truncate text-sm text-fg-ink hover:text-accent">{{ $order->title }}</a>
+                                            <a href="{{ route('maintenance.work_order', ['workOrder' => $order->id]) }}" wire:navigate class="truncate text-sm text-fg-ink underline-offset-4 hover:text-accent-ink hover:underline">{{ $order->title }}</a>
                                             <p class="text-xs text-fg-ink-muted">{{ $order->wo_no }} · {{ $order->opened_on->format('d M Y') }}</p>
                                         </div>
 
@@ -823,7 +972,7 @@ new #[Title('Vehicle')] class extends Component {
                                                 {{ $breakdown->occurred_at->format('d M Y') }}
                                                 · {{ $breakdown->cause->label() }}
                                                 @if ($breakdown->workOrder)
-                                                    · <a href="{{ route('maintenance.work_order', ['workOrder' => $breakdown->workOrder->id]) }}" wire:navigate class="hover:text-accent">{{ $breakdown->workOrder->wo_no }}</a>
+                                                    · <a href="{{ route('maintenance.work_order', ['workOrder' => $breakdown->workOrder->id]) }}" wire:navigate class="hover:text-accent-ink">{{ $breakdown->workOrder->wo_no }}</a>
                                                 @else
                                                     · {{ __('no repair yet') }}
                                                 @endif
@@ -843,7 +992,7 @@ new #[Title('Vehicle')] class extends Component {
         </x-ui.card>
     @endcan
 
-    <x-ui.card :title="__('Paper on file')" :description="__('Registration, insurance, roadworthy — the §4.4 documents whose subject is this truck.')">
+    <x-ui.card :title="__('Paper on file')":description="__('Registration, insurance, roadworthy — the documents whose subject is this truck.')">
         @if ($this->documents->isEmpty())
             <x-ui.empty-state
                 icon="folder"

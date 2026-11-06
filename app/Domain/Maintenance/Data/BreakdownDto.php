@@ -17,7 +17,7 @@ use InvalidArgumentException;
  * cannot become a work order. Hours lost are optional and default to zero — many stops are repaired
  * at the roadside without anybody logging an hour.
  *
- * `recoverableFromDriver` is a decision, not a guess, and only a `driver` cause may carry it (§4.3's
+ * `recoverableFromDriver` is a decision, not a guess, and only a `driver` cause may carry it (the
  * CHECK). The DTO refuses the other causes by name so the refusal is a sentence, not a SQL error.
  */
 final readonly class BreakdownDto

@@ -13,12 +13,12 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * Books an enquiry (§4.1 JOB, §15.2 Phase 2's "jobs → quotes → trips").
+ * Books an enquiry (JOB, Phase 2's "jobs → quotes → trips").
  *
  * The job number is allocated here rather than at quote time because a job is *referenced* from the
  * moment it exists — the customer's WhatsApp message, the waybill, the board all name `JOB-00042` —
- * and §7.4's "number at issue, never at creation" rule is about financial documents, where a number
- * is a claim that money moved. An operational reference is a label, and §7 says so: never reused
+ * and the "number at issue, never at creation" rule is about financial documents, where a number
+ * is a claim that money moved. An operational reference is a label, and the design says so: never reused
  * matters more here than having no gaps.
  *
  * Both master rows are read through their own tenant-scoped queries, so a dispatcher cannot book work
@@ -37,7 +37,7 @@ final class CreateJob
 
             if (! $customer->active) {
                 throw new InvalidArgumentException(sprintf(
-                    'Customer "%s" is inactive (§4.1), so new work cannot be booked against them.',
+                    'Customer "%s" is inactive, so new work cannot be booked against them.',
                     $customer->name,
                 ));
             }

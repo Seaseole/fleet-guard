@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 FUEL_ISSUE — fuel leaving a purchase (or, later, a bulk tank) into a truck, on a trip.
+     * FUEL_ISSUE — fuel leaving a purchase (or, later, a bulk tank) into a truck, on a trip.
      *
      * Two figures are stored rather than derived, for two different reasons. `litres_x100` is the
      * spec's own scale (two decimal places, integer) so partial litres at a pump are exact.
@@ -22,7 +22,7 @@ return new class extends Migration
      * which sources require it. `trip_cost_id` names the ledger-backed cost row this issue raised, so
      * the trip's fuel number and the issue's litres are one transaction seen from two sides.
      *
-     * §10.9's machine: `recorded → posted → reversed`. A correction is a reversal plus a new issue,
+     * The machine: `recorded → posted → reversed`. A correction is a reversal plus a new issue,
      * never an edit — the state columns are the trait's, and `reversed` needs a reason at the
      * `operational_events` CHECK. `reversal_of_id` links the pair so the register shows both.
      */
@@ -48,7 +48,7 @@ return new class extends Migration
             $table->datetime('state_changed_at')->nullable();
             $table->string('exception_reason', 160)->nullable();
 
-            // §6.9: the trip cost row this issue posted, and for an issue that corrects another, the
+            // The trip cost row this issue posted, and for an issue that corrects another, the
             // row corrected. Nullable in both directions because a bulk-tank issue has no purchase
             // and a first issue has no predecessor.
             $table->char('trip_cost_id', 26)->nullable();

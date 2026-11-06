@@ -10,19 +10,19 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 PART — the workshop's catalogue of what it fits, not yet its stock.
+     * PART — the workshop's catalogue of what it fits, not yet its stock.
      *
-     * Phase 1 ships the register only (§15 phase 1 "parts register"): sku, name, category, the
+     * Phase 1 ships the register only (phase 1 "parts register"): sku, name, category, the
      * cost it is bought at, and the vehicle it is specific to. Stock movements and counts arrive
      * with the workshop in phase 3 — Q5 chose an issue register with optional counts, so the
-     * denormalised `stock_quantity` column §4.3 marks "only if perpetual stores chosen" is
+     * denormalised `stock_quantity` column marks "only if perpetual stores chosen" is
      * deliberately absent until that decision is exercised.
      *
      * `truck_id` is nullable because most parts fit any truck; a body panel or an ECU does not.
-     * The FK is restrictive rather than nulling: trucks are retired, never deleted (§2 deletes),
+     * The FK is restrictive rather than nulling: trucks are retired, never deleted (deletes),
      * so a dangling specific part would mean something has gone wrong upstream.
      *
-     * `unit_cost_minor` + `currency_code` follow §5.1: money is integer minor units and carries
+     * `unit_cost_minor` + `currency_code` follow money is integer minor units and carries
      * its currency. A part bought in ZAR and fitted in Botswana must keep the number the invoice
      * showed, exactly as a rate card does.
      */

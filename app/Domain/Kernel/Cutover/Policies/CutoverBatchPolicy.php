@@ -8,7 +8,7 @@ use App\Domain\Kernel\Cutover\Models\CutoverBatch;
 use App\Models\User;
 
 /**
- * Who may rehearse and who may commit (§15.2 Phase 0.5, §9.3).
+ * Who may rehearse and who may commit.
  *
  * Two permissions rather than one because uploading a legacy file and posting the opening
  * balances are different acts: the accountant validates the file, the Owner alone moves the
@@ -36,7 +36,7 @@ final class CutoverBatchPolicy
     }
 
     /**
-     * §6.4: a posted batch is corrected by reversal, never by editing the upload. There is no
+     * A posted batch is corrected by reversal, never by editing the upload. There is no
      * update path — the Actions own every status column.
      */
     public function update(User $user, CutoverBatch $batch): bool

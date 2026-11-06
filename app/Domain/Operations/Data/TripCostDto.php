@@ -12,11 +12,11 @@ use Carbon\CarbonImmutable;
 use DateTimeInterface;
 
 /**
- * One direct cost as a screen or an upstream Action hands it over (§4.1 TRIP_COST).
+ * One direct cost as a screen or an upstream Action hands it over (TRIP_COST).
  *
  * The amount is the figure **as stated** — the fuel slip's USD, the toll's BWP — and `rate` is the
  * one conversion that turns it into the base figure. Keeping the rate on the DTO rather than inside
- * the Action means the caller has to say where the rate came from: §5.2's `fx_rate_source` is the
+ * the Action means the caller has to say where the rate came from: The `fx_rate_source` is the
  * difference between a number somebody typed and a figure the bank reported.
  *
  * `sourceType`/`sourceId` are optional and name the upstream record a retried capture belongs to

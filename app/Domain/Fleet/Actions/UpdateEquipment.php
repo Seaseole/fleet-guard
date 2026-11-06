@@ -9,7 +9,7 @@ use App\Domain\Fleet\Models\Equipment;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Edits equipment (§4.3, D1). Status moves through {@see ChangeEquipmentStatus}.
+ * Edits equipment (D1). Status moves through {@see ChangeEquipmentStatus}.
  */
 final class UpdateEquipment
 {

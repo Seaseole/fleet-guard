@@ -3,7 +3,7 @@
     Three targets so "System" stays reachable.
 
     The starting figure is the **effective** mode, not the stored one: a seat that never chose shows
-    the company default (§20.37), and its first click makes that choice its own. "Use the company
+    the company default, and its first click makes that choice its own. "Use the company
     default" on the appearance screen hands it back.
 --}}
 <button
@@ -14,7 +14,7 @@
         window.FleetGuardTheme?.set(mode);
     "
     :aria-label="'Theme: ' + mode"
-    class="grid size-9 place-items-center rounded-fg-sm text-fg-ink-secondary transition duration-(--t-fast) hover:bg-fg-surface-sunk hover:text-fg-ink"
+    class="grid size-9 touch:size-11 shrink-0 place-items-center rounded-fg-sm text-fg-ink-secondary transition duration-(--t-fast) hover:bg-fg-surface-sunk hover:text-fg-ink"
     {{ $attributes }}
 >
     <x-ui.icon name="sun" size="5" x-show="mode === 'light'" />

@@ -9,10 +9,10 @@ use App\Domain\Accounting\Models\Supplier;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Adds a supplier to the books (§4.2, D1).
+ * Adds a supplier to the books (D1).
  *
  * The category is written from the enum the DTO carries, so the string in the column is always one
- * of §4.2's six — a caller cannot post `category => 'tyres'` and meet the CHECK constraint at
+ * of the six — a caller cannot post `category => 'tyres'` and meet the CHECK constraint at
  * commit with a message that names a column instead of a choice.
  */
 final class CreateSupplier

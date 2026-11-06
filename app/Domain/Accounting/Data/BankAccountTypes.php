@@ -26,7 +26,7 @@ enum BankAccountTypes: string
     }
 
     /**
-     * Petty cash and wallets do not carry a bank account number; §4.2's column is nullable for
+     * Petty cash and wallets do not carry a bank account number; The column is nullable for
      * exactly that reason, and the form hides the field instead of storing "N/A" as a secret.
      */
     public function takesAccountNumber(): bool

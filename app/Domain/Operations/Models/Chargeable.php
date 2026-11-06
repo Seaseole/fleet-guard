@@ -14,14 +14,14 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.1 CHARGEABLE — what a trip earns, held between the delivery and the invoice.
+ * CHARGEABLE — what a trip earns, held between the delivery and the invoice.
  *
- * The row is generated from the POD's own payload (§16: chargeables are built from the event, not
+ * The row is generated from the POD's own payload (chargeables are built from the event, not
  * re-read later), and `source_uuid` is the idempotency key that makes a second approval a lookup
  * rather than a second bill. `base_amount` is the base-currency figure; `amount` is what the customer
  * will see, in the currency the job was quoted in.
  *
- * There is no `invoice_id` here. §4.1's INVOICE_LINE names the chargeable, not the other way round,
+ * There is no `invoice_id` here. The INVOICE_LINE names the chargeable, not the other way round,
  * because one chargeable is billed once and an invoice can bundle many.
  *
  * @property string $id

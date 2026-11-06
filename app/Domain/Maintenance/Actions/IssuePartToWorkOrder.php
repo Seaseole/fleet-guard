@@ -25,7 +25,7 @@ use InvalidArgumentException;
 
 /**
  * Hands a part from the stores shelf to a job, and posts it, and moves the order's total — in one
- * transaction (§15.2 phase 3, §10.6's "parts issue" posting path).
+ * transaction (phase 3, the "parts issue" posting path).
  *
  * Three refusals carry the design. The order must be **sanctioned**: an approved, planned, running or
  * held job may draw parts, while a draft or an estimate still waiting for an approver may not — the
@@ -35,7 +35,7 @@ use InvalidArgumentException;
  * transfer.
  *
  * The issue is costed at the shelf's moving average, and an issue that takes the last unit takes the
- * exact remaining value, so the emptied shelf is worth nothing (§20.26's rule, now applied to parts).
+ * exact remaining value, so the emptied shelf is worth nothing (the rule, now applied to parts).
  *
  * The order's totals are recomputed with `recalculateCosts(false)` — a running job may not have its
  * *estimate* edited, but a part it actually consumed is a fact. Before the work starts the threshold
@@ -60,7 +60,7 @@ final class IssuePartToWorkOrder
         ?int $actorId = null,
     ): StockMovement {
         if (! Gate::allows('work_orders.create')) {
-            throw new InvalidArgumentException('Issuing a part to a job is a workshop act (§9.3).');
+            throw new InvalidArgumentException('Issuing a part to a job is a workshop act.');
         }
 
         if ($quantityX100 <= 0) {
@@ -142,7 +142,7 @@ final class IssuePartToWorkOrder
 
         if (! in_array($order->status, $allowed, true)) {
             throw new InvalidArgumentException(sprintf(
-                '%s is %s. Parts are issued to a sanctioned job — approve or start it first, and a released vehicle cannot draw stock (§10.6).',
+                '%s is %s. Parts are issued to a sanctioned job — approve or start it first, and a released vehicle cannot draw stock.',
                 $order->wo_no,
                 strtolower($order->status->label()),
             ));
@@ -162,10 +162,10 @@ final class IssuePartToWorkOrder
 
         $debitCode = $part->category === PartCategory::Tyres ? '5320' : '5310';
         $debit = $accounts[$debitCode] ?? throw new InvalidArgumentException(sprintf(
-            'Account %s is not in this company\'s chart, so the part cannot be posted. Seed the chart first (§6.2).',
+            'Account %s is not in this company\'s chart, so the part cannot be posted. Seed the chart first.',
             $debitCode,
         ));
-        $stock = $accounts['1190'] ?? throw new InvalidArgumentException('Account 1190 Parts stock is not in this company\'s chart. Seed the chart first (§6.2).');
+        $stock = $accounts['1190']?? throw new InvalidArgumentException('Account 1190 Parts stock is not in this company\'s chart. Seed the chart first.');
 
         $amount = Money::ofMinor($value, $base);
 

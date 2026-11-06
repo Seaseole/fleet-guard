@@ -10,7 +10,7 @@ use App\Domain\Kernel\Settings\CompanySettings;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 
 /**
- * §14.2 — the company's pump price per fuel type, read as a starting figure rather than a rule.
+ * The company's pump price per fuel type, read as a starting figure rather than a rule.
  *
  * The price lives in settings so every clerk and every driver link begins from the same number;
  * the slip's own price is still what the register records, so changing the setting never re-prices

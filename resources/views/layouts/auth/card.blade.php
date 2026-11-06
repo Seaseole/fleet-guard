@@ -6,15 +6,17 @@
     </head>
 
     <body class="grid min-h-dvh place-items-center bg-fg-canvas px-4 py-10 text-fg-ink">
-        <div class="w-full max-w-lg rounded-fg-lg border border-fg-line bg-fg-surface p-8 shadow-fg-2">
+        <main id="main" class="w-full max-w-lg rounded-fg-lg border border-fg-line bg-fg-surface p-8 shadow-fg-2">
             <x-auth-header :title="$title ?? null" />
 
             <div class="mt-6">
                 {{ $slot }}
             </div>
-        </div>
+        </main>
 
         <x-ui.toast.group />
-        <x-flash-toasts />
+
+        @php $shellFlashes = collect(session()->pull("flash_toasts", []))->concat(session("status") ? [["message" => session("status"), "kind" => "success"]] : [])->values()->all(); @endphp
+        <x-flash-toasts :flashes="$shellFlashes" />
     </body>
 </html>

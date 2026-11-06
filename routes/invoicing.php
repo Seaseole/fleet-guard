@@ -6,11 +6,12 @@ use App\Domain\Invoicing\Documents\InvoiceDocuments;
 use App\Domain\Invoicing\Models\Customer;
 use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Queries\Statements;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 /*
- * Invoicing screens (§3.2): the customer register, the invoice register and detail, and the ageing report.
+ * Invoicing screens: the customer register, the invoice register and detail, and the ageing report.
  *
  * The PDF downloads are plain routes rather than Livewire actions because a browser download is a
  * response, not a state change: the page links to it, and the route renders and returns the document.
@@ -19,7 +20,7 @@ use Illuminate\Support\Facades\Route;
  *
  * Every screen asks for `invoices.view`; the pages ask for the narrower abilities on the controls they
  * render (`invoices.void`, `payments.allocate`, `credit_notes.manage`, `invoices.issue`) and every Action
- * asks again — a screen is not a permission check (§9.2).
+ * asks again — a screen is not a permission check.
  */
 Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::livewire('customers', 'pages::invoicing.customers')
@@ -57,8 +58,8 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             'to' => ['nullable', 'date', 'after_or_equal:from'],
         ]);
 
-        $from = isset($window['from']) ? \Carbon\Carbon::parse($window['from']) : \Carbon\Carbon::now()->startOfMonth();
-        $to = isset($window['to']) ? \Carbon\Carbon::parse($window['to']) : \Carbon\Carbon::now();
+        $from = isset($window['from']) ? Carbon::parse($window['from']) : Carbon::now()->startOfMonth();
+        $to = isset($window['to']) ? Carbon::parse($window['to']) : Carbon::now();
 
         $statement = $statements->forCustomer((int) $customer->id, $from, $to);
         $pdf = $documents->statement($statement);

@@ -17,7 +17,7 @@
         type="radio"
         id="{{ $id }}"
         value="{{ $value }}"
-        class="size-4 accent-accent"
+        class="size-4 touch:size-6 accent-accent"
         {{ $attributes->except(['id','value','class']) }}
     />
 

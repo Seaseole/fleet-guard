@@ -10,16 +10,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * §4.2 PAYMENT_ALLOCATION — the act of saying which invoice a receipt was for.
+ * PAYMENT_ALLOCATION — the act of saying which invoice a receipt was for.
  *
  * Its own row (and its own ledger seam) because the design refuses to "adjust" an invoice when a customer
  * overpays: the residue stays in `2150` until a later allocation finds it, so one receipt can settle three
- * invoices and one invoice can be settled by four receipts (§10.4).
+ * invoices and one invoice can be settled by four receipts.
  *
- * `settled` marks the allocation that **closed** the invoice — the one §5.5's residue rule absorbed the
+ * `settled` marks the allocation that **closed** the invoice — the one the residue rule absorbed the
  * final ±1 minor unit into — so a zeroed balance can be told from a partly paid one without re-running the
  * FIFO walk. Currency-native and base amounts are both stored: re-deriving a historical figure from
- * `base ÷ rate` is §5.3's rewritten history.
+ * `base ÷ rate` is the rewritten history.
  *
  * @property string $id
  * @property int $company_id
@@ -86,7 +86,7 @@ final class PaymentAllocation extends Model
         return $this->belongsTo(Invoice::class);
     }
 
-    /** A reversed allocation still exists as evidence, but counts as nothing to the projection (§10.4). */
+    /** A reversed allocation still exists as evidence, but counts as nothing to the projection. */
     public function countsTowardsTheBalance(): bool
     {
         return ! $this->reversed;

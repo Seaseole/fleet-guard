@@ -9,10 +9,10 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §20.36 (Phase 5 slice 5b) — the receipt's own record of the supplier paper that funded it.
+     * (Phase 5 slice 5b) — the receipt's own record of the supplier paper that funded it.
      *
-     * The same seam as `fuel_purchases.bill_id` (§20.36): the receipt posted `Dr 1190 / Cr 2110` at
-     * the movement (§20.29), so the bill documents it through `Maintenance\Actions\MarkStockReceiptBilled`
+     * The same seam as `fuel_purchases.bill_id`: the receipt posted `Dr 1190 / Cr 2110` at
+     * the movement, so the bill documents it through `Maintenance\Actions\MarkStockReceiptBilled`
      * and never re-expenses it. A null is "awaiting the bill"; the parts register says so today and
      * this column is what lets it say so as data.
      */

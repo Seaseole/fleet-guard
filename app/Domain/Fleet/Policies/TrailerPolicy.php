@@ -8,7 +8,7 @@ use App\Domain\Fleet\Models\Trailer;
 use App\Models\User;
 
 /**
- * Who may see and change a trailer (§9.3 "Fleet"). State moves and disposal parallel a truck's;
+ * Who may see and change a trailer ("Fleet"). State moves and disposal parallel a truck's;
  * there is no odometer capability because trailers without hubodometers record nothing.
  */
 final class TrailerPolicy

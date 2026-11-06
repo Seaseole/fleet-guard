@@ -15,6 +15,7 @@ use App\Domain\Fleet\Data\OdometerReadingDto;
 use App\Domain\Fleet\Data\TrailerDto;
 use App\Domain\Fleet\Data\TruckDto;
 use App\Domain\Fleet\FleetStatus;
+use App\Domain\Fleet\FuelType;
 use App\Domain\Fleet\Models\Truck;
 use App\Domain\Fleet\OdometerSource;
 use App\Domain\Fleet\Plausibility;
@@ -31,7 +32,7 @@ use Illuminate\Database\Seeder;
 
 /**
  * Seeds 22 trucks, 22 trailers, equipment, employees, drivers, assignments and the paper that proves
- * the first few (§15.2 Phase 1 definition of done).
+ * the first few (Phase 1 definition of done).
  *
  * SADC corridor configuration: Gaborone - Windhoek, Gaborone - Durban, Lusaka, Beira. Expiries are
  * deliberately spread across current / lapsing-soon / lapsed so the expiry board, the dashboard
@@ -128,7 +129,7 @@ final class FleetSeeder extends Seeder
                 serviceIntervalKm: 30_000,
                 serviceIntervalHours: 500,
                 serviceIntervalMonths: 6,
-                fuelType: 'diesel',
+                fuelType: FuelType::Diesel,
                 mainTankLitres: 450,
                 auxTankLitres: 350,
                 expectedConsumptionPer100: 34.50,

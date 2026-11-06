@@ -10,11 +10,11 @@ return new class extends Migration
 {
     /**
      * Sanctum's own table, published and then renamed into this project's ordering. The column set is
-     * left exactly as the package writes it: `tokenable` morphs to `users`, whose `company_id` (§8) is
+     * left exactly as the package writes it: `tokenable` morphs to `users`, whose `company_id` is
      * what puts a token in a tenant, so a company column here would be a second answer to the same
      * question and the first thing to drift.
      *
-     * The trip-scoped kiosk tokens of §9.6 do **not** live in this table. They belong to a trip, not to
+     * The trip-scoped kiosk tokens of the design do **not** live in this table. They belong to a trip, not to
      * a user, and a driver has no account and no factor to hold a personal access token.
      */
     public function up(): void

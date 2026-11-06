@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace App\Domain\Operations;
 
 /**
- * §4.1's `trip_costs.cost_type`, and the two things a poster needs from it: which account the cost
- * debits, and which §6.6 bucket the rollup adds it to.
+ * The `trip_costs.cost_type`, and the two things a poster needs from it: which account the cost
+ * debits, and which bucket the rollup adds it to.
  *
  * The mapping lives on the enum rather than in a switch inside the Action so "where does a border
  * cost post?" has one answer in the codebase. `advance` deliberately posts to a receivable and has
- * no bucket: an advance is not an expense until it is settled (§6.8's `AdvanceDisbursed`), and
+ * no bucket: an advance is not an expense until it is settled (the `AdvanceDisbursed`), and
  * counting it as a direct cost would make every trip carrying cash look unprofitable.
  */
 enum TripCostType: string
@@ -53,7 +53,7 @@ enum TripCostType: string
         };
     }
 
-    /** §6.6's bucket, or null for a cost that is not a P&L expense (the advance). */
+    /** The bucket, or null for a cost that is not a P&L expense (the advance). */
     public function bucket(): ?TripCostBucket
     {
         return match ($this) {

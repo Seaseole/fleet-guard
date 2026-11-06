@@ -13,12 +13,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * One line of a journal entry (§4.2 GL_JOURNAL_LINE, §6.2) — append-only with no exception: a
+ * One line of a journal entry (GL_JOURNAL_LINE) — append-only with no exception: a
  * line is never rewritten, not even to correct it, because the entry's own totals would then stop
  * describing the lines underneath them.
  *
  * `direction` + a single amount rather than debit and credit columns, so "a line carrying both"
- * is unrepresentable instead of checked (§6.1). `amount_base` is authoritative; `amount_foreign`
+ * is unrepresentable instead of checked. `amount_base` is authoritative; `amount_foreign`
  * is the number as the source document stated it.
  *
  * @property int $id
@@ -58,7 +58,7 @@ final class JournalLine extends Model
             'account_id' => 'integer',
             'direction' => Side::class,
             'amount_base' => MinorUnits::class,
-            // Not MinorUnits: that cast answers null with 0 (§20.4), and "no foreign amount" is a
+            // Not MinorUnits: that cast answers null with 0, and "no foreign amount" is a
             // different fact from "zero". The float guard belongs where the value is created —
             // LedgerService builds both amounts from Money, which already refuses floats.
             'amount_foreign' => 'integer',

@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * Fits a tank to a truck — the row an issue fills (§4.3 FUEL_TANK).
+ * Fits a tank to a truck — the row an issue fills (FUEL_TANK).
  *
  * The truck's `main_tank_litres`/`aux_tank_litres` from Phase 1 are the stated capacity, and this
  * Action seeds the two rows from them when no capacity is given, so the common case is "fit the
@@ -24,7 +24,7 @@ final class CreateFuelTank
     public function __invoke(int $truckId, FuelTankKind $kind, ?int $capacityLitres = null): FuelTank
     {
         if (! Gate::allows('fuel.record')) {
-            throw new InvalidArgumentException('Fitting a tank is workshop recording (§9.3).');
+            throw new InvalidArgumentException('Fitting a tank is workshop recording.');
         }
 
         $truck = Truck::query()->find($truckId)

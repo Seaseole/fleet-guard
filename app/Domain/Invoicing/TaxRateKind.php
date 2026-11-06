@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Invoicing;
 
 /**
- * §17 Q4 — how a line is treated for VAT, which is not the same question as "what rate".
+ * Q4 — how a line is treated for VAT, which is not the same question as "what rate".
  *
  * `zero_rated` and `exempt` both carry 0%, and the migration's CHECK enforces that; they differ in
  * what the return does with the line, so collapsing them into one value would lose the only fact the

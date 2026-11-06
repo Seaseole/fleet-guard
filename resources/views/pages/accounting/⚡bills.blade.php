@@ -28,27 +28,27 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /*
- * The bills register (§3.2, §6.8): what the suppliers have billed us, and what we still owe them.
+ * The bills register: what the suppliers have billed us, and what we still owe them.
  *
  * The record panel sits on the register because entering a paper document is one decision, the same
- * reason the consolidated run lives on the invoice list (§20.34). VAT is previewed per line from the
+ * reason the consolidated run lives on the invoice list. VAT is previewed per line from the
  * rate effective on the bill date — the figure the Action will compute is shown before it is spent,
- * so a clerk never discovers the gross total after pressing record (§5.5).
+ * so a clerk never discovers the gross total after pressing record.
  *
- * Fuel and parts lines must name the leg their account demands (§6.1's masks: 5100 truck+trip,
+ * Fuel and parts lines must name the leg their account demands (the masks: 5100 truck+trip,
  * 5310/5300 truck); the row's pickers appear with the category that needs them, and the Action
  * refuses by name if a screen ever posts without one.
  *
  * Slice 5b's second shape is asked up front: **is this paper a new cost, or the receipt for something
  * the ledger already owes?** A bulk delivery or a parts receipt posted `Cr 2110` at the movement
- * (§20.26/§20.29), so its bill documents that figure and posts nothing twice — which is why choosing
+ * (/), so its bill documents that figure and posts nothing twice — which is why choosing
  * the link hides the lines and shows the obligation's own number instead of letting anyone type one.
  *
  * The register's money column is the **balance**, not the gross: what the fleet still owes is the
- * question a payables screen answers, and it is derived from the payment rows (§10.4's rule, sideways).
+ * question a payables screen answers, and it is derived from the payment rows (the rule, sideways).
  *
  * Only `accounting.view` is asked for the list; the panel is gated by `bills.create` and the Action
- * asks again, because a screen is not a permission check (§9.2).
+ * asks again, because a screen is not a permission check.
  */
 new #[Title('Bills')] class extends Component {
     use WithPagination;
@@ -63,7 +63,7 @@ new #[Title('Bills')] class extends Component {
 
     public string $supplierDocNo = '';
 
-    /** 'lines' or a {@see BillLinkedSource} value — the two shapes a supplier paper can take (§20.36). */
+    /** 'lines' or a {@see BillLinkedSource} value — the two shapes a supplier paper can take. */
     public string $shape = 'lines';
 
     public string $obligationId = '';
@@ -199,8 +199,8 @@ new #[Title('Bills')] class extends Component {
     }
 
     /**
-     * The obligations the chosen shape can document, read through each module's own door (§3.1 D5):
-     * a bulk delivery that posted `Cr 2110` (§20.26) or a parts receipt that funded the shelf (§20.29),
+     * The obligations the chosen shape can document, read through each module's own door (D5):
+     * a bulk delivery that posted `Cr 2110` or a parts receipt that funded the shelf,
      * both still waiting for the supplier's paper.
      *
      * @return list<\App\Domain\Accounting\Data\UnbilledObligation>
@@ -215,7 +215,7 @@ new #[Title('Bills')] class extends Component {
         };
     }
 
-    /** The figure the linked bill must carry: the book's, not a typed one (§20.36). */
+    /** The figure the linked bill must carry: the book's, not a typed one. */
     #[Computed]
     public function chosenObligation(): ?\App\Domain\Accounting\Data\UnbilledObligation
     {
@@ -229,7 +229,7 @@ new #[Title('Bills')] class extends Component {
     }
 
     /**
-     * The VAT the Action will apply, previewed line by line (§5.5: per line, rounded once). A missing
+     * The VAT the Action will apply, previewed line by line (per line, rounded once). A missing
      * rate register answers null — the panel says so rather than quietly previewing zero VAT.
      */
     #[Computed]
@@ -295,7 +295,7 @@ new #[Title('Bills')] class extends Component {
             }
         }
 
-        $tax = $this->vatPreview()['total'] ?? 0;
+        $tax = $this->vatPreview['total'] ?? 0;
 
         return ['net' => $net, 'tax' => $tax, 'gross' => $net + $tax];
     }
@@ -303,7 +303,7 @@ new #[Title('Bills')] class extends Component {
     /**
      * One row per document, newest first. A paid bill stays in the register — the list is the record of
      * what arrived, not a work queue — and its state badge is **derived** from the payment rows the way
-     * an invoice's is (§10.4, copied sideways by §20.36), so nothing here can read paid while still owed.
+     * an invoice's is (copied sideways by ), so nothing here can read paid while still owed.
      */
     #[Computed]
     public function bills(): LengthAwarePaginator
@@ -334,7 +334,7 @@ new #[Title('Bills')] class extends Component {
     /**
      * The payable the register's footer states: what is **still owed**, not what was billed — the
      * payments have already reduced it, so this is the figure the ledger's `2110` credit should agree
-     * with for the same set (§6.9's tie-out asks the same question from the other side).
+     * with for the same set (the tie-out asks the same question from the other side).
      */
     #[Computed]
     public function outstandingMinor(): int
@@ -455,7 +455,7 @@ new #[Title('Bills')] class extends Component {
     }
 
     /**
-     * The badge is the derived settlement when the bill is live (§10.4's axis two, copied sideways), and
+     * The badge is the derived settlement when the bill is live (the axis two, copied sideways), and
      * the lifecycle only when the document has left the money question entirely.
      */
     public function stateTone(Bill $bill): string
@@ -480,7 +480,7 @@ new #[Title('Bills')] class extends Component {
 }; ?>
 
 <div class="grid gap-6">
-    <header class="grid gap-1">
+    <header class="fg-page-header grid gap-1.5">
         <x-ui.heading size="xl" level="1">{{ __('Bills') }}</x-ui.heading>
         <x-ui.text>
             {{ __('Every supplier document this company has recorded, with the expense and input VAT it put into the ledger. Outstanding payable: :amount.', ['amount' => $this->money($this->outstandingMinor)]) }}
@@ -516,7 +516,7 @@ new #[Title('Bills')] class extends Component {
                     <x-ui.input type="date" name="dueOn" :label="__('Due')" :hint="__('Taken from the supplier\'s terms; edit if the paper says otherwise.')" wire:model="dueOn" required />
                 </div>
 
-                {{-- §20.36 — the first question is what the paper IS. A new cost is typed line by line;
+                {{-- the first question is what the paper IS. A new cost is typed line by line;
                      a bill for something Phase 3 already posted takes the book's figure and no lines,
                      because a second expense debit would fund the same diesel or shelf twice. --}}
                 <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:items-end">
@@ -544,7 +544,7 @@ new #[Title('Bills')] class extends Component {
                             </x-ui.select>
 
                             @if ($this->obligations === [])
-                                <p class="text-xs text-fg-ink-muted">{{ __('Nothing is waiting for its paper: every posted delivery and receipt already has a bill, and a pump slip becomes an expense when the diesel is issued (§20.26).') }}</p>
+                                <p class="text-xs text-fg-ink-muted">{{ __('Nothing is waiting for its paper: every posted delivery and receipt already has a bill, and a pump slip becomes an expense when the diesel is issued.') }}</p>
                             @elseif ($this->chosenObligation === null && $obligationId !== '')
                                 <p class="text-xs text-fg-danger">{{ __('That movement is no longer on the list — someone else just billed it, or it was released. Choose again.') }}</p>
                             @endif
@@ -660,7 +660,7 @@ new #[Title('Bills')] class extends Component {
                 @else
                     <x-ui.alert tone="info" :title="__('This bill posts nothing')">
                         @if ($this->chosenObligation !== null)
-                            {{ __(':label — the ledger already owes :amount on 2110 from the movement itself (§20.36). This paper documents that figure; it will not be expensed a second time, and it carries no input VAT because the movement modelled none.', [
+                            {{ __(':label — the ledger already owes:amount on 2110 from the movement itself. This paper documents that figure; it will not be expensed a second time, and it carries no input VAT because the movement modelled none.', [
                                 'label' => $this->chosenObligation->label,
                                 'amount' => $this->money($this->chosenObligation->amountBase),
                             ]) }}
@@ -703,10 +703,10 @@ new #[Title('Bills')] class extends Component {
                 <tr>
                     <x-ui.table.th>{{ __('Bill') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Supplier') }}</x-ui.table.th>
-                    <x-ui.table.th nowrap>{{ __('Billed') }}</x-ui.table.th>
+                    <x-ui.table.th nowrap hideBelow="lg">{{ __('Billed') }}</x-ui.table.th>
                     <x-ui.table.th nowrap>{{ __('Due') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('Total') }}</x-ui.table.th>
-                    <x-ui.table.th numeric>{{ __('of which VAT') }}</x-ui.table.th>
+                    <x-ui.table.th numeric hideBelow="lg">{{ __('of which VAT') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('Still owed') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('State') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
@@ -722,10 +722,10 @@ new #[Title('Bills')] class extends Component {
                         @endif
                     </x-ui.table.td>
                     <x-ui.table.td>{{ $bill->supplier?->name ?? '—' }}</x-ui.table.td>
-                    <x-ui.table.td nowrap>{{ $bill->bill_on->format('d M Y') }}</x-ui.table.td>
+                    <x-ui.table.td nowrap hideBelow="lg">{{ $bill->bill_on->format('d M Y') }}</x-ui.table.td>
                     <x-ui.table.td nowrap>{{ $bill->due_on->format('d M Y') }}</x-ui.table.td>
                     <x-ui.table.td numeric>{{ $this->money($bill->amount) }}</x-ui.table.td>
-                    <x-ui.table.td numeric>{{ $this->money($bill->tax_amount) }}</x-ui.table.td>
+                    <x-ui.table.td numeric hideBelow="lg">{{ $this->money($bill->tax_amount) }}</x-ui.table.td>
                     <x-ui.table.td numeric>{{ $bill->status->isOpenItem() ? $this->money($bill->balance_amount) : '—' }}</x-ui.table.td>
                     <x-ui.table.td>
                         <x-ui.badge :tone="$this->stateTone($bill)">{{ $this->stateLabel($bill) }}</x-ui.badge>

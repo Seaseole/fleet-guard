@@ -21,7 +21,7 @@ use RuntimeException;
 final class ImportValues
 {
     /**
-     * A major-unit amount, converted once here (§5.1). The currency is the row's own — a rate or a
+     * A major-unit amount, converted once here. The currency is the row's own — a rate or a
      * part cost may be in ZAR — and an unknown code is a row error, not a crash.
      *
      * @return array{0: int|null, 1: string|null}

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Maintenance;
 
 /**
- * §10.6's work-order machine, as vocabulary.
+ * The work-order machine, as vocabulary.
  *
  * The transitions live on {@see Models\WorkOrder} so they cannot drift from the migration's CHECK;
  * this enum is the label and the tone the register prints.

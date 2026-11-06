@@ -11,7 +11,7 @@ use App\Domain\Maintenance\Models\Part;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Corrects a catalogue line (§4.3, D1) — a mistyped SKU, a cost that moved, a part that turns out
+ * Corrects a catalogue line (D1) — a mistyped SKU, a cost that moved, a part that turns out
  * to fit every truck instead of one. Work-order lines will point at the row id, so correcting the
  * catalogue does not detach a repair's history.
  */

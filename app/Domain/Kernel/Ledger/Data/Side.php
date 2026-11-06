@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Kernel\Ledger\Data;
 
 /**
- * Which side of an account increases it (§4.2 `normal_balance`, `gl_journal_lines.direction`).
+ * Which side of an account increases it (`normal_balance`, `gl_journal_lines.direction`).
  *
  * One enum serves both columns because they take the same two values and mean the same thing —
  * the account's normal side and the line's side. Keeping them separate types would let a

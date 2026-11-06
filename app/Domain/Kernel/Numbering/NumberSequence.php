@@ -8,7 +8,7 @@ use App\Domain\Kernel\Tenancy\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * The counter row and the lock target for one (company, scope, period) (§7.1).
+ * The counter row and the lock target for one (company, scope, period).
  *
  * Company-scoped by T1: two companies must never share a sequence, or each one's fiscal
  * numbering depends on the other's activity.

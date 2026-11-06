@@ -10,14 +10,14 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.4 DOCUMENT — one document, many versions, two independent axes (§10.8).
+     * DOCUMENT — one document, many versions, two independent axes.
      *
      * `lifecycle` is stored because superseding and archiving are decisions; `validity` is
-     * deliberately **not** a column, because §10.8's whole point is that a driver licence and a
+     * deliberately **not** a column, because the whole point is that a driver licence and a
      * weighbridge ticket must not each carry their own hand-coded idea of "expired" — it derives
      * from `expires_on` in one place.
      *
-     * `type` is a string + enum + CHECK rather than a MySQL ENUM for the §6.1 reason repeated: a
+     * `type` is a string + enum + CHECK rather than a MySQL ENUM for the reason repeated: a
      * new document kind (roadworthiness, transit bond) must be a value list edit, not a table
      * rebuild.
      */
@@ -32,7 +32,7 @@ return new class extends Migration
 
             // The subject the document evidences — a trip's POD, a truck's licence, a customer's
             // contract. Deliberately unconstrained: every candidate table arrives in a later
-            // phase, and a polymorphic pair is exactly what §6.2 rejected for the ledger's
+            // phase, and a polymorphic pair is exactly what rejected for the ledger's
             // *reporting* dimensions. A document's subject is never grouped by in a report; it is
             // only followed back to the row, so no index is lost by keeping it polymorphic.
             $table->string('morph_type', 120)->nullable();
@@ -42,7 +42,7 @@ return new class extends Migration
             $table->string('lifecycle', 12)->default('draft');
             $table->string('retention_class', 12)->default('operational');
 
-            // §14.4 "role-based visibility via documents.visibility + policy": the role keys that
+            // "Role-based visibility via documents.visibility + policy": the role keys that
             // may see this document. An empty list means "anyone holding documents.view", which is
             // what makes the column additive rather than a second permission system.
             $table->json('visibility')->nullable();
@@ -59,7 +59,7 @@ return new class extends Migration
             $table->index(['morph_type', 'morph_id'], 'documents_subject_index');
         });
 
-        // Blueprint has no CHECK support (§20.4), so the value lists are raw DDL on both engines.
+        // Blueprint has no CHECK support, so the value lists are raw DDL on both engines.
         DB::statement('alter table `documents` add constraint `documents_type_allowed` check (type in (\'contract\', \'licence\', \'insurance\', \'permit\', \'delivery_note\', \'pod\', \'customs\', \'work_order\', \'maintenance\', \'weighbridge\'))');
         DB::statement('alter table `documents` add constraint `documents_lifecycle_allowed` check (lifecycle in (\'draft\', \'current\', \'superseded\', \'archived\', \'voided\'))');
         DB::statement('alter table `documents` add constraint `documents_retention_allowed` check (retention_class in (\'tax\', \'legal\', \'operational\', \'none\'))');
@@ -69,11 +69,11 @@ return new class extends Migration
         DB::statement('alter table `documents` add constraint `documents_subject_is_a_pair` check ((morph_type is null and morph_id is null) or (morph_type is not null and morph_id is not null))');
 
         // Taking a document out of use is a dated event, not just a word in a column: an archived
-        // row with no `archived_at` cannot be used by the retention report (§14.5) to tell which
+        // row with no `archived_at` cannot be used by the retention report to tell which
         // papers are held past their class, and a voided row without a timestamp is unauditable.
         DB::statement('alter table `documents` add constraint `documents_retirement_dated` check ((lifecycle <> \'archived\' or archived_at is not null) and (lifecycle <> \'voided\' or voided_at is not null))');
 
-        // §4.4 makes the reason for a void mandatory, and the row that carries the void is this one —
+        // The design makes the reason for a void mandatory, and the row that carries the void is this one —
         // the operational event is the trail, but the register itself has to state it too, or the
         // document list shows "Voided" with nothing next to it and the reason lives only in a table
         // nobody opens from the register.

@@ -16,11 +16,11 @@ use RuntimeException;
 use Spatie\Permission\Models\Role;
 
 /**
- * Creates the Owner account (§9.1 owner-first). The only production path that mints an account with
+ * Creates the Owner account (owner-first). The only production path that mints an account with
  * full rights, reachable from `fleet:setup-owner` and `OwnerSeeder` — never from a route.
  *
  * Three guards, because this is the function an attacker most wants:
- * - one Owner per company (§9.1); a second Owner is how the top seat gets handed out quietly;
+ * - one Owner per company; a second Owner is how the top seat gets handed out quietly;
  * - the password goes through `Password::defaults()`, because nothing else checks a string typed
  *   into a terminal;
  * - the assignment happens with the company pinned as the tenancy context, so the pivot row cannot
@@ -29,7 +29,7 @@ use Spatie\Permission\Models\Role;
  * That third guard is why the existing-Owner lookup below reads the pivot tables directly instead of
  * using `$user->roles`: the relation filters on the **ambient** team id, and a CLI command has no
  * authenticated user, so `whereHas('roles')` would find nothing and report "no Owner yet" for a
- * company that has one. §20.4's queue-tenant leak is the same trap with a different trigger.
+ * company that has one. The queue-tenant leak is the same trap with a different trigger.
  */
 final class CreateOwner
 {
@@ -43,7 +43,7 @@ final class CreateOwner
         // anything else that owns it is refused.
         if ($existing !== null && $existing !== $email) {
             throw new RuntimeException(
-                "Company {$companyId} already has an Owner ({$existing}). Change roles on the users screen rather than re-running setup (§9.1)."
+                "Company {$companyId} already has an Owner ({$existing}). Change roles on the users screen rather than re-running setup."
             );
         }
 
@@ -79,7 +79,7 @@ final class CreateOwner
                     // having the link delivered to it (AcceptInvitation).
                     //
                     // `Carbon::now()` rather than `now()`: `Date::use(CarbonImmutable)` is active
-                    // (§20.4), so the helper returns a CarbonImmutable and the model's declared
+                    //, so the helper returns a CarbonImmutable and the model's declared
                     // property is the mutable `Illuminate\Support\Carbon`.
                     $user->email_verified_at = Carbon::now();
                 }
@@ -120,7 +120,7 @@ final class CreateOwner
         Validator::validate(
             ['password' => $password],
             ['password' => Password::defaults()],
-            ['password' => 'The Owner password does not meet the strength rules (§9.1).'],
+            ['password' => 'The Owner password does not meet the strength rules.'],
         );
     }
 }

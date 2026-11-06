@@ -10,10 +10,10 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §10.5 — the document that corrects an invoice without touching it.
+     * The document that corrects an invoice without touching it.
      *
      * A credit note is a **separate document with its own numbering scope**, and it never rewinds the
-     * invoice's lifecycle (§10.4): an issued invoice stays issued, and its derived settlement state simply
+     * invoice's lifecycle: an issued invoice stays issued, and its derived settlement state simply
      * moves toward `refunded` as this credit is applied. That separation is what keeps gap-free numbering
      * honest — a correction that silently un-issued an invoice would leave a fiscal number pointing at
      * nothing.
@@ -23,11 +23,11 @@ return new class extends Migration
      * with a remaining balance, which is why `balance_amount` lives here too rather than the status carrying
      * the whole answer.
      *
-     * `void` is deliberately absent. §7.4 constrains an invoice void once a payment exists; a credit note is
+     * `void` is deliberately absent. Constrains an invoice void once a payment exists; a credit note is
      * the answer to "the invoice was wrong", so the only retreat for one that has not been issued is
      * `draft → cancelled`, and the CHECK says so.
      *
-     * §5.2's FX block, verbatim: a credit in ZAR against an invoice in ZAR must reduce the invoice's
+     * The FX block, verbatim: a credit in ZAR against an invoice in ZAR must reduce the invoice's
      * currency-native balance by the figure the customer sees, not by a Pula amount re-derived at today's rate.
      */
     public function up(): void
@@ -46,7 +46,7 @@ return new class extends Migration
             $table->date('issue_date');
             $table->string('reason', 30);
 
-            // §5.2 verbatim.
+            // Verbatim.
             $table->char('currency_code', 3);
             $table->unsignedBigInteger('amount');
             $table->decimal('fx_rate', 19, 8);
@@ -92,7 +92,7 @@ return new class extends Migration
         DB::statement('alter table `credit_notes` add constraint `credit_notes_cancellation_needs_a_reason` check (
             status <> \'cancelled\' or (cancellation_reason is not null and char_length(cancellation_reason) >= 10)
         )');
-        // §10.5's partial-application rule stated as data: an `issued` note still has a balance to apply,
+        // The partial-application rule stated as data: an `issued` note still has a balance to apply,
         // and once the whole balance is allocated the note is `applied` (or `settled`). A row that says
         // issued with nothing left to apply is the drift this CHECK exists to refuse.
         DB::statement('alter table `credit_notes` add constraint `credit_notes_balance_matches_status` check (

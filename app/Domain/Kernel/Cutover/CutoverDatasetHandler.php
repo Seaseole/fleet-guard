@@ -9,7 +9,7 @@ use App\Domain\Kernel\Cutover\Models\CutoverBatch;
 use App\Providers\DomainServiceProvider;
 
 /**
- * What a module must provide for one master-data dataset (§15.2 Phase 1, D2).
+ * What a module must provide for one master-data dataset (Phase 1, D2).
  *
  * The Kernel owns the batch, the rows, the error report and the two-phase flow; a module owns what
  * a row means and how it becomes a record. The engine resolves an implementation from the registry

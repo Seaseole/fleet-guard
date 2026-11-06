@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Fleet;
 
 /**
- * Whether a reading can be trusted (§4.3).
+ * Whether a reading can be trusted.
  *
  * `suspect` is the automatic answer when a reading runs backwards against the truck's recorded
  * odometer; `disputed` is a human decision. Neither is an edit — the reading stays as measured and

@@ -9,11 +9,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * §6.8 — one application of a supplier payment to one bill: the rows that are the **truth** of whether
- * a bill is paid, while `bills.balance_amount` is only their projection (§10.4's rule, copied to the
+ * One application of a supplier payment to one bill: the rows that are the **truth** of whether
+ * a bill is paid, while `bills.balance_amount` is only their projection (the rule, copied to the
  * payable side so AP ageing stays a query).
  *
- * `countsTowardsTheBalance()` is the customer sibling's lesson (§20.33): a reversed row is evidence that
+ * `countsTowardsTheBalance()` is the customer sibling's lesson: a reversed row is evidence that
  * counts for nothing, and the balance tie-out must read through the same predicate the screen does.
  */
 final class SupplierPaymentAllocation extends Model

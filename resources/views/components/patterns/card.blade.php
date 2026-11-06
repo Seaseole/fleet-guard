@@ -11,7 +11,7 @@
 
 <{{ $as }}
     {{ $attributes->class([
-        'rounded-fg-md border border-fg-line bg-fg-surface shadow-fg-1',
+        'fg-panel',
         $paddings[$padding] ?? $paddings['md'],
     ]) }}
 >

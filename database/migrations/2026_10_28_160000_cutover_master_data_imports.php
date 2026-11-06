@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §15.2 Phase 1 — the same batch table, a second destination.
+     * Phase 1 — the same batch table, a second destination.
      *
      * A master file validates into `cutover_rows.payload` because its columns belong to the file, not
      * to the journal: nine datasets share one table, and a typed column per spreadsheet field would
@@ -19,7 +19,7 @@ return new class extends Migration
      *
      * `applied` is a terminal state next to `posted`/`reversed`: the handler upserts the module's
      * master rows inside one transaction and this row records who did it. There is no reversal,
-     * because a rollback of thousands of upserts is a data decision, not a §6.4 mirror entry.
+     * because a rollback of thousands of upserts is a data decision, not a mirror entry.
      *
      * The row CHECKs are restated with the payload escape: a valid master row has no amount and no
      * account, and a valid trial-balance row still must have exactly one side and its account.

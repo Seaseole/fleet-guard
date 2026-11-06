@@ -9,7 +9,7 @@ use DateTimeInterface;
 use InvalidArgumentException;
 
 /**
- * What the driver's fuel screen hands over (§9.6, §4.3).
+ * What the driver's fuel screen hands over.
  *
  * Litres and price arrive as the spec's hundredths so a pump's 45.32 L × 19.75 is integer arithmetic
  * all the way to the slip's amount, and the odometer is required because the issue records the
@@ -18,7 +18,7 @@ use InvalidArgumentException;
  * purchase Action refuses a foreign id by name.
  *
  * There is no trip and no truck: the token names the trip, the trip names the truck, and a DTO that
- * could name either would be a way to pour one trip's diesel into another (§9.6).
+ * could name either would be a way to pour one trip's diesel into another.
  */
 final readonly class KioskFuelDto
 {
@@ -49,7 +49,7 @@ final readonly class KioskFuelDto
         }
     }
 
-    /** The slip's amount: litres × price, rounded half-up once (§5.5). */
+    /** The slip's amount: litres × price, rounded half-up once. */
     public function amountMinor(): int
     {
         return intdiv($this->litresX100 * $this->pricePerLitreMinor + 50, 100);

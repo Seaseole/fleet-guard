@@ -11,13 +11,13 @@ use App\Domain\Operations\TripStatus;
 use Illuminate\Support\Facades\DB;
 
 /**
- * §10.2's `planned|assigned → on_hold` and back, with the vehicle held or freed accordingly.
+ * The `planned|assigned → on_hold` and back, with the vehicle held or freed accordingly.
  *
  * A hold is a pre-departure blocker — a licence renewal that has not landed, a trailer in the shop, a
  * customer who has not confirmed the load window. The truck it names must **not** stay reserved while
- * it sits: §10.2's dispatch board counts a held unit as free, and a hold that kept the reservation
+ * it sits: The dispatch board counts a held unit as free, and a hold that kept the reservation
  * would idle a truck nobody can use. So the assignment is released here, and the next
- * {@see DispatchTrip} re-runs the full §10.2 gate — which is the point: the blocker being cleared is
+ * {@see DispatchTrip} re-runs the full gate — which is the point: the blocker being cleared is
  * exactly the thing that has to be re-checked.
  *
  * Both directions share one Action because the machine's two edges are the same decision seen from

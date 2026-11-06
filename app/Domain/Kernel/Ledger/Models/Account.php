@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
- * A chart-of-accounts row (§4.2 GL_ACCOUNT, §6.1) — a tree, so a trial balance can roll up
+ * A chart-of-accounts row (GL_ACCOUNT) — a tree, so a trial balance can roll up
  * without a report-definition table.
  *
  * `is_postable` false marks the header rows that group but never take a line; `is_system` marks
@@ -98,7 +98,7 @@ final class Account extends Model
     }
 
     /**
-     * The dimensions every line posted here must carry (§6.1, {@see Dimension}).
+     * The dimensions every line posted here must carry ({@see Dimension}).
      *
      * @return list<Dimension>
      */

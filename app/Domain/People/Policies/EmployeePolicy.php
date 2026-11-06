@@ -9,7 +9,7 @@ use App\Domain\People\Models\Employee;
 use App\Models\User;
 
 /**
- * Who may see and change an employee (§9.3 "People").
+ * Who may see and change an employee ("People").
  *
  * Reading people is deliberately wider than changing them: the Dispatcher holds `people.view`
  * because dispatch must name a driver, but only `people.manage` (Owner, Operations Manager) edits a
@@ -42,7 +42,7 @@ final class EmployeePolicy
 
     /**
      * People are never deleted: a payroll record that vanishes takes its history with it. Leaving is
-     * `left_on` plus `active = false` (§4.3), which the update path owns.
+     * `left_on` plus `active = false`, which the update path owns.
      */
     public function delete(User $user, Employee $employee): bool
     {

@@ -10,7 +10,7 @@ use App\Domain\Kernel\Tenancy\SiteName;
 /**
  * The theme the app opens with, before any script runs.
  *
- * The company's choice is the site-wide default (§20.37) so a fresh device — a phone handed to a
+ * The company's choice is the site-wide default so a fresh device — a phone handed to a
  * driver, a yard terminal, the Owner's laptop after a rebuild — renders the same way without anyone
  * configuring it. A personal choice stays per-browser, because it has to apply **before first paint**
  * and a server round-trip per page cannot do that; `partials/head.blade.php` reads one, then the

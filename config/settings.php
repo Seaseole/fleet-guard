@@ -3,7 +3,7 @@
 /*
  * `egough/laravel-settings` configuration.
  *
- * Storage is NOT the package's global `settings` table: T4 and DESIGN.md §14.2 make every
+ * Storage is NOT the package's global `settings` table: T4 and DESIGN.md the design make every
  * setting company-scoped, so `App\Domain\Kernel\Settings\CompanySettings` implements the
  * package's `SettingsRepository` contract over the `companies.settings` JSON blob (one
  * memoised read per request, defaults in `config/fleet.php`). The table names below are

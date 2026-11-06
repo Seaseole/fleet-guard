@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <title>{{ $title ?? 'Document' }}</title>
     <style>
-        /* §14.4's print subset: DOMPDF understands tables and block layout, not flex or grid, so the
+        /* The print subset: DOMPDF understands tables and block layout, not flex or grid, so the
            document is laid out the way a printed form has always been laid out. No web fonts: a
            browser-only font would silently fall back and change every measurement on the page. */
         @page { margin: 18mm 16mm 20mm 16mm; }

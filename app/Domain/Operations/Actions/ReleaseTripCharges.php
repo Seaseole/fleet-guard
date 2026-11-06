@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * `billed → ready`: the delivery is billable again because the document that claimed it was voided (§10.4).
+ * `billed → ready`: the delivery is billable again because the document that claimed it was voided.
  *
  * A voided invoice is not a deletion — its number stays spent and its posting is reversed — but the charges
  * it claimed must not stay claimed, or the trip could never be billed again and the revenue would be lost
@@ -31,7 +31,7 @@ final class ReleaseTripCharges
         if (DB::transactionLevel() === 0) {
             throw new InvalidArgumentException(
                 'Charges are released inside the voiding transaction: outside one, a lock releases before the '
-                .'void commits and the delivery is momentarily billable by two documents (§10.4).',
+                .'void commits and the delivery is momentarily billable by two documents.',
             );
         }
 

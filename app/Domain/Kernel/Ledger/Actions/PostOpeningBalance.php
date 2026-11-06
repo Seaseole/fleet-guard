@@ -17,12 +17,12 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
 
 /**
- * The ledger door for §15.2's opening trial balance and its rehearsal rollback.
+ * The ledger door for the opening trial balance and its rehearsal rollback.
  *
  * It lives in the Ledger rather than in Cutover because assembling a `LineDto` is exactly the
  * ledger internals D3 keeps outside modules. Cutover hands over flat scalars and the source triple;
  * this class is the only place that knows the opening-balance source names and how a reversal is
- * spelled (§6.4: opposite sides, a reference to the original, today's date).
+ * spelled (opposite sides, a reference to the original, today's date).
  */
 final class PostOpeningBalance
 {
@@ -55,7 +55,7 @@ final class PostOpeningBalance
     }
 
     /**
-     * §6.4: a posted set is corrected by a mirror entry, never by editing it. The mirror carries
+     * A posted set is corrected by a mirror entry, never by editing it. The mirror carries
      * `reverses_entry_id` and the batch's `netting_group`, so a report can net the pair to zero
      * without knowing which rows the accountant changed.
      *

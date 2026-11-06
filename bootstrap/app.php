@@ -5,6 +5,7 @@ use App\Domain\Kernel\Identity\LimitConfirmationAttempts;
 use App\Domain\Kernel\Tenancy\ResolveCurrentCompany;
 use App\Domain\Operations\Kiosk\EnsureKioskToken;
 use App\Domain\Security\Sessions\TrackUserSessions;
+use Illuminate\Auth\Middleware\Authorize;
 use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -24,12 +25,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'company' => ResolveCurrentCompany::class,
 
-            // §9.6 — the driver's door. Not `auth`: a driver has no account (ADR-0006), and this
+            // The driver's door. Not `auth`: a driver has no account (ADR-0006), and this
             // middleware is what establishes the company context the tenancy guard otherwise reads off
             // the authenticated user.
             'kiosk' => EnsureKioskToken::class,
 
-            // §9.1 — Fortify's password confirmation behind a named gate, so the abilities that
+            // Fortify's password confirmation behind a named gate, so the abilities that
             // PermissionCatalogue::requiresReauth() marks ⚑ carry the requirement on the route
             // where a reviewer can see it, rather than in a component that might remember to ask.
             'reauth' => RequirePassword::class,
@@ -49,7 +50,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         /*
-         * §9.1's factor gate runs *after* the route's own permission check.
+         * The factor gate runs *after* the route's own permission check.
          *
          * Middleware priority only reorders what is in this list, and the gate was not in it: a `can:`
          * refusal therefore could never sort ahead of the enrolment redirect, and a Dispatcher who
@@ -59,7 +60,7 @@ return Application::configure(basePath: dirname(__DIR__))
          * on every screen the seat is allowed to open.
          *
          * The three gates above it are deliberately not listed, so they keep their place in front of
-         * it: a revoked device is cut off before the factor question is even asked (§20.3).
+         * it: a revoked device is cut off before the factor question is even asked.
          */
         $middleware->appendToPriorityList(
             Authorize::class,

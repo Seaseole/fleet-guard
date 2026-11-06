@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Kernel\Audit;
 
 /**
- * §4.4 SECURITY_EVENT.kind — the closed list the DB CHECK enforces.
+ * SECURITY_EVENT.kind — the closed list the DB CHECK enforces.
  *
  * Closed on purpose. A security trail that accepts any string becomes a log file: nobody can query
  * it for "who disabled MFA" because the answer is spread over four spellings of the same event.
@@ -13,7 +13,7 @@ namespace App\Domain\Kernel\Audit;
  * intended cost, and it is what keeps the Owner's security screen a list of questions with answers.
  *
  * The document kinds are the reason this enum exists in the Kernel rather than in Security: the
- * download trail (§14.4) is written by Documents, and a trail the app cannot write is a trail that
+ * download trail is written by Documents, and a trail the app cannot write is a trail that
  * gets "implemented" later as a log line.
  */
 enum SecurityEventKind: string
@@ -33,6 +33,14 @@ enum SecurityEventKind: string
     case DocumentVoided = 'document_voided';
     case SettingsChanged = 'settings_changed';
 
+    /** The `export` row, Phase 8's: one for the request that queued a file, one for the read that streamed it out. */
+    case ExportQueued = 'export_queued';
+
+    case ExportDownloaded = 'export_downloaded';
+
+    /** The rotation: which key versions moved to which, and how much data came with them. */
+    case KeyRotated = 'key_rotated';
+
     public function label(): string
     {
         return match ($this) {
@@ -50,6 +58,9 @@ enum SecurityEventKind: string
             self::DocumentVersionDeleted => 'Document version deleted',
             self::DocumentVoided => 'Document voided',
             self::SettingsChanged => 'Company settings changed',
+            self::ExportQueued => 'Report export queued',
+            self::ExportDownloaded => 'Report export downloaded',
+            self::KeyRotated => 'Column encryption keys rotated',
         };
     }
 }

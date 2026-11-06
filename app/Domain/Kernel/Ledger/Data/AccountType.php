@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Domain\Kernel\Ledger\Data;
 
 /**
- * §6.1: `gl_accounts.type` is `string(16)` + this enum + a DB CHECK, not a MySQL ENUM.
+ * `gl_accounts.type` is `string(16)` + this enum + a DB CHECK, not a MySQL ENUM.
  *
- * The DB enforces the same list (§6.1 decision 2), so a value that is not in this enum cannot be
+ * The DB enforces the same list (decision 2), so a value that is not in this enum cannot be
  * stored even by someone editing the row in a SQL client.
  */
 enum AccountType: string

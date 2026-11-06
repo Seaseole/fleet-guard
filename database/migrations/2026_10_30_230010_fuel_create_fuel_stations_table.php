@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 FUEL_STATION — a filling station the fleet buys from, as master data.
+     * FUEL_STATION — a filling station the fleet buys from, as master data.
      *
      * A station is a supplier with a pump, so it carries `supplier_id` (the payable party) and the
      * facts a purchase record needs to be believable: which town and country the pump is in. The

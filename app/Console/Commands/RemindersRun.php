@@ -9,7 +9,7 @@ use App\Domain\Kernel\Alerts\Support\ReminderRunner;
 use Illuminate\Console\Command;
 
 /**
- * §14.1's nightly scan: the only driver the reminder path is allowed to have.
+ * The nightly scan: the only driver the reminder path is allowed to have.
  *
  * "Scheduler is the only driver; nothing in the reminder path runs on a page load" — the second half of
  * that sentence is why a register can be rendered by a query instead of by a computation, and why a page
@@ -47,7 +47,7 @@ class RemindersRun extends Command
             }
 
             $this->line('No alert was lost — each one above is on the register. The threshold row that '
-                .'should have delivered it names a role nobody holds in that company (§14.1).');
+                .'should have delivered it names a role nobody holds in that company.');
 
             return self::FAILURE;
         }

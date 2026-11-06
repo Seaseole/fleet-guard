@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * Closes a fitment and says what became of the casing (§4.3 TYRE_POSITION).
+ * Closes a fitment and says what became of the casing (TYRE_POSITION).
  *
  * The cost per kilometre is written here and nowhere else, because until the closing odometer is read
  * there is no distance to divide by. It is stored as a four-place rate (`×10000` of a base unit per
@@ -34,7 +34,7 @@ final class RemoveTyre
         TyreStatus $nextStatus,
     ): TyrePosition {
         if (! Gate::allows('tyres.manage')) {
-            throw new InvalidArgumentException('Removing a tyre is a workshop act (§9.3).');
+            throw new InvalidArgumentException('Removing a tyre is a workshop act.');
         }
 
         if ($nextStatus === TyreStatus::InService) {

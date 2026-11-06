@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * §14.4's download endpoint — the only route that reads the private disk.
+ * The download endpoint — the only route that reads the private disk.
  *
  * Three checks in a deliberate order, because each answers a different question and the cheap one
  * goes first:
@@ -26,7 +26,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  *    signature was present;
  *  - the Action asks *may these bytes leave* (lifecycle, scan verdict, present on disk).
  *
- * It contains no business logic. §3.1's D1 says an HTTP entry point validates and calls one Action,
+ * It contains no business logic. The D1 says an HTTP entry point validates and calls one Action,
  * and this one has a single line of that: `DownloadDocument::handle`. Everything the download
  * promises is enforced in the domain, which is where the kiosk path and a future API surface will
  * need the same answers.
@@ -43,7 +43,7 @@ final class DownloadDocumentController
 
         if ($user === null || Gate::denies('download', $document)) {
             // Refused before the trail: a download attempt by somebody with no right to the paper is
-            // a security question, not a document question, and §14.4 audits the reads that happened.
+            // a security question, not a document question, and audits the reads that happened.
             abort(403, 'Your role may not download this document.');
         }
 

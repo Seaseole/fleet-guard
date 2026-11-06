@@ -11,11 +11,11 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.2 / §6.2 GL_JOURNAL_LINE — append-only, typed dimensions (ADR-0001 #2).
+     * / GL_JOURNAL_LINE — append-only, typed dimensions (ADR-0001 #2).
      *
      * `amount_base` is the authoritative number and the line is `direction` + one amount rather
      * than a debit and a credit column, so "a line carrying both" is unrepresentable instead of
-     * checked. `posted_on` is denormalised from the entry for exactly the reason §6.7 gives:
+     * checked. `posted_on` is denormalised from the entry for exactly the reason the design gives:
      * date-range + dimension reports become single-table index range scans.
      *
      * HAZARD, stated rather than hidden: the dimension columns have **no foreign keys yet**. None
@@ -40,7 +40,7 @@ return new class extends Migration
             $table->char('currency_code', 3);
             $table->string('line_note', 191)->nullable();
 
-            // §6.2 typed dimensions. A dimension earns a column when a report needs it twice —
+            // Typed dimensions. A dimension earns a column when a report needs it twice —
             // route_id, tyre_id and permit_id deliberately stay in dimension_extra.
             $table->unsignedBigInteger('truck_id')->nullable();
             $table->unsignedBigInteger('trailer_id')->nullable();
@@ -74,7 +74,7 @@ return new class extends Migration
             $table->foreign('entry_id')->references('id')->on('gl_journal_entries');
         });
 
-        // ── §6.3 layer 2 ──
+        // ── layer 2 ──
         DB::statement('alter table `gl_journal_lines` add constraint `gl_journal_lines_direction_allowed` check (direction in (\'debit\', \'credit\'))');
 
         // A zero-value line is not a line: it silently inflates line_count, and a posted entry
@@ -83,7 +83,7 @@ return new class extends Migration
         DB::statement('alter table `gl_journal_lines` add constraint `gl_journal_lines_foreign_amount_positive` check (amount_foreign is null or amount_foreign > 0)');
 
         if (DB::connection()->getDriverName() !== 'sqlite') {
-            // ── §6.3 layer 3 ──
+            // ── layer 3 ──
             DB::statement(<<<'SQL'
             create trigger `gl_journal_lines_bu` before update on `gl_journal_lines`
             for each row
@@ -114,7 +114,7 @@ return new class extends Migration
             end
             SQL);
 
-            // Added beyond the §6.3 list, because it closes a hole the other four leave open: a line
+            // Added beyond the design list, because it closes a hole the other four leave open: a line
             // appended to an entry that is already posted passes every CHECK (the entry's own totals do
             // not move), so the entry would claim to balance while its lines do not. Only an
             // unpublished entry accepts new lines, and the barrier row is the audited exception.

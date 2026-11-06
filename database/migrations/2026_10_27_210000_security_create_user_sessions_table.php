@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §9.2's device/session list, and the row that makes §9.1's absolute session bound exist at all.
+     * The device/session list, and the row that makes the absolute session bound exist at all.
      *
      * A registry rather than a read of the framework's `sessions` table, because `SESSION_DRIVER` is
      * Valkey in production and a screen that greps the session store would work on this laptop and
@@ -42,7 +42,7 @@ return new class extends Migration
             // this table existed" would be the same query result, and the second one has to be adopted.
             $table->timestamp('revoked_at')->nullable();
 
-            // §9.1's promise is that a second factor was actually satisfied for this device. Recorded at
+            // The promise is that a second factor was actually satisfied for this device. Recorded at
             // sign-in (the full predicate) and then latched one-way by activity, because the invited user
             // who signs in before enrolling a factor should not be left claiming their own laptop has no
             // factor after they have enrolled one.

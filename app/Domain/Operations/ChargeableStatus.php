@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Domain\Operations;
 
 /**
- * §4.1 CHARGEABLE's machine: `pending → ready → billed`, with `written_off` as the terminal exception.
+ * CHARGEABLE's machine: `pending → ready → billed`, with `written_off` as the terminal exception.
  *
  * `ready` is where this phase stops: invoicing is Phase 4, and a `billed` chargeable is a fact an
- * invoice row owns, not a state this table may adopt in advance. §10.3's `billing_state` on the job is
+ * invoice row owns, not a state this table may adopt in advance. The `billing_state` on the job is
  * derived from these rows, never stored.
  */
 enum ChargeableStatus: string

@@ -10,25 +10,25 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.2 / §6.8 — the supplier's own document for work the fleet had done for it.
+     * / The supplier's own document for work the fleet had done for it.
      *
      * A bill is the document, not the obligation. Phase 3 already wrote the ledger's debt for the
-     * cases it could value at the shelf or the pump (`Dr 1180/1190 · Cr 2110`, §20.26/§20.29); a
+     * cases it could value at the shelf or the pump (`Dr 1180/1190 · Cr 2110`, /); a
      * garage repair never reached the ledger at all, and its expense debit arrives here with the
-     * bill (§6.8's `BillRecorded`). A bill that names no linked document posts its own lines; the
+     * bill (the `BillRecorded`). A bill that names no linked document posts its own lines; the
      * settlement of either kind is the payment slice, not this row.
      *
-     * The lifecycle is §10's smaller-machine shape: `draft → recorded → void`. `partially_paid`
+     * The lifecycle is the smaller-machine shape: `draft → recorded → void`. `partially_paid`
      * and `paid` will be **derived** from the settlement rows the way an invoice's settlement is
-     * (§10.4's three axes), so they are deliberately absent from the CHECK until a payment door
+     * (the three axes), so they are deliberately absent from the CHECK until a payment door
      * exists that could write them.
      *
-     * The number is an operational reference, allocated at creation like `WO-` and `TRP-` (§7):
+     * The number is an operational reference, allocated at creation like `WO-` and `TRP-`:
      * a bill is the supplier's fiscal document, not ours, so our own reference needs "never
      * reused" rather than "gap-free at issue". The supplier's document number is stored beside it
      * as evidence, not as identity.
      *
-     * §5.2's money block is applied verbatim, but this slice's Action refuses a foreign-currency
+     * The money block is applied verbatim, but this slice's Action refuses a foreign-currency
      * bill the same way issuing refuses one: the rate a bill is recorded at is the FX slice's
      * decision, and an invented rate is a ledger entry that disagrees with the document.
      */
@@ -47,7 +47,7 @@ return new class extends Migration
             $table->date('bill_on');
             $table->date('due_on');
 
-            // §5.2 verbatim — gross, VAT included; the lines carry their own net and tax.
+            // Verbatim — gross, VAT included; the lines carry their own net and tax.
             $table->char('currency_code', 3);
             $table->unsignedBigInteger('amount');
             $table->decimal('fx_rate', 19, 8);

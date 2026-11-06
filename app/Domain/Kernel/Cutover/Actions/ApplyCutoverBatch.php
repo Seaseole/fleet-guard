@@ -13,7 +13,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * §15.2 Phase 1 — turn a validated master-data batch into records, once.
+ * Phase 1 — turn a validated master-data batch into records, once.
  *
  * The module handler writes through its own Actions; this Action owns the surrounding transaction
  * and the batch's transition, so "all the rows applied" and "the batch says applied" commit
@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\DB;
  *
  * Applying is the Owner's second half of the cutover workflow, next to committing the opening
  * balances. Master rows are corrected on their own screens afterwards; this Action offers no
- * reversal, because a rollback of thousands of upserts is not a §6.4 mirror entry.
+ * reversal, because a rollback of thousands of upserts is not a mirror entry.
  */
 final class ApplyCutoverBatch
 {

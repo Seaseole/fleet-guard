@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace App\Domain\Kernel\Alerts;
 
 /**
- * §14.1's alert taxonomy — the machine-readable form of §4.4's `alerts.type` CHECK list.
+ * The alert taxonomy — the machine-readable form of the `alerts.type` CHECK list.
  *
- * The DB CHECK and this enum are deliberately the same eleven names, for the §20.7 reason: a trail
+ * The DB CHECK and this enum are deliberately the same eleven names, for the reason: a trail
  * that accepts any string is a log file, and a register that accepts any type is a place where
  * "did the licence reminder ever fire" has no answer.
  *
- * `self_check_failure` is not in §4.4's list. It is here because §14.6's last line — "every one is
- * scheduled; every failure raises an alert" — needs a type, and §4.4's ten do not contain one that
- * fits: `posting_failure` is reserved by §11.3 for a posting that hit a locked period, and putting
+ * `self_check_failure` is not in the list. It is here because the last line — "every one is
+ * scheduled; every failure raises an alert" — needs a type, and the ten do not contain one that
+ * fits: `posting_failure` is reserved by for a posting that hit a locked period, and putting
  * digest drift or a numbering gap on the ledger exceptions screen hides it from the Owner, who is
  * the only person who can act on either.
  */
@@ -73,7 +73,7 @@ enum AlertType: string
     /**
      * Whether a user may silence this type on a given channel.
      *
-     * §14.1's exception is worded as "except for critical financial and safety alerts", which is a
+     * The exception is worded as "except for critical financial and safety alerts", which is a
      * property of the *alert* rather than of the type: the same `doc_expiry` type is a warning three
      * months out and a critical alert the day a truck crosses a border with an expired roadworthiness
      * certificate. So the gate asks the severity the row actually carries, and the type only

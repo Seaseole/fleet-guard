@@ -18,9 +18,9 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * §10.9's correction: a posted fuel issue is **reversed, never edited**.
+ * The correction: a posted fuel issue is **reversed, never edited**.
  *
- * The reversal is a mirror journal entry (§6.4) — the original's own lines with the sides swapped,
+ * The reversal is a mirror journal entry — the original's own lines with the sides swapped,
  * `reverses_entry_id` set and the issue as the netting group — posted at today, so the pair nets to
  * zero and both rows stay readable. When the diesel came from the yard tank, the litres and the
  * money go back onto the tank's book as a `reversal` movement, which keeps 1180 and the tank's
@@ -28,9 +28,9 @@ use InvalidArgumentException;
  * figure by the register's own rule (a reversed issue is no longer dispensed).
  *
  * The reason is mandatory, on the row and in the operational trail: `reversed` is a destructive
- * state (§10.1), and a correction nobody explained is indistinguishable from a disappearance.
+ * state, and a correction nobody explained is indistinguishable from a disappearance.
  *
- * The trip costs may already be frozen. §10.2 says a frozen set is corrected by re-opening the trip
+ * The trip costs may already be frozen. The design says a frozen set is corrected by re-opening the trip
  * *or posting a reversing entry* — this is that entry, and refusing it here would leave the only
  * wrong number the freeze was meant to protect permanently wrong.
  */
@@ -45,13 +45,13 @@ final class ReverseFuelIssue
     public function __invoke(FuelIssue $issue, string $reason, ?int $actorId = null): FuelIssue
     {
         if (! Gate::allows('fuel.correct')) {
-            throw new InvalidArgumentException('Correcting a fuel issue is an operations decision (§9.3).');
+            throw new InvalidArgumentException('Correcting a fuel issue is an operations decision.');
         }
 
         $reason = trim($reason);
 
         if ($reason === '') {
-            throw new InvalidArgumentException('A reversal needs the reason that will appear in the trail (§10.1).');
+            throw new InvalidArgumentException('A reversal needs the reason that will appear in the trail.');
         }
 
         if (mb_strlen($reason) > 160) {
@@ -66,7 +66,7 @@ final class ReverseFuelIssue
         }
 
         if ($issue->trip_cost_id === null) {
-            throw new InvalidArgumentException('This issue names no trip cost, so there is no posted entry to mirror. Reconcile it by hand (§6.4).');
+            throw new InvalidArgumentException('This issue names no trip cost, so there is no posted entry to mirror. Reconcile it by hand.');
         }
 
         $trip = $issue->trip_id === null

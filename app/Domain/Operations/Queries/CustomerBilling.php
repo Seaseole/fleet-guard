@@ -14,7 +14,7 @@ use App\Domain\Operations\Models\Trip;
 use DateTimeInterface;
 
 /**
- * The consolidated run's read door (§10.4, §13 D5): every `ready` charge one customer has earned.
+ * The consolidated run's read door (D5): every `ready` charge one customer has earned.
  *
  * {@see TripBilling} answers "what does this leg owe", which is the per-trip invoice's question. A
  * consolidated run asks the same thing the other way round — "what has this customer not been billed
@@ -25,7 +25,7 @@ use DateTimeInterface;
  * The window is over `chargeables.created_at`, not a trip timestamp: a chargeable exists before an
  * invoice does and before a state moves, and it is the row being billed. A charge raised in August but
  * swept into September's run is therefore visible by its own date rather than by a state change
- * nobody recorded (§10.2 stores no `delivered_at`).
+ * nobody recorded (the design stores no `delivered_at`).
  *
  * Only `ready` rows are returned for {@see TripBilling}'s reason: pending has no paperwork, billed
  * already has a line, and returning either would let a run double-bill a delivery.

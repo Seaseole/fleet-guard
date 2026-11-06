@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 
 /**
- * §14.3's ingest path: one webhook batch in, positions on file, projection moved, in one transaction.
+ * The ingest path: one webhook batch in, positions on file, projection moved, in one transaction.
  *
  * Three responsibilities here, each a decision rather than a convenience:
  *
@@ -31,7 +31,7 @@ use InvalidArgumentException;
  * - **The projection moves only forwards.** `latest_positions` is what the map reads, and a buffered
  *   device posting an hour-old fix must not put the truck back where it was.
  *
- * No business invariant depends on any of this (§16 R6): a trip's distance comes from its odometer
+ * No business invariant depends on any of this (R6): a trip's distance comes from its odometer
  * pair, not from these rows, so an outage costs the map and nothing else.
  */
 final class IngestPositions
@@ -50,7 +50,7 @@ final class IngestPositions
     {
         if (! $account->active) {
             throw new InvalidArgumentException(sprintf(
-                'The %s is switched off, so its messages are not accepted (§4.4).',
+                'The %s is switched off, so its messages are not accepted.',
                 $account->label(),
             ));
         }
@@ -62,9 +62,9 @@ final class IngestPositions
             return new IngestReport(0, 0, 0, 0);
         }
 
-        // A webhook arrives with no session, so the account is the tenancy statement (§8). The pin is
+        // A webhook arrives with no session, so the account is the tenancy statement. The pin is
         // restored rather than forgotten on the way out: the caller — a queued job, a verifier — may be
-        // pinned to its own company, and erasing that pin is §20.4's leak in reverse.
+        // pinned to its own company, and erasing that pin is the leak in reverse.
         $previous = CurrentCompany::pin();
         CurrentCompany::force((int) $account->company_id);
 

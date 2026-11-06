@@ -11,12 +11,12 @@ use InvalidArgumentException;
 /**
  * A casing as the "new tyre" dialog hands it to {@see CreateTyre} (D1).
  *
- * The price is optional because a tyre often arrives on a truck rather than an invoice: §4.3 stores
+ * The price is optional because a tyre often arrives on a truck rather than an invoice: The design stores
  * `purchase_cost_base` as a not-null number, so "not recorded" is zero, and the removal then writes no
  * cost per kilometre rather than a confident 0.0000. A recorded price must be in the base currency —
- * the Action refuses a foreign one instead of inventing a rate (§5.2).
+ * the Action refuses a foreign one instead of inventing a rate.
  *
- * Tread depth is the *new* depth in hundredths of a millimetre (§5.5's scale applied to a physical
+ * Tread depth is the *new* depth in hundredths of a millimetre (the scale applied to a physical
  * quantity); wear is read off the casing at removal, not stored as a second number here.
  */
 final readonly class TyreDto

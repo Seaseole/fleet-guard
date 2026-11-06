@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * One change to a part's book, with the figures the shelf held immediately afterwards (§4.3).
+ * One change to a part's book, with the figures the shelf held immediately afterwards.
  *
  * Written only by {@see Part::recordMovement()} in the same transaction as the movement's journal
  * entry, so the row, the part and the ledger move together or not at all.
@@ -39,7 +39,7 @@ final class StockMovement extends Model
 {
     use BelongsToCompany;
 
-    /** ULID key (§2): a movement can be cited from the ledger entry it posted. */
+    /** ULID key: a movement can be cited from the ledger entry it posted. */
     protected $keyType = 'string';
 
     public $incrementing = false;

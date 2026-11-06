@@ -10,21 +10,21 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.4 GPS_POSITION — the raw fix, append-only and high-volume.
+     * GPS_POSITION — the raw fix, append-only and high-volume.
      *
-     * The key is a `bigint` auto-increment, not a ULID (§2): at 21 vehicles × a 30 s ping this is
+     * The key is a `bigint` auto-increment, not a ULID: at 21 vehicles × a 30 s ping this is
      * ~60 k rows a day, nothing outside the ingest path ever fetches one by id, and a 26-character
      * key on every row of the biggest table in the schema buys nothing. The row's identity for the
      * outside world is `(provider, provider_message_id)` — the webhook retry key.
      *
-     * `provider_message_id` is unique **per company** as well as per provider (§8: the tenant is the
+     * `provider_message_id` is unique **per company** as well as per provider (the tenant is the
      * leading column of every unique key). A provider's message ids are opaque strings, and two
      * tenants would otherwise share the namespace of whichever provider id happened to collide.
      *
      * `raw_json` keeps the payload the provider sent. The normalised columns are what the app reads;
      * the payload is what settles an argument with the provider about a fix that looked wrong.
      *
-     * Retention is not enforced here. §14.3's four-week window plus monthly archive is Phase 7,
+     * Retention is not enforced here. The four-week window plus monthly archive is Phase 7,
      * because a prune with no archive is data loss. Until then the table grows and is indexed for
      * the two queries that exist: a truck's recent track and a trip's track.
      */
@@ -51,7 +51,7 @@ return new class extends Migration
             $table->json('raw_json')->nullable();
             $table->datetime('ingested_at');
 
-            // §14.3's dedupe key: a webhook retried after a timeout returns the fix it already had
+            // The dedupe key: a webhook retried after a timeout returns the fix it already had
             // instead of plotting the truck twice.
             $table->unique(['company_id', 'provider', 'provider_message_id'], 'gps_positions_provider_message_unique');
             $table->index(['company_id', 'truck_id', 'fixed_at'], 'gps_positions_truck_fixed_index');
@@ -60,7 +60,7 @@ return new class extends Migration
             $table->index(['company_id', 'fixed_at'], 'gps_positions_company_fixed_index');
         });
 
-        // A position may name a trip, and that trip has to be in the same company (§8's composite
+        // A position may name a trip, and that trip has to be in the same company (the composite
         // key). A fix is never deleted by the app, so the FK is restrictive rather than cascading:
         // history that vanishes with its trip is not history.
         DB::statement('alter table `gps_positions` add constraint `gps_positions_trip_company_fk` foreign key (`trip_id`, `company_id`) references `trips` (`id`, `company_id`)');

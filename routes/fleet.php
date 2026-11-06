@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 
 /*
- * Fleet (§3.2, §4.3). One register with three tabs and one detail screen per truck.
+ * Fleet. One register with three tabs and one detail screen per truck.
  *
  * The register route asks for `fleet.view` and nothing more: reading the fleet is the widest
  * capability any seat holds (a Dispatcher names a truck on a trip before they may change it), and the

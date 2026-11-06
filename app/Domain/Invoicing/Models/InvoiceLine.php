@@ -11,15 +11,15 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * §4.2 INVOICE_LINE — one billed line, and the leg of the fleet it earned money on.
+ * INVOICE_LINE — one billed line, and the leg of the fleet it earned money on.
  *
  * The line carries `trip_id` and `truck_id` because `4100 Haulage revenue` requires truck, trip **and**
- * customer (§6.1's mask): a consolidated invoice cannot post one lump credit to it, so the dimension has
+ * customer (the mask): a consolidated invoice cannot post one lump credit to it, so the dimension has
  * to survive at line level or the revenue block names a customer and no leg. `revenue_account_code` is
  * copied at write time — if the chart is re-coded next year, rows already posted must still say what they
  * posted to.
  *
- * VAT is stored per line rather than derived at print time (§5.5: sum of rounded line amounts, never
+ * VAT is stored per line rather than derived at print time (sum of rounded line amounts, never
  * round-of-sum), so an invoice can never disagree with the return filed from it.
  *
  * @property string $id
@@ -57,7 +57,7 @@ final class InvoiceLine extends Model
         'chargeable_id', 'trip_id', 'job_id', 'truck_id', 'revenue_account_code',
         'quantity_x100', 'unit_price_minor', 'currency_code', 'amount', 'base_amount',
         'tax_rate_id', 'tax_kind', 'tax_amount', 'tax_base', 'position',
-        // Set by a void, so the line stops competing for its chargeable (§20.33). Never mass-assigned by a
+        // Set by a void, so the line stops competing for its chargeable. Never mass-assigned by a
         // screen: `VoidInvoice` is the only writer.
         'released_at',
     ];
@@ -89,7 +89,7 @@ final class InvoiceLine extends Model
         return $this->belongsTo(Invoice::class);
     }
 
-    // `chargeable_id`, `trip_id` and `job_id` are Operations' rows and carry no relations here (§13 D5): the
+    // `chargeable_id`, `trip_id` and `job_id` are Operations' rows and carry no relations here (D5): the
     // line names the charge it billed and the leg it earned on, and Invoicing never holds another module's
     // model. The one relation below is its own.
 

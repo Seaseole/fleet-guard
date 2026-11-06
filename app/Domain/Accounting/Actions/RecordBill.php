@@ -33,24 +33,24 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
- * §6.8 / §15.2 phase 5, slice 5a — the supplier's document for work the fleet had done for it.
+ * / Phase 5, slice 5a — the supplier's document for work the fleet had done for it.
  *
  * A free-line bill is the case Phase 3 kept pointing at: an external garage repaired a truck, nothing
  * in the fleet's own doors ever expensed that, and the ledger stayed silent. Recording the bill is
  * where the silence ends — `Dr` the category's expense account and `2126` Input VAT,
- * `Cr 2110` Accounts payable (§6.8's `BillRecorded`, restated onto COA v1 the way §20.25 restated
+ * `Cr 2110` Accounts payable (the `BillRecorded`, restated onto COA v1 the way restated
  * the fuel rows: the section's `5210`/`3100`/`2211` are paper codes this chart does not carry).
  *
  * Ordered steps, one transaction:
  *
  * 1. Refuse anything the seat may not do, and any figure the door cannot keep honest — before a
- *    number is spent (§20.32's ordering lesson).
+ *    number is spent (the ordering lesson).
  * 2. Allocate `BILL-{SEQ:5}` **at creation**: a bill is the supplier's fiscal document, not ours, so
- *    our own reference needs never-reused, not gap-free-at-issue (§7).
+ *    our own reference needs never-reused, not gap-free-at-issue.
  * 3. Write the lines with VAT computed per line from the rate effective on the bill date — stored,
- *    never re-derived at report time (§5.5).
- * 4. Post one entry, dimensions on every line (§6.2): the supplier and this bill on all three sides,
- *    plus the truck and trip the expense account demands (§6.1).
+ *    never re-derived at report time.
+ * 4. Post one entry, dimensions on every line: the supplier and this bill on all three sides,
+ *    plus the truck and trip the expense account demands.
  *
  * A bill that *settles* an obligation Phase 3 already posted (a fuel delivery's or a parts receipt's
  * `Cr 2110`) must **not** post its own entry — the expense or stock debit already happened at the
@@ -84,7 +84,7 @@ final class RecordBill
     private function vatAccount(array $accounts): ChartAccount
     {
         return $accounts[self::INPUT_VAT_ACCOUNT]
-            ?? throw new InvalidArgumentException('Account 2126 Input VAT is not in this company\'s chart, so the bill\'s VAT has nowhere to be claimed (§6.8).');
+            ?? throw new InvalidArgumentException('Account 2126 Input VAT is not in this company\'s chart, so the bill\'s VAT has nowhere to be claimed.');
     }
 
     /**
@@ -103,22 +103,22 @@ final class RecordBill
         ?int $actorId = null,
     ): Bill {
         if (! Gate::allows('bills.create')) {
-            throw new InvalidArgumentException('Recording a supplier bill needs the bills.create ability (§9.3).');
+            throw new InvalidArgumentException('Recording a supplier bill needs the bills.create ability.');
         }
 
-        // §20.36 — the two shapes, and the schema CHECK that says they are a pair: free lines post
+        // The two shapes, and the schema CHECK that says they are a pair: free lines post
         // their own expense; a link documents what Phase 3 already put on 2110 and posts nothing twice.
         if ($linkedSource === null && $lines === []) {
-            throw new InvalidArgumentException('A bill with no lines and no linked delivery would post a zero-value journal entry; the supplier\'s document has nothing on it (§10.4\'s shape applies here too).');
+            throw new InvalidArgumentException('A bill with no lines and no linked delivery would post a zero-value journal entry; the supplier\'s document has nothing on it (the shape applies here too).');
         }
 
         if (($linkedSource === null) !== ($linkedSourceId === null)) {
-            throw new InvalidArgumentException('A linked bill names both the kind of obligation and its id — one without the other is a half of a pair (§4.2).');
+            throw new InvalidArgumentException('A linked bill names both the kind of obligation and its id — one without the other is a half of a pair.');
         }
 
         if ($linkedSource !== null && $lines !== []) {
             throw new InvalidArgumentException(sprintf(
-                'This bill is a %s paper: it documents an obligation the ledger already holds, so it carries no lines of its own — free lines here would expense the same %s a second time (§20.36).',
+                'This bill is a %s paper: it documents an obligation the ledger already holds, so it carries no lines of its own — free lines here would expense the same %s a second time.',
                 $linkedSource->label(),
                 mb_strtolower($linkedSource->label()),
             ));
@@ -134,7 +134,7 @@ final class RecordBill
 
             if ($obligation === null) {
                 throw new InvalidArgumentException(sprintf(
-                    'That %s is not an unbilled posted obligation in this company — it may already have its paper, or it may be a pump slip whose payable arrives when the diesel is issued (§20.26).',
+                    'That %s is not an unbilled posted obligation in this company — it may already have its paper, or it may be a pump slip whose payable arrives when the diesel is issued.',
                     mb_strtolower($linkedSource->label()),
                 ));
             }
@@ -151,13 +151,13 @@ final class RecordBill
         $supplier = Supplier::query()->find($supplierId)
             ?? throw new InvalidArgumentException('That supplier is not in this company\'s register, so the bill has no party to owe.');
 
-        // §3f/§20.8's date-column convention: one day, no instant, so a Gaborone midnight bill is the
+        // /'S date-column convention: one day, no instant, so a Gaborone midnight bill is the
         // same calendar date the paper document carries.
         $billOn = Carbon::instance($billOn)->startOfDay();
         $dueOn = Carbon::instance($dueOn)->startOfDay();
 
         if ($dueOn->lessThan($billOn)) {
-            throw new InvalidArgumentException('A bill cannot be due before it is dated — the schema\'s CHECK would refuse the row anyway (§4.2).');
+            throw new InvalidArgumentException('A bill cannot be due before it is dated — the schema\'s CHECK would refuse the row anyway.');
         }
 
         $baseCurrency = CurrentCompany::model()->base_currency_code;
@@ -166,7 +166,7 @@ final class RecordBill
         $payable = $accounts[self::PAYABLE_ACCOUNT] ?? null;
 
         if ($payable === null) {
-            throw new InvalidArgumentException('Account 2110 Accounts payable is not in this company\'s chart, so the bill has no liability to sit on (§6.8).');
+            throw new InvalidArgumentException('Account 2110 Accounts payable is not in this company\'s chart, so the bill has no liability to sit on.');
         }
 
         $rate = $this->vat->on($billOn);
@@ -174,9 +174,9 @@ final class RecordBill
         $prepared = [];
 
         if ($obligation !== null) {
-            // §20.36 — the paper must equal the book, and this slice's book knows no VAT: Phase 3
+            // The paper must equal the book, and this slice's book knows no VAT: Phase 3
             // posted the obligation's `Cr 2110` at the movement's own value with input VAT modelled
-            // nowhere (§20.26/§20.29's honest gaps). A linked bill is that paper, so it carries the
+            // nowhere (/the honest gaps). A linked bill is that paper, so it carries the
             // movement's figure and nothing else — refusing here is what stops a silent VAT claim
             // against a posting that never charged any.
             $netMinor = $obligation->amountBase;
@@ -188,7 +188,7 @@ final class RecordBill
 
                 if ($account === null) {
                     throw new InvalidArgumentException(sprintf(
-                        'Account %s (%s) is not in this company\'s chart, so line %d of the bill cannot be posted (§6.2).',
+                        'Account %s (%s) is not in this company\'s chart, so line %d of the bill cannot be posted.',
                         $accountCode,
                         $line->category->label(),
                         $index + 1,
@@ -205,7 +205,7 @@ final class RecordBill
 
                 if ($line->currencyCode !== null && $line->currencyCode !== $baseCurrency) {
                     throw new InvalidArgumentException(sprintf(
-                        'Line %d is stated in %s and this bill can only be recorded in %s. A supplier\'s foreign invoice needs §5.2\'s '
+                        'Line %d is stated in %s and this bill can only be recorded in %s. A supplier\'s foreign invoice needs the '
                         .'rate carried from the document — the FX slice that also settles the ZAR part receipts and work-order lines owns it; '
                         .'a rate invented here would be a ledger entry that disagrees with the paper.',
                         $index + 1,
@@ -214,7 +214,7 @@ final class RecordBill
                     ));
                 }
 
-                // §6.1's mask is a requirement, so the leg must be named before the ledger is asked.
+                // The mask is a requirement, so the leg must be named before the ledger is asked.
                 foreach ($account->requiredDimensions as $dimension) {
                     $missing = match ($dimension) {
                         'truck' => $line->truckId === null,
@@ -224,7 +224,7 @@ final class RecordBill
 
                     if ($missing) {
                         throw new InvalidArgumentException(sprintf(
-                            'Line %d ("%s") would post to %s, which requires a %s (§6.1). A %s on a fuel bill must name the leg it was burned on '
+                            'Line %d ("%s") would post to %s, which requires a %s. A %s on a fuel bill must name the leg it was burned on '
                             .'or the cost lands in overheads and per-trip margin stops being true.',
                             $index + 1,
                             $line->description,
@@ -276,7 +276,7 @@ final class RecordBill
             $baseCurrency, $accounts, $payable, $rate, $netMinor, $taxMinor, $grossMinor, $description,
             $obligation,
         ): Bill {
-            // 2. The operational reference is spent at creation (§7): the checks above all passed, so
+            // 2. The operational reference is spent at creation: the checks above all passed, so
             //    nothing between here and the row can make the number an orphan.
             $number = $this->numbers->allocate('bill', $billOn, $actorId);
 
@@ -288,7 +288,7 @@ final class RecordBill
                 'supplier_doc_no' => $supplierDocNo !== null && trim($supplierDocNo) !== '' ? mb_substr(trim($supplierDocNo), 0, 60) : null,
                 'bill_on' => $billOn->toDateString(),
                 'due_on' => $dueOn->toDateString(),
-                // §5.2's block is the identity, base-only, until the FX slice (§20.32's decision 5).
+                // The block is the identity, base-only, until the FX slice (the decision 5).
                 'currency_code' => $baseCurrency,
                 'amount' => $grossMinor,
                 'fx_rate' => '1',
@@ -300,7 +300,7 @@ final class RecordBill
                 'tax_base' => $taxMinor,
                 'note' => $note === null || trim($note) === '' ? null : mb_substr(trim($note), 0, 500),
                 'source_uuid' => $sourceUuid === null || $sourceUuid === '' ? null : $sourceUuid,
-                // §20.36 — the link and the starting balance. A fresh bill owes its whole gross; the
+                // The link and the starting balance. A fresh bill owes its whole gross; the
                 // payments slice walks this projection down and `settlementState()` derives from it.
                 'linked_source' => $obligation?->kind->value,
                 'linked_source_id' => $obligation?->id,
@@ -311,7 +311,7 @@ final class RecordBill
             ]);
 
             // The obligation's own module stamps its row — Accounting never writes another module's
-            // table (§3.1 D5); the stamp rides in this transaction, so a refused paper un-stamps by
+            // table (D5); the stamp rides in this transaction, so a refused paper un-stamps by
             // rolling back rather than by a second door nobody promised to call.
             if ($obligation !== null) {
                 match ($obligation->kind) {
@@ -361,7 +361,7 @@ final class RecordBill
                 );
             }
 
-            // §20.36 — a linked bill posts nothing of its own: the obligation's `Cr 2110` already
+            // A linked bill posts nothing of its own: the obligation's `Cr 2110` already
             // stands from Phase 3's movement, and mirroring a fresh expense here would fund the same
             // diesel or shelf twice. The paper, the stamp and the audit are its whole write.
             if ($obligation === null) {

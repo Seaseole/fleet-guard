@@ -10,21 +10,21 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.2 — money the customer sent, before anyone decided which invoice it was for.
+     * Money the customer sent, before anyone decided which invoice it was for.
      *
-     * The receipt and its allocations are **two documents, not one** (§6.8's `PaymentReceived` vs
+     * The receipt and its allocations are **two documents, not one** (the `PaymentReceived` vs
      * `PaymentAllocated`): a payment that arrives against a customer's account must be bankable today
      * and applied when the invoice appears, and a payment applied to nothing is still real money in the
      * bank. That is why `unapplied_amount` is a column rather than an absent child row — the ledger's
      * credit to `2150 Unapplied customer cash` has to balance against something on this row.
      *
      * `number` is the gap-free `receipt` sequence and is allocated **at creation**, not at issue: a
-     * receipt is a bank fact, there is no draft state for money that has already arrived, and §7's
+     * receipt is a bank fact, there is no draft state for money that has already arrived, and the
      * "number at issue" rule exists to stop *drafts* consuming fiscal numbers. The store registration in
      * `config/fleet.php` declares no `status_column` for exactly that reason.
      *
-     * §5.2's FX block again, because a corridor customer pays in ZAR and the ledger reads Pula. The
-     * rate the payment was booked at is what realised FX differences are measured against (§5.5), so it
+     * The FX block again, because a corridor customer pays in ZAR and the ledger reads Pula. The
+     * rate the payment was booked at is what realised FX differences are measured against, so it
      * is stored here and frozen.
      */
     public function up(): void
@@ -42,7 +42,7 @@ return new class extends Migration
             $table->string('method', 12);
             $table->string('reference', 80)->nullable();
 
-            // §5.2 verbatim.
+            // Verbatim.
             $table->char('currency_code', 3);
             $table->unsignedBigInteger('amount');
             $table->decimal('fx_rate', 19, 8);

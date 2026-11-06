@@ -10,14 +10,14 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.1 TRIP_ACCESS_TOKEN and §9.6 — the driver's field-capture door.
+     * TRIP_ACCESS_TOKEN and the driver's field-capture door.
      *
-     * A driver has no user account (§9.2's "two non-user principals", ADR-0006). What they hold is a
+     * A driver has no user account (the "two non-user principals", ADR-0006). What they hold is a
      * string that names one trip, and the string is a secret: the table stores **only its hash**, so a
      * read of this table — through a leak, a backup, or a support query — hands over nothing that opens
      * the kiosk. The 6-digit PIN is hashed for the same reason.
      *
-     * The binding is to the trip *and* the driver: §9.6's sentence "a token cannot read another trip"
+     * The binding is to the trip *and* the driver: The sentence "a token cannot read another trip"
      * is a row relationship, not a filter in the screen, and the composite FK is what makes a token
      * pointing at a trip in a second company unrepresentable rather than merely discouraged.
      *
@@ -26,7 +26,7 @@ return new class extends Migration
      * horizon is the trip's, not the day's, and it is a column rather than a computation so a revocation
      * and an expiry stay two separate answers to "why is this one closed?".
      *
-     * `last_used_at` / `last_ip` exist for the question §9.6 asks about a shared phone: not "what did
+     * `last_used_at` / `last_ip` exist for the question the design asks about a shared phone: not "what did
      * the driver do" but "was this the driver". They are written on redemption, never on issue.
      */
     public function up(): void

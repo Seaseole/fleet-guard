@@ -8,7 +8,7 @@ use App\Domain\Operations\Models\Route;
 use App\Models\User;
 
 /**
- * Who may see and change a corridor (§9.3 "Jobs and trips" — `routes.view` / `routes.manage`).
+ * Who may see and change a corridor ("Jobs and trips" — `routes.view` / `routes.manage`).
  *
  * Dispatch reads routes to plan a trip; the Operations Manager (and the Owner) maintain them. The
  * agreed prices on a route are a separate field gate (`seeCustomerTerms`), so this policy never

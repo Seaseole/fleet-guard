@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §9.1 — staff accounts are invited, never self-registered. Registration is off in
+     * Staff accounts are invited, never self-registered. Registration is off in
      * config/fortify.php, so this table plus the accept Action is the only door into a user row.
      *
      * The row stores a **hash** of the token, never the token: an `invitations` dump must not be a
@@ -24,7 +24,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('company_id')->default(1)->constrained('companies');
 
-            // Matched case-insensitively against the address the link was accepted from (§9.1:
+            // Matched case-insensitively against the address the link was accepted from (
             // "accepted against a verified email address").
             $table->string('email', 191);
             $table->string('role_key', 40);
@@ -42,7 +42,7 @@ return new class extends Migration
             $table->index(['company_id', 'accepted_at'], 'invitations_company_accepted_index');
         });
 
-        // Laravel's Blueprint has no CHECK support (§20.4), so the two invariants that must survive
+        // Laravel's Blueprint has no CHECK support, so the two invariants that must survive
         // a bug in the Action are enforced by the engine.
         DB::statement('alter table `invitations` add constraint `invitations_accepted_requires_user` check (accepted_at is null or accepted_user_id is not null)');
         DB::statement('alter table `invitations` add constraint `invitations_user_requires_accepted` check (accepted_at is not null or accepted_user_id is null)');

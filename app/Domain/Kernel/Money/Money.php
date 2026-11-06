@@ -16,7 +16,7 @@ use RuntimeException;
 /**
  * The only money type the domain is allowed to move around (ADR-0004 #1, #2, #4).
  *
- * It carries its currency with it on purpose: an amount without one is the bug §5 exists to
+ * It carries its currency with it on purpose: an amount without one is the bug exists to
  * prevent, and making the pair a single value means no call site can pass one without the other.
  */
 final class Money implements JsonSerializable
@@ -80,7 +80,7 @@ final class Money implements JsonSerializable
     /**
      * Parse what a person typed — a major-unit amount like "1 234.56" — into minor units.
      *
-     * Screens are the boundary where a major-unit string becomes money (§5.1), and this is the
+     * Screens are the boundary where a major-unit string becomes money, and this is the
      * only place allowed to do it. `ofMinor()` refuses a decimal string on purpose, so a screen
      * that tried to use it directly would fail on every valid input rather than on a wrong one.
      *
@@ -92,7 +92,7 @@ final class Money implements JsonSerializable
         if (is_float($major)) {
             throw new RuntimeException(sprintf(
                 'Money::ofMajor() takes the typed amount as a string; got float %s. A float has already '
-                .'lost the digits you are trying to read (§20.4: brick/math truncates rather than rejects).',
+                .'lost the digits you are trying to read (brick/math truncates rather than rejects).',
                 var_export($major, true),
             ));
         }

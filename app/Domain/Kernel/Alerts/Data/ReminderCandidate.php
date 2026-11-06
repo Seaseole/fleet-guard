@@ -12,7 +12,7 @@ use Carbon\CarbonInterface;
  * One condition, as a source saw it on one business day — the only thing a module is allowed to hand
  * the engine.
  *
- * This is the seam that keeps §13's D2 (the Kernel is a leaf) true once Phase 1 arrives. A source that
+ * This is the seam that keeps the D2 (the Kernel is a leaf) true once Phase 1 arrives. A source that
  * returned `Truck` or `Invoice` models would make the alert engine depend on modules that do not exist
  * yet, and the folder contract's whole argument is that the direction of that dependency is the one
  * that breaks. A candidate carries *words and ids*, not objects: the register renders them from
@@ -41,9 +41,9 @@ final readonly class ReminderCandidate
     ) {}
 
     /**
-     * The key §14.1's cooldown is measured against, before the episode suffix.
+     * The key the cooldown is measured against, before the episode suffix.
      *
-     * `type:subject:bucket` is §14.1's `type + subject + bucket` written out. The subject is included
+     * `type:subject:bucket` is the `type + subject + bucket` written out. The subject is included
      * even though the bucket usually names it too, because the uniqueness that matters is "this
      * condition on this row", and a bucket built from a date (`30d:2026-12-01`) is the same string for
      * two trucks whose licences expire together.

@@ -1,0 +1,5 @@
+supplier_code,reference,amount,due_on,bill_on,description,currency_code,fx_rate
+OPENSUP-1,GAR-4471,18400.00,2026-11-12,2026-10-13,Tyres fitted at the workshop and not yet paid,,
+OPENSUP-1,GAR-4502,3250.00,2026-12-02,2026-11-03,Labour on the axle repair,,
+OPENSUP-2,BOR-1188,140660.00,2026-10-31,2026-09-29,Agent's clearing charges at the border — Rand bill entered at its cutover-day base value,BWP,1
+OPENSUP-3,INS-2026-77,9020.00,2026-12-15,2026-11-15,Third-quarter insurance premium,,

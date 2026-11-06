@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 /**
- * Phase 0 identity verification (DESIGN.md §14.6).
+ * Phase 0 identity verification.
  *
  * Not a test suite — tests/ stays out of the repository by the owner's decision. This is the
- * runnable proof that the security rules actually hold, because §9's promises ("a dispatcher must
+ * runnable proof that the security rules actually hold, because the promises ("a dispatcher must
  * not see margins", "an invitation is single-use", "the number is encrypted") are all the kind of
  * thing that looks implemented while silently failing open.
  *
@@ -52,7 +52,7 @@ $app = require __DIR__.'/../bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
 
 if ($app->environment('production')) {
-    fwrite(STDERR, "Refusing to run against a production database (§14.6).\n");
+    fwrite(STDERR, "Refusing to run against a production database.\n");
 
     exit(1);
 }
@@ -123,7 +123,7 @@ $ownerRow = DB::table('users')
 $owner = $ownerRow === null ? null : User::query()->find($ownerRow->id);
 
 if ($owner === null) {
-    fwrite(STDERR, "No Owner row. Run: php artisan fleet:setup-owner (§9.1).\n");
+    fwrite(STDERR, "No Owner row. Run: php artisan fleet:setup-owner.\n");
 
     exit(1);
 }
@@ -138,7 +138,7 @@ check('every catalogue permission exists as a row', function () {
     return $missing === [] ?: 'missing: '.implode(', ', $missing);
 });
 
-check('no role row is global (company_id NOT NULL) (§8)', fn () => DB::table('roles')->whereNull('company_id')->count() === 0 ?: 'a role exists for every company at once');
+check('no role row is global (company_id NOT NULL)', fn () => DB::table('roles')->whereNull('company_id')->count() === 0?: 'a role exists for every company at once');
 
 check('every role holds only catalogue permissions', function () {
     $known = PermissionCatalogue::names();
@@ -153,7 +153,7 @@ check('every role holds only catalogue permissions', function () {
     return $stray === [] ?: 'stray: '.implode(', ', $stray);
 });
 
-check('Owner holds the whole catalogue (§9.3)', fn () => asUser($owner, fn () => count(PermissionCatalogue::names()) === $owner->roles->flatMap->permissions->count()));
+check('Owner holds the whole catalogue', fn () => asUser($owner, fn () => count(PermissionCatalogue::names()) === $owner->roles->flatMap->permissions->count()));
 
 check('provisioning is idempotent (no cascade-deleted assignments)', function () use ($owner) {
     $before = DB::table('model_has_roles')->count();
@@ -162,7 +162,7 @@ check('provisioning is idempotent (no cascade-deleted assignments)', function ()
     return $before === DB::table('model_has_roles')->count() ?: 'role assignments changed during a re-provision';
 });
 
-section('Field gates (§9.4)');
+section('Field gates');
 
 $staff = [];
 
@@ -186,7 +186,7 @@ check('Dispatcher is refused the trip margin', fn () => asUser($staff['dispatche
 check('Dispatcher is refused the vehicle cost', fn () => asUser($staff['dispatcher'], fn () => ! Gate::allows(FieldGate::SeeVehicleCost->value)));
 check('Dispatcher is refused the bank number', fn () => asUser($staff['dispatcher'], fn () => ! Gate::allows(FieldGate::SeeBankDetail->value)));
 check('Accountant is granted the bank number', fn () => asUser($staff['accountant'], fn () => Gate::allows(FieldGate::SeeBankDetail->value)));
-check('Auditor is refused the bank number (R (masked) row) (§9.3)', fn () => asUser($staff['auditor'], fn () => ! Gate::allows(FieldGate::SeeBankDetail->value)));
+check('Auditor is refused the bank number (R (masked) row)', fn () => asUser($staff['auditor'], fn () =>! Gate::allows(FieldGate::SeeBankDetail->value)));
 check('Auditor is granted the trip margin (R row)', fn () => asUser($staff['auditor'], fn () => Gate::allows(FieldGate::SeeTripMargin->value)));
 check('a guest closes every gate', fn () => asUser(null, function () {
     foreach (FieldGate::cases() as $gate) {
@@ -198,7 +198,7 @@ check('a guest closes every gate', fn () => asUser(null, function () {
     return true;
 }));
 
-check('every gate maps to a catalogue permission (§9.4)', function () {
+check('every gate maps to a catalogue permission', function () {
     foreach (FieldGate::cases() as $gate) {
         if (! PermissionCatalogue::knows($gate->permission())) {
             return "{$gate->value} cites an unknown permission";
@@ -208,7 +208,7 @@ check('every gate maps to a catalogue permission (§9.4)', function () {
     return true;
 });
 
-section('Encrypted columns (§9.5)');
+section('Encrypted columns');
 
 // The script is re-runnable, and `bank_accounts` has a unique (company, name) key — so a row left
 // behind by an interrupted earlier run would fail the insert below rather than report a real defect.
@@ -228,11 +228,11 @@ $account = asUser($owner, fn () => (new CreateBankAccount)(new BankAccountDto(
 check('the mask keeps only the tail', fn () => $account->number_masked === SecretMask::tail($accountNumber) ?: "stored '{$account->number_masked}'");
 check('the plaintext is not in the stored column', fn () => ! str_contains((string) $account->getRawOriginal('number_encrypted'), '12345678') ?: 'the number is readable in the database');
 check('the key version is recorded on the row', fn () => is_string($account->key_version) && $account->key_version !== '' ?: 'key_version missing');
-check('the mask is the §9.5 shape and hides everything but the tail', fn () => $account->maskedNumber() === '••••3456'
+check('the mask is the shape and hides everything but the tail', fn () => $account->maskedNumber() === '••••3456'
     && ! str_contains($account->maskedNumber(), '1234') ?: "got '{$account->maskedNumber()}'");
 
 // A list page for a role without the gate must still be able to render, sort and search this column
-// — which is the entire reason the mask is stored rather than derived at render time (§9.5).
+// — which is the entire reason the mask is stored rather than derived at render time.
 check('a Dispatcher renders the list without decrypting anything', function () use ($account, $staff) {
     $asDispatcher = asUser($staff['dispatcher'], function () use ($account): array {
         $row = BankAccount::query()->findOrFail($account->id);
@@ -248,7 +248,7 @@ check('a Dispatcher renders the list without decrypting anything', function () u
         && $asDispatcher['revealed'] === null
         && $asDispatcher['hidden'];
 });
-check('reveal is refused through the gate (§9.4)', fn () => asUser($staff['dispatcher'], fn () => BankAccount::query()->findOrFail($account->id)->revealedNumber()) === null ?: 'a Dispatcher decrypted a bank number');
+check('reveal is refused through the gate', fn () => asUser($staff['dispatcher'], fn () => BankAccount::query()->findOrFail($account->id)->revealedNumber()) === null?: 'a Dispatcher decrypted a bank number');
 check('reveal succeeds for the Accountant', fn () => asUser($staff['accountant'], fn () => BankAccount::query()->findOrFail($account->id)->revealedNumber()) === $accountNumber);
 
 check('a wrong key version refuses to read', function () use ($account) {
@@ -275,12 +275,12 @@ check('a tampered ciphertext fails authentication', function () use ($account) {
     }
 });
 
-section('Invitations (§9.1)');
+section('Invitations');
 
 $inviteEmail = 'verify-clerk@fleetguard.local';
 
 // Cleared inside the owner's tenant context: `invitations` carries BelongsToCompany, so an
-// unscoped delete is a MissingCompanyContext error by design (§8 T3) rather than something this
+// unscoped delete is a MissingCompanyContext error by design (T3) rather than something this
 // script gets to skip.
 asUser($owner, function () use ($inviteEmail): void {
     Invitation::query()->where('email', $inviteEmail)->delete();
@@ -318,7 +318,7 @@ check('accepting creates the account with the invited role', function () use ($i
         }
 
         if ($user->email_verified_at === null) {
-            return 'created without a verified address (§9.1)';
+            return 'created without a verified address';
         }
 
         if ($user->company_id !== $invitation['invitation']->company_id) {
@@ -351,7 +351,7 @@ check('an expired invitation is refused', function () use ($invitation) {
     }
 });
 
-check('the Owner role is never granted by invitation (§9.3)', function () use ($owner) {
+check('the Owner role is never granted by invitation', function () use ($owner) {
     try {
         asUser($owner, fn () => (new InviteUser)($owner, 'verify-would-be-owner@fleetguard.local', RoleKey::Owner));
 
@@ -361,7 +361,7 @@ check('the Owner role is never granted by invitation (§9.3)', function () use (
     }
 });
 
-section('Tenancy isolation (§8 T3)');
+section('Tenancy isolation (T3)');
 
 $second = Company::query()->firstOrCreate(
     ['name' => 'Verification Second Co'],
@@ -395,7 +395,7 @@ check('a role from another company does not authorise this one', function () use
     // company. That is a real rule for this codebase, not a script quirk: **never authorise from a
     // User instance that was loaded under a different tenant.** Every HTTP request resolves the user
     // after ResolveCurrentCompany has set the context, so it cannot hit this; a CLI or queued job
-    // that re-pins mid-process can (§20.5).
+    // that re-pins mid-process can.
     $inOwnCompany = asUser($other, function () use ($second) {
         CurrentCompany::force($second->id);
 
@@ -417,7 +417,7 @@ check('a role from another company does not authorise this one', function () use
     };
 });
 
-check('a stale relation is the only way a cross-company grant appears (§20.5)', function () use ($owner, $second) {
+check('a stale relation is the only way a cross-company grant appears', function () use ($owner, $second) {
     /** @var User|null $other */
     $other = User::query()->where('email', 'verify-second-co-owner@fleetguard.local')->first();
 
@@ -447,21 +447,21 @@ check('with no tenant context, every role-derived permission is refused', fn () 
     return ! Gate::allows('ledger.post') && ! Gate::allows('bank.view');
 }));
 
-section('Mandatory MFA enforcement (§9.1)');
+section('Mandatory MFA enforcement');
 
 // Every one of the seven seeded seats holds at least one financial permission (invoices.view,
-// accounting.view, dashboard.financial, fuel.variance.view_cost …), so §9.1's rule makes TOTP
+// accounting.view, dashboard.financial, fuel.variance.view_cost …), so the rule makes TOTP
 // mandatory for the whole staff set, not just the Owner. Recorded because that is a consequence of
 // the catalogue rather than a decision anyone took in one place — and it is why the negative control
 // below has to be a role-less probe: no seeded role escapes the requirement.
 foreach (RoleKey::cases() as $role) {
-    check("role '{$role->label()}' requires MFA (§9.1)", fn () => $role->requiresMfa() === true
+    check("role '{$role->label()}' requires MFA", fn () => $role->requiresMfa() === true
         ?: 'a seeded seat can see or move money without a factor');
 }
 
 // Pre-clean before measuring anything: a run that died further down leaves these behind, and the
 // unique email index would then abort forceCreate with a schema error blamed on the wrong section
-// (§20.8's residue lesson).
+// (the residue lesson).
 User::query()->where('email', 'like', 'verify-mfa-%@fleetguard.local')->get()->each(function (User $stale): void {
     DB::table('model_has_roles')->where('model_id', $stale->id)->where('model_type', User::class)->delete();
     $stale->delete();
@@ -487,7 +487,7 @@ $makeProbe = fn (string $email, ?RoleKey $role, bool $confirmed): User => asUser
 
 // Exercises the middleware the way the web group does: tenant pinned (so hasAnyPermission is scoped
 // to the right team), a named route on the request (so the allow-list is measured, not assumed), and
-// a pass-through sentinel as $next. The request is built by hand on purpose — §20.8 recorded that a
+// a pass-through sentinel as $next. The request is built by hand on purpose — recorded that a
 // full in-process kernel->handle() drops the guard and dies on MissingCompanyContext, so a fake
 // browser proves nothing here; calling handle() directly does.
 $runMfa = fn (User $user, string $routeName, string $uri = '/dashboard'): mixed => asUser($user, function () use ($user, $routeName, $uri): mixed {
@@ -536,7 +536,7 @@ echo "\n";
 
 // Ordered cleanup: the pivot rows go with the users (their FK cascades), the second company's role
 // rows must go before the company itself (FK), and the verification bank account is master data with
-// no postings — so a hard delete is allowed here (§9.5) and would not be in the application.
+// no postings — so a hard delete is allowed here and would not be in the application.
 asUser($owner, function () use ($second): void {
     $verifyIds = User::query()->where('email', 'like', 'verify-%@fleetguard.local')->pluck('id');
 

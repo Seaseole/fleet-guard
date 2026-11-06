@@ -7,7 +7,7 @@ namespace App\Domain\Operations\Exceptions;
 use RuntimeException;
 
 /**
- * §10.2's `planned → assigned` refusals, in the words a dispatcher can act on.
+ * The `planned → assigned` refusals, in the words a dispatcher can act on.
  *
  * The message is the deliverable: "not eligible" makes someone hunt for the reason, "licence lapsed
  * on 2026-10-27" makes them fix it. Every factory therefore names *which* paper, *which* row and
@@ -32,7 +32,7 @@ final class DispatchRefused extends RuntimeException
     }
 
     /**
-     * Fleet refused the reservation (§10.2: the assignment is the authority on "is this truck free").
+     * Fleet refused the reservation (the assignment is the authority on "is this truck free").
      *
      * Re-wrapped rather than let `AssignmentRejected` escape, because the screen's error field and the
      * audit entry belong to the trip the operator was working on, not to a Fleet exception they have
@@ -50,7 +50,7 @@ final class DispatchRefused extends RuntimeException
 
     public static function unitNotAvailable(string $kind, string $label, string $status): self
     {
-        return new self(sprintf('%s %s is %s, so it cannot be named on a dispatch (§10.2: only an available unit).', ucfirst($kind), $label, $status));
+        return new self(sprintf('%s %s is %s, so it cannot be named on a dispatch (only an available unit).', ucfirst($kind), $label, $status));
     }
 
     public static function driverMissing(int $id): self
@@ -62,11 +62,11 @@ final class DispatchRefused extends RuntimeException
     {
         $papers = [
             'licence '.($licenceOn === null ? 'not on file' : 'expires '.$licenceOn),
-            'PDP permit '.($permitOn === null ? 'not on file' : 'expires '.$permitOn),
+            'PRDP permit '.($permitOn === null ? 'not on file' : 'expires '.$permitOn),
         ];
 
         return new self(sprintf(
-            '%s cannot drive on %s: status is %s and %s (§10.2 checks the papers against the trip\'s start date, not against today).',
+            '%s cannot drive on %s: status is %s and %s (checks the papers against the trip\'s start date, not against today).',
             $name,
             $on,
             $status,
@@ -77,7 +77,7 @@ final class DispatchRefused extends RuntimeException
     public static function paperExpired(string $documentType, string $subjectLabel, string $expiredOn): self
     {
         return new self(sprintf(
-            'The filed %s for %s expired on %s. Renew the paper and file it before dispatching (§10.2).',
+            'The filed %s for %s expired on %s. Renew the paper and file it before dispatching.',
             $documentType,
             $subjectLabel,
             $expiredOn,

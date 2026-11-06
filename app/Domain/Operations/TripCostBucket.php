@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Operations;
 
 /**
- * §6.6's five direct-cost buckets on `trips`, one case per rollup column.
+ * The five direct-cost buckets on `trips`, one case per rollup column.
  *
  * The bucket, not the account, is what the screen and the dashboard read: a sixteenth expense
  * account added later joins a bucket rather than a report query.
@@ -41,6 +41,7 @@ enum TripCostBucket: string
     }
 
     /** Which posted account codes land in this bucket — the rollup's whole mapping table. */
+    /** @return list<string> */
     public function accountCodes(): array
     {
         return match ($this) {

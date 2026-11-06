@@ -12,11 +12,11 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * The four badges §10.3 refuses to store.
+ * The four badges the design refuses to store.
  *
  * `all_trips_completed`, `ready_to_invoice`, `invoiced` and `settled` are questions about a job's
  * *children*, so they are answered by asking the children. Storing any of them would create the
- * failure §4.1 names directly — a trip added after the job was marked `invoiced` would sit inside a
+ * failure the design names directly — a trip added after the job was marked `invoiced` would sit inside a
  * job whose badge says the money is done, and every ageing report downstream would believe the badge.
  *
  * Only two of the four are answerable in Phase 2: invoices arrive in Phase 4, so `invoiced` and
@@ -55,7 +55,7 @@ final class JobProgress
             ->count();
     }
 
-    /** §10.3's `all_trips_completed`: at least one trip, and none of them still on the road. */
+    /** The `all_trips_completed`: at least one trip, and none of them still on the road. */
     public function allTripsCompleted(): bool
     {
         return $this->tripCount() > 0 && $this->openTripCount() === 0;
@@ -66,7 +66,7 @@ final class JobProgress
      *
      * `ready_to_invoice`, `invoiced` and `settled` are absent rather than false: a Phase 2 screen
      * printing "not invoiced" would claim knowledge it does not have, since nothing that can invoice
-     * a job exists yet (§15.2 Phase 4).
+     * a job exists yet.
      *
      * @return list<array{key: string, label: string, tone: string}>
      */
@@ -93,7 +93,7 @@ final class JobProgress
         return $badges;
     }
 
-    /** §10.3: `closed` is the Owner's decision, and the only hand-set end to a job. */
+    /** `closed` is the Owner's decision, and the only hand-set end to a job. */
     public function mayClose(): bool
     {
         return Gate::allows('close', $this->job);

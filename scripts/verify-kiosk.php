@@ -74,17 +74,17 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
- * Phase 2 slice 2d verification — the kiosk and the proof of delivery (DESIGN.md §9.6, §10.2, §4.1).
+ * Phase 2 slice 2d verification — the kiosk and the proof of delivery.
  *
- * Not the test suite (`tests/` is local-only, §14.6). This is the runnable proof of the sentences the
+ * Not the test suite (`tests/` is local-only). This is the runnable proof of the sentences the
  * slice turns on:
  *
- * - §9.6 *"a token cannot read another trip, and the database stores no secret"* — the row keeps SHA-256
+ * - *"A token cannot read another trip, and the database stores no secret"* — the row keeps SHA-256
  *   of the secret and of `pin|secret`, the model hides both, and the only copy of the plain values is the
  *   Action's return value;
- * - §10.2 *"a driver may never transition to delivered"* — the capture reaches `pod_pending` and the
+ * - *"A driver may never transition to delivered"* — the capture reaches `pod_pending` and the
  *   office's approval, not the driver's, reaches `delivered`;
- * - §9.6's offline retry — the same `client_uuid` twice is one delivery note, not two.
+ * - The offline retry — the same `client_uuid` twice is one delivery note, not two.
  *
  * Phase 3's slice 3g adds the driver's fuel screen to the same file: a `fuel` link records the slip
  * the driver paid for, issues its litres onto the trip, posts the 5100 cost against petty cash and
@@ -111,7 +111,7 @@ CurrentCompany::force(1);
  * Delete rows by an id list, refusing to run on an empty list.
  *
  * `whereIn(char(26)_column, [])` is harmless, but the first drafts of these scripts passed `[0]`, and
- * MySQL compared a ULID column against an integer and aborted the whole statement (§20.14's mine).
+ * MySQL compared a ULID column against an integer and aborted the whole statement (the mine).
  */
 function wipeIds(string $table, string $column, array $ids): int
 {
@@ -123,7 +123,7 @@ function wipeIds(string $table, string $column, array $ids): int
 }
 
 /**
- * The §6.3 barrier refuses deletes on the ledger; a fixture must lift it for its own entries only.
+ * The barrier refuses deletes on the ledger; a fixture must lift it for its own entries only.
  *
  * @param  list<string>  $costIds
  * @return list<string>
@@ -316,9 +316,12 @@ function asCompanyOne(): void
 }
 
 $runStartedAt = Carbon::now();
-$owner = User::query()->findOrFail(1);
+// The Owner seat is the account the deployment names, not row 1: on a development database row 1
+// may have been re-seated, and a harness that signs in the wrong seat fails at the first gated
+// write before it tests anything. `FLEET_OWNER_EMAIL` is the documented override.
+$owner = User::query()->where('email', config('fleet.identity.owner_email'))->firstOrFail();
 Auth::login($owner);
-CurrentCompany::force(1);
+CurrentCompany::force((int) $owner->company_id);
 
 $created = [
     'truck_ids' => [], 'trailer_ids' => [], 'employee_ids' => [], 'driver_ids' => [],
@@ -327,7 +330,7 @@ $created = [
 ];
 
 /* ------------------------------------------------------------------------- */
-echo "== §4.1 the schema keeps the promises the docs make (live MySQL 9.1) ==\n";
+echo "== the schema keeps the promises the docs make (live MySQL 9.1) ==\n";
 
 $tokenDdl = (string) ((array) DB::select('show create table trip_access_tokens')[0])['Create Table'];
 
@@ -360,16 +363,16 @@ foreach ([
 }
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §9.6 the route is public, throttled, and names the company in the path ==\n";
+echo "\n== the route is public, throttled, and names the company in the path ==\n";
 
 $kioskRoute = Route::getRoutes()->getByName('kiosk.capture');
 
 check($kioskRoute !== null, 'the kiosk capture route is registered');
 
 if ($kioskRoute !== null) {
-    check(str_contains($kioskRoute->uri(), '{company}'), 'the company travels in the path — a driver has no session to resolve one from (§T2 is fail-closed)');
+    check(str_contains($kioskRoute->uri(), '{company}'), 'the company travels in the path — a driver has no session to resolve one from (the design is fail-closed)');
     check(str_contains($kioskRoute->uri(), '{secret}'), '...and so does the secret, which is the whole credential');
-    check(in_array('throttle:kiosk', $kioskRoute->middleware(), true), 'the attempt is rate-limited before the token is even looked up (§9.6)');
+    check(in_array('throttle:kiosk', $kioskRoute->middleware(), true), 'the attempt is rate-limited before the token is even looked up');
     check(in_array('kiosk', $kioskRoute->middleware(), true), 'the kiosk middleware establishes the tenant and stamps last_used_at');
     check(! in_array('auth', $kioskRoute->middleware(), true), 'and no auth middleware: a driver has no account (ADR-0006)');
 }
@@ -379,7 +382,7 @@ check((int) config('fleet.kiosk.ttl_hours_after_trip_end') > 0, 'and so is the g
 
 $fuelRoute = Route::getRoutes()->getByName('kiosk.fuel');
 
-check($fuelRoute !== null, 'the driver fuel screen has its own route (§15.2 3g)');
+check($fuelRoute!== null, 'the driver fuel screen has its own route');
 
 if ($fuelRoute !== null) {
     check(str_contains($fuelRoute->uri(), '{company}') && str_contains($fuelRoute->uri(), '{secret}'), '...with the company and the secret in the path, same as the POD door');
@@ -388,7 +391,7 @@ if ($fuelRoute !== null) {
 }
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §4.3 the fuel issue row names the phone that wrote it (§15.2 3g) ==\n";
+echo "\n== the fuel issue row names the phone that wrote it ==\n";
 
 $issueDdl = (string) ((array) DB::select('show create table fuel_issues')[0])['Create Table'];
 
@@ -488,7 +491,7 @@ $driver = $crew[2];
 check($trip->status === TripStatus::InTransit, 'the fixture trip is on the road ('.$trip->trip_no.')');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §9.6 issuing a token: hashes out, plain values once ==\n";
+echo "\n== issuing a token: hashes out, plain values once ==\n";
 
 $issue = app(IssueTripAccessToken::class);
 
@@ -532,7 +535,7 @@ $issuedEvent = DB::table('security_events')
     ->where('happened_at', '>=', $runStartedAt)
     ->get();
 
-check($issuedEvent->count() >= 1, '§14.4 records the issuance on the security trail ('.$issuedEvent->count().' row)');
+check($issuedEvent->count() >= 1, 'the design records the issuance on the security trail ('.$issuedEvent->count().' row)');
 check(
     $issuedEvent->contains(static fn ($event): bool => str_contains((string) $event->meta, $token->id)),
     '...and its meta names the token row so "who could write that POD" has an answer'
@@ -542,7 +545,7 @@ check($token->isLive(), 'a freshly issued token is live');
 check($token->closedBecause() === null, '...and reports no closing reason');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §9.6 redemption: the secret is the only way in, and it says nothing when it fails ==\n";
+echo "\n== redemption: the secret is the only way in, and it says nothing when it fails ==\n";
 
 $redeem = app(RedeemKioskToken::class);
 
@@ -558,7 +561,7 @@ refuses('the same secret in another company resolves nothing — tenancy is the 
 asCompanyOne();
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.2 capture refuses everything that is not evidence ==\n";
+echo "\n== capture refuses everything that is not evidence ==\n";
 
 $capture = app(CaptureProofOfDelivery::class);
 
@@ -607,7 +610,7 @@ refuses(
 );
 
 refuses(
-    'a proof without a photo is refused — §10.2 names signature AND photo',
+    'a proof without a photo is refused — the design names signature AND photo',
     fn () => $capture($token, $secret, $pin, $facts, ['signature' => $signature()], (string) Str::uuid()),
     InvalidArgumentException::class,
     'no photo'
@@ -642,7 +645,7 @@ check(DB::table('proof_of_deliveries')->where('trip_id', $trip->id)->count() ===
 check(DB::table('documents')->where('title', 'like', $trip->trip_no.' %')->count() === 0, '...and uploaded no document — the gate is asked before the first byte is stored');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §9.6 the offline retry: one client_uuid, one delivery note ==\n";
+echo "\n== the offline retry: one client_uuid, one delivery note ==\n";
 
 $clientUuid = (string) Str::uuid();
 
@@ -652,7 +655,7 @@ $created['pod_ids'][] = $pod->id;
 check($pod->status === PodStatus::Submitted, 'a complete proof lands as submitted (waiting for the office)');
 check($pod->receiver_name === 'KIO Receiver', '...with the receiver named');
 check((float) $pod->quantity_received_tonnes_10_2 === 27.55, '...and the quantity received, in the 10^2 column');
-check($pod->signature_document_id !== null, '...and the signature filed as a document (§10.8 keeps its retention)');
+check($pod->signature_document_id!== null, '...and the signature filed as a document (the design keeps its retention)');
 check($pod->exceptions === [], '...and "nothing went wrong" stored as an empty list, not null');
 
 $documents = DB::table('documents')->where('morph_type', 'proof_of_delivery')->where('morph_id', $pod->id)->get();
@@ -663,7 +666,7 @@ $versions = DB::table('document_versions')->whereIn('document_id', $documents->p
 check($versions->count() === 2 && $versions->every(static fn ($version): bool => $version->mime === 'image/png'), '...each with one current version whose MIME was sniffed, not trusted');
 
 $trip->refresh();
-check($trip->status === TripStatus::PodPending, 'the capture walked arrived → pod_pending (§10.2)');
+check($trip->status === TripStatus::PodPending, 'the capture walked arrived → pod_pending');
 
 $kioskEvent = DB::table('operational_events')
     ->where('aggregate_type', 'trip')
@@ -671,7 +674,7 @@ $kioskEvent = DB::table('operational_events')
     ->where('to_state', 'pod_pending')
     ->first();
 
-check($kioskEvent !== null && $kioskEvent->actor_kind === ActorKind::Kiosk->value, '...and the trail attributes it to the kiosk, not to a person (§4.4)');
+check($kioskEvent!== null && $kioskEvent->actor_kind === ActorKind::Kiosk->value, '...and the trail attributes it to the kiosk, not to a person');
 
 $podIdsBefore = DB::table('proof_of_deliveries')->where('trip_id', $trip->id)->pluck('id')->all();
 $docIdsBefore = DB::table('documents')->where('morph_type', 'proof_of_delivery')->pluck('id')->all();
@@ -683,7 +686,7 @@ check(DB::table('proof_of_deliveries')->where('trip_id', $trip->id)->pluck('id')
 check(DB::table('documents')->where('morph_type', 'proof_of_delivery')->pluck('id')->all() === $docIdsBefore, '...and no duplicate signature or photo was filed');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.2 the driver cannot deliver: that is the office's decision ==\n";
+echo "\n== the driver cannot deliver: that is the office's decision ==\n";
 
 refuses(
     'a kiosk actor cannot move pod_pending → delivered',
@@ -694,7 +697,7 @@ refuses(
 
 check($trip->fresh()->status === TripStatus::PodPending, '...and the trip stayed where the driver left it');
 
-check(Gate::allows('pod.approve'), 'the Owner holds pod.approve (§9.3)');
+check(Gate::allows('pod.approve'), 'the Owner holds pod.approve');
 
 $approved = (app(ApprovePod::class))($pod->fresh(), 1);
 
@@ -716,7 +719,7 @@ refuses(
 );
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §4.1 rejection sends the paper back, not the truck ==\n";
+echo "\n== rejection sends the paper back, not the truck ==\n";
 
 [$tripB, $crewB] = $arrivedTrip('2', 210_000, 250);
 $driverB = $crewB[2];
@@ -757,7 +760,7 @@ $approvedB = (app(ApprovePod::class))($resubmitted->fresh(), 1);
 check($approvedB->status === PodStatus::Approved && $tripB->fresh()->status === TripStatus::Delivered, 'the replacement is approved and the trip delivered');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §15.2 3g the driver's fuel screen: one slip, one issue, one cost ==\n";
+echo "\n== 3g the driver's fuel screen: one slip, one issue, one cost ==\n";
 
 [$tripC, $crewC] = $arrivedTrip('3', 300_000, 300);
 $truckC = $crewC[0];
@@ -777,7 +780,7 @@ $created['tank_ids'][] = $otherTank->id;
 $fuelToken = $issue($tripC, (int) $driverC->id, ['fuel'], 1);
 $created['token_ids'][] = $fuelToken['token']->id;
 
-check($fuelToken['token']->hasScope(TripAccessScope::Fuel), 'a link issued for the fuel screen carries the fuel scope (§15.2 3g)');
+check($fuelToken['token']->hasScope(TripAccessScope::Fuel), 'a link issued for the fuel screen carries the fuel scope');
 check(! $fuelToken['token']->hasScope(TripAccessScope::Pod), '...and only that scope: the dispatcher chose the narrow door');
 
 $recordFuel = app(RecordKioskFuelIssue::class);
@@ -805,7 +808,7 @@ $podOnly = $issue($tripC, (int) $driverC->id, ['pod'], 1);
 $created['token_ids'][] = $podOnly['token']->id;
 
 refuses(
-    'a pod-only link cannot reach the fuel screen — scopes are narrow (§9.6)',
+    'a pod-only link cannot reach the fuel screen — scopes are narrow',
     fn () => $recordFuel($podOnly['token'], $podOnly['secret'], $podOnly['pin'], $dto(), (string) Str::uuid()),
     InvalidArgumentException::class,
     'does not carry the fuel'
@@ -830,14 +833,14 @@ $created['purchase_ids'][] = $kioskIssue->purchase_id;
 
 check($kioskIssue->source === FuelIssueSource::Kiosk, 'the issue says it was written at the kiosk');
 check($kioskIssue->status === FuelIssueStatus::Posted, '...and posted the cost rather than waiting for the office');
-check($kioskIssue->trip_access_token_id === $fuelToken['token']->id, '...naming the token row — attribution survives the shared phone (§9.6)');
+check($kioskIssue->trip_access_token_id === $fuelToken['token']->id, '...naming the token row — attribution survives the shared phone');
 check($kioskIssue->recorded_by === null, '...with no user recorded, because a driver has no account (ADR-0006)');
 
 $purchase = DB::table('fuel_purchases')->where('id', $kioskIssue->purchase_id)->first();
 
 check($purchase !== null && (int) $purchase->litres === 25_000 && (int) $purchase->price_per_litre_minor === 1_975, 'the slip is recorded at the litres and price on the driver\'s receipt');
 check($purchase !== null && (int) $purchase->amount === 493_750, '...its amount is litres × price: BWP 4 937.50');
-check($purchase !== null && (bool) $purchase->posted_to_ledger === false, '...and the slip is not posted as a payable — the issue carries the money (§6.8)');
+check($purchase!== null && (bool) $purchase->posted_to_ledger === false, '...and the slip is not posted as a payable — the issue carries the money');
 
 $cost = TripCost::query()->findOrFail($kioskIssue->trip_cost_id);
 
@@ -857,7 +860,7 @@ if ($entry !== null) {
 
     check($debit !== null && (int) $debit->account_id === $chart['5100']->id && (int) $debit->amount_base === 493_750, '...debiting 5100 fuel by the issued cost');
     check($credit !== null && (int) $credit->account_id === $chart['1110']->id && (int) $credit->amount_base === 493_750, '...and crediting 1110 petty cash, the money the driver spent');
-    check($debit !== null && $debit->truck_id === $truckC->id && $debit->trip_id === $tripC->id, '...with the truck and trip dimensions account 5100 requires (§6.1)');
+    check($debit!== null && $debit->truck_id === $truckC->id && $debit->trip_id === $tripC->id, '...with the truck and trip dimensions account 5100 requires');
 }
 
 $reading = DB::table('odometer_readings')->where('trip_id', $tripC->id)->where('odometer_km', 300_500)->first();
@@ -867,7 +870,7 @@ check((int) DB::table('trucks')->where('id', $truckC->id)->value('odometer_km') 
 
 $rollup = (int) DB::table('trips')->where('id', $tripC->id)->value('fuel_cost_base');
 
-check($rollup === 493_750, 'the §6.6 rollup\'s fuel bucket equals the posted cost ('.$rollup.')');
+check($rollup === 493_750, 'the rollup\'s fuel bucket equals the posted cost ('.$rollup.')');
 
 $issueEvent = DB::table('operational_events')
     ->where('aggregate_type', 'fuel_issue')
@@ -877,7 +880,7 @@ $issueEvent = DB::table('operational_events')
 
 $context = $issueEvent === null ? [] : (json_decode((string) $issueEvent->context, true) ?: []);
 
-check($issueEvent !== null && $issueEvent->actor_kind === ActorKind::Kiosk->value, '§10.9\'s recorded → posted move is on the trail attributed to the kiosk');
+check($issueEvent!== null && $issueEvent->actor_kind === ActorKind::Kiosk->value, 'the recorded → posted move is on the trail attributed to the kiosk');
 check(($context['trip_access_token_id'] ?? null) === $fuelToken['token']->id, '...and its context names the token, so the trail and the row agree');
 
 $fuelAuthority = KioskAuthority::verified($fuelToken['token'], $fuelToken['secret'], $fuelToken['pin'], TripAccessScope::Fuel);
@@ -898,12 +901,12 @@ refuses(
 
 $fuelRetry = $recordFuel($fuelToken['token'], $fuelToken['secret'], $fuelToken['pin'], $dto(), $clientUuid);
 
-check($fuelRetry->id === $kioskIssue->id, 'the same client_uuid returns the litre already recorded instead of buying it twice (§9.6)');
+check($fuelRetry->id === $kioskIssue->id, 'the same client_uuid returns the litre already recorded instead of buying it twice');
 check((int) DB::table('fuel_issues')->where('trip_id', $tripC->id)->count() === 1, '...and the trip holds exactly one issue');
 check((int) DB::table('fuel_purchases')->where('invoice_no', 'KIO-CASH-1')->count() === 1, '...and exactly one slip');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §9.6 revocation and expiry: two reasons a link dies, kept in two columns ==\n";
+echo "\n== revocation and expiry: two reasons a link dies, kept in two columns ==\n";
 
 $revoke = app(RevokeTripAccessToken::class);
 $revoked = $revoke($token->fresh());
@@ -920,7 +923,7 @@ $revokedEvent = DB::table('security_events')
     ->where('happened_at', '>=', $runStartedAt)
     ->get();
 
-check($revokedEvent->contains(static fn ($event): bool => str_contains((string) $event->meta, $token->id)), 'revocation is on the security trail with the token it closed (§14.4)');
+check($revokedEvent->contains(static fn ($event): bool => str_contains((string) $event->meta, $token->id)), 'revocation is on the security trail with the token it closed');
 
 $expiringIssue = $issue($tripB, (int) $driverB->id, ['pod'], 1);
 $expiring = $expiringIssue['token'];
@@ -933,6 +936,26 @@ $expiring->forceFill([
 
 check($expiring->fresh()->closedBecause() === 'expired', 'a token past its horizon reports "expired"');
 refuses('...and its secret no longer resolves', fn () => $redeem->fromSecret(1, $expiringIssue['secret'], '10.11.12.13'), InvalidArgumentException::class);
+asCompanyOne();
+
+/* ------------------------------------------------------------------------- */
+echo "\n== a link re-issued for a trip that ended long ago is born live, not expired ==\n";
+
+// The grace is measured from the trip's own end, so §10.2's rejection loop reaching the office days after
+// the truck arrived would ask for an expiry already in the past — and
+// `trip_access_tokens_expires_after_issue` refuses that insert. The issue still has to work.
+DB::table('trips')->where('id', $tripB->id)->update([
+    'departed_at' => Carbon::now()->subDays(5),
+    'arrived_at' => Carbon::now()->subDays(4),
+]);
+
+$late = $issue($tripB->fresh(), (int) $driverB->id, ['pod'], 1);
+$created['token_ids'][] = $late['token']->id;
+
+check((int) DB::table('trip_access_tokens')->where('id', $late['token']->id)->count() === 1, 'the database takes the insert — the expiry-after-issue CHECK is not tripped');
+check($late['token']->expires_at->isFuture(), '...because the horizon runs from the issue, not the stale arrival ('.$late['token']->expires_at->toIso8601String().')');
+check($late['token']->isLive(), '...so the re-issued link opens the capture form');
+refuses('the two-day-old link stays shut — the new door did not revive it', fn () => $redeem->fromSecret(1, $expiringIssue['secret'], '10.11.12.13'), InvalidArgumentException::class);
 asCompanyOne();
 
 /* ------------------------------------------------------------------------- */

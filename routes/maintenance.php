@@ -5,10 +5,10 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 
 /*
- * Workshop screens (§3.2). `maintenance` is the register of service schedules and work orders, and
+ * Workshop screens. `maintenance` is the register of service schedules and work orders, and
  * `maintenance/work-orders/{workOrder}` is one order's machine, lines, costs and trail.
  *
- * Both read on `maintenance.view` — §9.3 gives every seat that much, because a dispatcher asking
+ * Both read on `maintenance.view` — the design gives every seat that much, because a dispatcher asking
  * "is the truck in the workshop" and an accountant reading a repair bill are both reading. What each
  * seat may *do* is the Actions' own gates: `work_orders.create` for the workshop, `work_orders.approve`
  * for the spend, `work_orders.close` for the freeze.
@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Route;
  * repairs without reading what the store holds. Receiving is `parts.adjust`, counting is `parts.count`
  * — both gated in the Actions rather than by the route, so the page can print the seat's own controls.
  *
- * The detail route binds by ULID (§2), so a foreign id is a 404 rather than somebody else's work
+ * The detail route binds by ULID, so a foreign id is a 404 rather than somebody else's work
  * order: the tenancy scope answers the lookup before `mount()` sees a row.
  */
 Route::middleware(['auth', 'verified'])->group(function (): void {

@@ -19,10 +19,10 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.1 ROUTE_RATE — one customer's price for one corridor on one basis, over a validity window.
+ * ROUTE_RATE — one customer's price for one corridor on one basis, over a validity window.
  *
  * The class depends on the Invoicing module's `Customer` for exactly one reason: a rate without a
- * customer is not a price, it is a wish. §3's module map already draws the edge Operations →
+ * customer is not a price, it is a wish. The module map already draws the edge Operations →
  * Invoicing, and `scripts/lint-architecture.php` declares it explicitly rather than letting the
  * import hide.
  *
@@ -90,7 +90,7 @@ final class RouteRate extends Model implements AuditableContract
 
     /**
      * The stored amount as money, in the card's own currency. The screen formats it; the model
-     * does not own a decimal format (§5.1), and a rate quoted in ZAR must not be rendered with the
+     * does not own a decimal format, and a rate quoted in ZAR must not be rendered with the
      * company's Pula symbol as if it were a base amount.
      */
     public function amount(): Money

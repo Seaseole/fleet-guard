@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * T1-T4 in DESIGN.md §8 / ADR-0003: one company today, but the company is a row, not
+     * T1-T4 in DESIGN.md / ADR-0003: one company today, but the company is a row, not
      * an assumption. Settings that would otherwise be hard-coded (currency, timezone,
      * fiscal year) live here so a second company is data, not a deploy.
      */
@@ -27,7 +27,7 @@ return new class extends Migration
             $table->string('timezone', 64)->default('Africa/Gaborone');
             $table->char('country_code', 2)->default('BW');
 
-            // §17 Q3 is unresolved, so the fiscal year is a value we can change, not a
+            // Q3 is unresolved, so the fiscal year is a value we can change, not a
             // migration. Calendar-year default until the accountant answers.
             $table->date('fiscal_year_starts_on')->default('2000-01-01');
 

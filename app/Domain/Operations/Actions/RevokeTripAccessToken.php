@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * §9.6's `revoked` flag, flipped by the seat that issued it.
+ * The `revoked` flag, flipped by the seat that issued it.
  *
  * Revocation, not deletion: the row is the audit's record of who held a door to which trip and when, and
  * a deleted token would turn "who could have written this POD at 03:12?" into an unanswerable question.
@@ -27,7 +27,7 @@ final class RevokeTripAccessToken
     {
         return DB::transaction(function () use ($token): TripAccessToken {
             if (! Gate::allows('kiosk.token.issue')) {
-                throw new \InvalidArgumentException('Only the seat that can issue a driver link can close it (§9.3).');
+                throw new \InvalidArgumentException('Only the seat that can issue a driver link can close it.');
             }
 
             $token->forceFill(['revoked' => true])->save();

@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * §15.2 Phase 0.5 CUTOVER_ROW — one parsed line, kept whether it validated or not.
+ * Phase 0.5 CUTOVER_ROW — one parsed line, kept whether it validated or not.
  *
  * Rejected rows are the deliverable, not waste: the error report is built from them, and the
  * accountant corrects the spreadsheet against the same line numbers. Commit reads only

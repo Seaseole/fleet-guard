@@ -8,11 +8,11 @@ use DateTimeInterface;
 use Illuminate\Support\Carbon;
 
 /**
- * §10.4 axis three — how late an invoice is, derived from `due_on` against today.
+ * Axis three — how late an invoice is, derived from `due_on` against today.
  *
  * Stored nowhere. An ageing column is a number that is wrong every midnight, and the AR report would then
  * be a stale figure the accountant discovers at month end. `Invoice::ageingState()` computes it, and the
- * buckets are the five §10.4 names plus `disputed`, which is not a date question at all.
+ * buckets are the five the design names plus `disputed`, which is not a date question at all.
  *
  * `disputed` is unreachable from a date and is deliberately not inferred from a credit note existing: a
  * credit note is a correction that has been agreed, whereas a dispute is a customer who has not paid and
@@ -51,7 +51,7 @@ enum AgeingBucket: string
 
     /**
      * The bucket a due date falls into today. The boundary days belong to the older bucket, so a 30-day
-     * invoice is `1–30` and a 31-day one is `31–60` — the same reading as the §10.4 names.
+     * invoice is `1–30` and a 31-day one is `31–60` — the same reading as the design names.
      */
     public static function for(DateTimeInterface $dueOn, ?DateTimeInterface $today = null): self
     {

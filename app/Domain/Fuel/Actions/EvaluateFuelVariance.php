@@ -23,11 +23,11 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * §10.9's fuel-variance judgement, made when a trip completes: did this load burn more diesel than
+ * fuel-variance judgement, made when a trip completes: did this load burn more diesel than
  * the truck's own expected figure says it should have?
  *
  * The comparison is per 100 km, not per trip, because that is the only figure two trips of different
- * lengths can be held to. The **inputs are stored on the row** (§5.5) — distance, litres, tonnes and
+ * lengths can be held to. The **inputs are stored on the row** — distance, litres, tonnes and
  * the expected rate in force — so a decision made today still says what it was about when the
  * company's expectation changes next year.
  *
@@ -36,7 +36,7 @@ use Illuminate\Support\Facades\DB;
  * the unique key is the guard, and a re-completed trip refreshes the figures only while the row is
  * still **open**; a decided row is a judgement about figures that have already been examined.
  *
- * The alert goes out through §14.1's single door with the variance row as its subject, so resolving
+ * The alert goes out through single door with the variance row as its subject, so resolving
  * the row can close the alert it raised.
  */
 final class EvaluateFuelVariance
@@ -70,11 +70,11 @@ final class EvaluateFuelVariance
             return null;
         }
 
-        if ((int) round($truck->expected_consumption_per_100 * 100) <= 0) {
+        if ((int) round((float) $truck->expected_consumption_per_100 * 100) <= 0) {
             return null;
         }
 
-        $figures = FuelConsumption::compare($litresX100, $distanceKm, $truck->expected_consumption_per_100);
+        $figures = FuelConsumption::compare($litresX100, $distanceKm, (float) $truck->expected_consumption_per_100);
         $variancePctX100 = $figures['variance_pct_x100'];
 
         $thresholdPctX100 = (int) round((float) $this->settings->get('fuel.variance_threshold_pct') * 100);

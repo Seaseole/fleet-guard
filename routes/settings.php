@@ -11,9 +11,9 @@ Route::middleware(['auth'])->group(function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('settings/appearance', 'pages::settings.appearance')->name('appearance.edit');
 
-    // §9.2's device list, own-scope: everyone sees and revokes the devices carrying *their* credential,
+    // The device list, own-scope: everyone sees and revokes the devices carrying *their* credential,
     // and nobody is handed another person's session rows. The administrative control for "stop this
-    // person" is deactivating their account (§9.1), not this screen.
+    // person" is deactivating their account, not this screen.
     Route::livewire('settings/sessions', 'pages::settings.sessions')->name('sessions.edit');
 
     Route::livewire('settings/security', 'pages::settings.security')
@@ -23,9 +23,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('security.edit');
 
     /*
-     * §9.3's Settings row, application scope. It is company-held policy, not a per-person
+     * The Settings row, application scope. It is company-held policy, not a per-person
      * preference, which is why it lives at its own URL rather than in the personal list beside it.
-     * The row is ⚑, so the route asks for the password again within §9.1's window; the page itself
+     * The row is ⚑, so the route asks for the password again within the window; the page itself
      * refuses a save without `settings.manage` (Owner), while Operations and Accounting may read it.
      */
     Route::redirect('settings/company', '/settings/application')

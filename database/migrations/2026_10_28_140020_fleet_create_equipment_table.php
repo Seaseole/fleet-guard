@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 EQUIPMENT — the yard's loaders, generators and toolboxes.
+     * EQUIPMENT — the yard's loaders, generators and toolboxes.
      *
      * Separate from trucks because it is dispatched by nobody and has no papers, but it still costs
      * money and still goes to the workshop, so it gets the same state column and the same cost

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Operations;
 
 /**
- * §4.4 BORDER_COST's `kind` — what the gate charged for.
+ * BORDER_COST's `kind` — what the gate charged for.
  *
  * The list is the DESIGN sketch's own; `other` is last because a charge that does not fit is a
  * question for the accountant, not a bucket to hide in. Phase 6 reads these to split recoverable

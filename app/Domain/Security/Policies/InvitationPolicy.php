@@ -9,7 +9,7 @@ use App\Domain\Security\Models\Invitation;
 use App\Models\User;
 
 /**
- * Invitations are an Owner-only capability (§9.3 "Users, roles, permissions ⚑ — **F only**"), so
+ * Invitations are an Owner-only capability ("Users, roles, permissions ⚑ — **F only**"), so
  * the policy is a single question with a company check in front of it.
  */
 final class InvitationPolicy

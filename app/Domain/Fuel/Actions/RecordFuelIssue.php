@@ -32,7 +32,7 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
- * Issues fuel onto a trip, and posts it, and measures the truck — in one transaction (§4.3, §6.8).
+ * Issues fuel onto a trip, and posts it, and measures the truck — in one transaction.
  *
  * This is the fuel module's one write door for the fleet's diesel, and it composes Phase 2's
  * machinery rather than re-implementing it:
@@ -50,13 +50,13 @@ use InvalidArgumentException;
  * cannot dispense more than it bought. A bulk tank must hold the litres asked for: stock may not go
  * negative, because a tank that owes litres is not a number anybody can reconcile.
  *
- * Above everything, the issue is **on a trip**: §4.3 allows a null `trip_id` for stock consumed off a
- * trip, but account 5100 requires the trip dimension (§6.1), so this door still demands one.
+ * Above everything, the issue is **on a trip**: The design allows a null `trip_id` for stock consumed off a
+ * trip, but account 5100 requires the trip dimension, so this door still demands one.
  *
  * **Two doors, one write.** A person holding `fuel.record` records an issue from the trip panel; a
  * driver's phone holds a verified {@see KioskAuthority} instead and the source must say `kiosk`, so
  * the register can always tell which door a litre came through. The token is bound to this trip and
- * names itself on the row, which is what §9.6's "attribution survives the shared phone" asks for.
+ * names itself on the row, which is what the "attribution survives the shared phone" asks for.
  */
 final class RecordFuelIssue
 {
@@ -68,7 +68,7 @@ final class RecordFuelIssue
     public function __invoke(Trip $trip, FuelIssueDto $dto, ?int $actorId = null, ?KioskAuthority $kiosk = null): FuelIssue
     {
         if ($kiosk === null && ! Gate::allows('fuel.record')) {
-            throw new InvalidArgumentException('Issuing fuel is workshop recording (§9.3).');
+            throw new InvalidArgumentException('Issuing fuel is workshop recording.');
         }
 
         $this->assertSourceMatchesTheDoor($trip, $dto, $kiosk);
@@ -82,7 +82,7 @@ final class RecordFuelIssue
         }
 
         $truckId = $trip->truck_id ?? throw new InvalidArgumentException(sprintf(
-            'Trip %s has no truck, so there is no tank to fill. Plan the trip first (§10.2).',
+            'Trip %s has no truck, so there is no tank to fill. Plan the trip first.',
             $trip->trip_no,
         ));
 
@@ -126,7 +126,9 @@ final class RecordFuelIssue
                 $rateDate = $dto->occurredOn;
                 $paidWith = TripCostPayment::Stock;
             } else {
-                $purchase = FuelPurchase::query()->whereKey($dto->purchaseId)->first()
+                // The remaining litres are a live sum over this slip's issues, so the slip row is what
+                // serialises two doors drawing on the same last few litres.
+                $purchase = FuelPurchase::query()->whereKey($dto->purchaseId)->lockForUpdate()->first()
                     ?? throw new InvalidArgumentException('That fuel purchase is not in this company\'s register, so the issue has no cost to carry.');
 
                 $remaining = $purchase->litresRemainingX100();
@@ -252,7 +254,7 @@ final class RecordFuelIssue
     private function assertSourceMatchesTheDoor(Trip $trip, FuelIssueDto $dto, ?KioskAuthority $kiosk): void
     {
         if ($dto->source === FuelIssueSource::Kiosk && $kiosk === null) {
-            throw new InvalidArgumentException('A kiosk issue is written by the driver\'s fuel screen (§9.6). The office panel records the slips it can name.');
+            throw new InvalidArgumentException('A kiosk issue is written by the driver\'s fuel screen. The office panel records the slips it can name.');
         }
 
         if ($kiosk === null) {
@@ -295,7 +297,7 @@ final class RecordFuelIssue
     }
 
     /**
-     * §7 R7: a tank that takes more litres than it holds is a datum to question, not a write to
+     * R7: a tank that takes more litres than it holds is a datum to question, not a write to
      * refuse — refusing would push the discrepancy into a wrong-but-accepted number. The row keeps
      * the reading and says why it looks wrong.
      */

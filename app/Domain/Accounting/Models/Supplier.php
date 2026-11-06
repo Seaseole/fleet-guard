@@ -15,13 +15,13 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * SUPPLIER — the party that bills the fleet (§4.2 `SUPPLIER ||--o{ BILL`).
+ * SUPPLIER — the party that bills the fleet (`SUPPLIER ||--o{ BILL`).
  *
- * `category` is §4.2's bill vocabulary, so a supplier row can default a bill's expense account
+ * `category` is the bill vocabulary, so a supplier row can default a bill's expense account
  * instead of asking the clerk every time. It is not a constraint on what the supplier may sell —
  * a parts shop occasionally does labour — it is what most bills from them are.
  *
- * No bank details: paying a supplier is a Phase 5 concern with its own §9.4 gate and §9.5 trio.
+ * No bank details: paying a supplier is a Phase 5 concern with its own gate and trio.
  *
  * @property int $id
  * @property int $company_id

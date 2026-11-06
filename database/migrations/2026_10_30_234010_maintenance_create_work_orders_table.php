@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 WORK_ORDER — one piece of workshop work against a truck, with the approval threshold that
-     * makes the workshop answerable for what it spends (§10.6, §15.2 phase 3).
+     * WORK_ORDER — one piece of workshop work against a truck, with the approval threshold that
+     * makes the workshop answerable for what it spends.
      *
      * **The threshold is copied onto the row.** `approval_required_amount_base` holds the limit that
      * was in force when the order was raised, or zero when the estimate was already under it. Copying
@@ -24,7 +24,7 @@ return new class extends Migration
      * and never after `closed`; the screen's number and the row's number are the same three
      * additions, and the CHECK keeps the parts adding up to the whole.
      *
-     * **Posting is not a state (§10.6).** Nothing here posts: parts post when stock leaves (phase 3e),
+     * **Posting is not a state.** Nothing here posts: parts post when stock leaves (phase 3e),
      * labour when a timesheet is approved, external work when the supplier bill is recorded (phase 5).
      * `closed` freezes editability, and that is all it does.
      */
@@ -100,7 +100,7 @@ return new class extends Migration
 
         DB::statement('alter table `work_orders` add constraint `work_orders_totals_add_up` check (total_cost_base = labour_cost_base + parts_cost_base + external_cost_base)');
 
-        // §10.6's single control: an order that needed an owner's approval cannot be worked without
+        // The single control: an order that needed an owner's approval cannot be worked without
         // one. Under-threshold orders carry a zero and need no approver.
         DB::statement('alter table `work_orders` add constraint `work_orders_started_is_approved` check (
             status not in (\'in_progress\', \'on_hold\', \'completed\', \'inspected\', \'closed\')
@@ -108,7 +108,7 @@ return new class extends Migration
             or approved_by is not null
         )');
 
-        // §10.6: completing "requires odometer at fitment", so every state past it names the reading.
+        // Completing "requires odometer at fitment", so every state past it names the reading.
         DB::statement('alter table `work_orders` add constraint `work_orders_completed_has_odometer` check (
             status not in (\'completed\', \'inspected\', \'closed\') or completion_odometer_km is not null
         )');

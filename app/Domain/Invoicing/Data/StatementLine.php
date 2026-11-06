@@ -10,12 +10,12 @@ use App\Domain\Invoicing\SettlementState;
 use DateTimeImmutable;
 
 /**
- * One invoice as a customer statement prints it (§10.6, §14.4).
+ * One invoice as a customer statement prints it.
  *
  * A statement is a *snapshot handed to the customer*, so every figure is copied out of the rows at the
  * moment the page renders — the number, the gross, what has been settled against it and what is left.
  * It deliberately carries no model: a queued email must not re-read a company-scoped invoice once the
- * tenant has been dropped (§20.8's defect), and the printed PDF must not change because somebody
+ * tenant has been dropped (the defect), and the printed PDF must not change because somebody
  * allocated a payment while the mail sat in the queue.
  */
 final readonly class StatementLine

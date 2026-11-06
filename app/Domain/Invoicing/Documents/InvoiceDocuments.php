@@ -14,9 +14,9 @@ use Spatie\LaravelPdf\Facades\Pdf;
 use Spatie\LaravelPdf\PdfBuilder;
 
 /**
- * §14.4's print door: the three documents a customer receives, rendered by the **DOMPDF** driver.
+ * The print door: the three documents a customer receives, rendered by the **DOMPDF** driver.
  *
- * DOMPDF is the default on purpose (§17): it needs no Chrome, no Node and no container binary, which is
+ * DOMPDF is the default on purpose: it needs no Chrome, no Node and no container binary, which is
  * the only honest answer for a Windows dev box and for Laravel Cloud. `config/laravel-pdf.php` pins it as
  * the default rather than leaving Browsershot in place with a comment, because a deployment that never
  * installs Chrome would discover the difference at the first invoice.
@@ -24,7 +24,7 @@ use Spatie\LaravelPdf\PdfBuilder;
  * Rendering is synchronous here and called from the queue where the caller wants it so. The bytes are
  * returned rather than a response because the two callers differ: the browser wants a download, the
  * mailable wants an attachment. Neither needs a live model after the call — that is the point, since the
- * worker runs without a company context (§20.8).
+ * worker runs without a company context.
  */
 final class InvoiceDocuments
 {

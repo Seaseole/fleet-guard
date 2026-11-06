@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 FUEL_TANK — the physical tank a truck carries fuel in.
+     * FUEL_TANK — the physical tank a truck carries fuel in.
      *
      * The truck rows already carry `main_tank_litres`/`aux_tank_litres` from Phase 1 as the stated
      * capacity; this table is the per-tank record an issue fills, because an issue that cannot name

@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Domain\Maintenance;
 
 /**
- * What a work-order line is (§4.3).
+ * What a work-order line is.
  *
  * The four kinds are the four ways a workshop spends money, and they are kept apart because they
- * post in different places at different times (§10.6): a `part` line becomes a stock issue in phase
+ * post in different places at different times: a `part` line becomes a stock issue in phase
  * 3e, `labour` waits for a timesheet, `external` waits for the supplier's bill, and `consumable` is
  * the oil that is neither stocked nor invoiced. The work order's totals carry the same split, so the
  * close-time capitalise decision can be taken line by line.

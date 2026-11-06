@@ -9,7 +9,7 @@ use App\Domain\Kernel\Cutover\Models\CutoverBatch;
 use App\Domain\Kernel\Money\Money;
 
 /**
- * §15.2's error report — the file the accountant works from.
+ * The error report — the file the accountant works from.
  *
  * Batch errors get line 0 because they belong to no row; row errors keep their physical line
  * number. A trial balance prints its ledger columns; every other dataset prints the columns its

@@ -9,7 +9,7 @@ use App\Providers\IdentityServiceProvider;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * One method per {@see FieldGate}, each of which is the whole of that gate's decision (§9.4).
+ * One method per {@see FieldGate}, each of which is the whole of that gate's decision.
  *
  * The rule the section is protecting: a Blade component never writes an ad-hoc `@can(...)`
  * expression around a sensitive column, and a report export never re-selects columns by hand.
@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Gate;
  * same thing in a table cell, a PDF and a CSV.
  *
  * Each method takes only the user. When a gate needs the row — "own truck", "own trip", the
- * kiosk-token cases in §9.6 — the subject argument is added here and nowhere else, so the
+ * kiosk-token cases in the subject argument is added here and nowhere else, so the
  * row-scoped half of a field rule still resolves to one method.
  */
 final class FieldGatePolicy
@@ -38,7 +38,7 @@ final class FieldGatePolicy
     }
 
     /**
-     * §9.5: the masked column exists so lists, sorting and search keep working without this gate.
+     * The masked column exists so lists, sorting and search keep working without this gate.
      * Opening it decrypts on demand, which is why it is also on the re-auth list in the catalogue.
      */
     public function seeBankDetail(?User $user): bool

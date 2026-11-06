@@ -6,7 +6,7 @@ declare(strict_types=1);
  * Phase 3 slice 3a — the fuel register and the trip's fuel panel, driven through the real stack.
  *
  * `verify-fuel.php` proves the Actions and the schema. This sweep proves the two screens that carry
- * them: that a slip, a station, a tank and an issue are readable to the seats §9.3 names, that a
+ * them: that a slip, a station, a tank and an issue are readable to the seats the design names, that a
  * seat without `fuel.record` is offered no control that would refuse it, that the trip panel is the
  * only place an issue is recorded, and that a rendered page still shows exactly one filled action.
  *
@@ -91,6 +91,17 @@ final class FuelRenderSweep extends TestCase
 
     /** @var list<int> */
     private array $varianceIds = [];
+
+    /**
+     * The scopes `documents:number-integrity` already reported as drifting when this run started.
+     * A development database that has had fixtures deleted by earlier sweeps carries real gaps in
+     * the `job`/`trip` counters, and no amount of re-aligning can close a gap somebody else burned.
+     * What this sweep must prove is that *it* added no drift, so the assertion compares the
+     * post-run drift set against this baseline instead of demanding a globally clean register.
+     *
+     * @var list<string>
+     */
+    private array $driftBefore = [];
 
     public function createApplication(): Application
     {
@@ -220,7 +231,7 @@ final class FuelRenderSweep extends TestCase
             bulkTankId: $bulk->id,
         ), 1);
 
-        // §10.9's judgement, made against the slip fuel the trip has burned so far: 250.50 L over
+        // The judgement, made against the slip fuel the trip has burned so far: 250.50 L over
         // 1,000 km is 25.05 L/100 against the truck's 30.00 — a -16.50% variance, above the band.
         $truck->forceFill(['expected_consumption_per_100' => 30.0])->save();
         $trip->forceFill(['distance_km_10_2' => 1000.0])->save();
@@ -246,7 +257,7 @@ final class FuelRenderSweep extends TestCase
             }
         });
 
-        $this->attempt('that page shows exactly one filled action (§5)', function () use ($owner): void {
+        $this->attempt('that page shows exactly one filled action', function () use ($owner): void {
             $html = (string) $this->actingAs($owner, 'web')->get('/fuel')->assertOk()->getContent();
             $this->assertOneFilledAction($html, '/fuel');
         });
@@ -255,7 +266,7 @@ final class FuelRenderSweep extends TestCase
             $html = (string) $this->actingAs($accountant, 'web')->get('/fuel')->assertOk()->getContent();
 
             if (! str_contains($html, 'FUE-SLIP-1')) {
-                throw new Exception('the accountant cannot see the register (§9.3 gives fuel.view)');
+                throw new Exception('the accountant cannot see the register (the design gives fuel.view)');
             }
 
             foreach (['open-fuel-slip', 'open-fuel-station', 'open-fuel-tank', 'open-bulk-tank', 'open-bulk-dip', 'Record a slip'] as $control) {
@@ -302,7 +313,7 @@ final class FuelRenderSweep extends TestCase
             $html = (string) $this->actingAs($accountant, 'web')->get('/fuel')->assertOk()->getContent();
 
             if (! str_contains($html, '-16.50%')) {
-                throw new Exception('the accountant cannot see the variance register (§9.3 gives fuel.view)');
+                throw new Exception('the accountant cannot see the variance register (the design gives fuel.view)');
             }
 
             if (str_contains($html, 'fuel-variance') || str_contains($html, 'startVariance')) {
@@ -320,7 +331,7 @@ final class FuelRenderSweep extends TestCase
             echo "  ok    (unpermissioned user answered {$status})\n";
         });
 
-        echo "\n== The trip's fuel panel is where fuel is issued (§10.9) ==\n";
+        echo "\n== The trip's fuel panel is where fuel is issued ==\n";
 
         $this->attempt('the trip page carries the fuel panel with the issue it already has', function () use ($owner, $trip): void {
             $html = (string) $this->actingAs($owner, 'web')->get('/trips/'.$trip->id)->assertOk()->getContent();
@@ -332,7 +343,7 @@ final class FuelRenderSweep extends TestCase
             }
         });
 
-        $this->attempt('the trip page shows exactly one filled action (§5)', function () use ($owner, $trip): void {
+        $this->attempt('the trip page shows exactly one filled action', function () use ($owner, $trip): void {
             $html = (string) $this->actingAs($owner, 'web')->get('/trips/'.$trip->id)->assertOk()->getContent();
             $this->assertOneFilledAction($html, '/trips/'.$trip->id);
         });
@@ -345,7 +356,7 @@ final class FuelRenderSweep extends TestCase
             }
         });
 
-        echo "\n== The register's three dialogs write what they say (§4.3) ==\n";
+        echo "\n== The register's three dialogs write what they say ==\n";
 
         $this->attempt('a station registered through the dialog lands once and refuses its duplicate', function () use ($clerk): void {
             Livewire::actingAs($clerk)
@@ -409,7 +420,7 @@ final class FuelRenderSweep extends TestCase
                 ->assertHasErrors('slip');
         });
 
-        echo "\n== The bulk tank dialogs: open, dip, and deliver into stock (§15.2) ==\n";
+        echo "\n== The bulk tank dialogs: open, dip, and deliver into stock ==\n";
 
         $this->attempt('a bulk tank opened through the dialog lands empty, and its name is refused twice', function () use ($clerk): void {
             Livewire::actingAs($clerk)
@@ -647,7 +658,7 @@ final class FuelRenderSweep extends TestCase
             }
         });
 
-        echo "\n== §10.9: the trip's consumption, the correction and the decision ==\n";
+        echo "\n== the trip's consumption, the correction and the decision ==\n";
 
         $this->attempt('the trip panel states the trip\'s consumption against the truck\'s expected figure', function () use ($owner, $trip): void {
             $html = (string) Livewire::actingAs($owner)->test('pages::fuel.trip-panel', ['trip' => $trip])->html();
@@ -668,12 +679,14 @@ final class FuelRenderSweep extends TestCase
             }
 
             if (str_contains($clerkHtml, 'fuel-issue-reversal') || str_contains($clerkHtml, 'startReversal')) {
-                throw new Exception('the clerk was offered the reversal, which fuel.correct refuses (§9.3)');
+                throw new Exception('the clerk was offered the reversal, which fuel.correct refuses');
             }
         });
 
         $this->attempt('a reversal with no reason is refused before anything posts', function () use ($owner, $trip): void {
             $fifty = FuelIssue::query()->where('trip_id', $trip->id)->where('litres_x100', 5_000)->firstOrFail();
+
+            $this->withSession(['auth.password_confirmed_at' => time()]);
 
             Livewire::actingAs($owner)
                 ->test('pages::fuel.trip-panel', ['trip' => $trip])
@@ -689,6 +702,8 @@ final class FuelRenderSweep extends TestCase
 
         $this->attempt('the owner reverses the fifty-litre issue and the open variance follows it', function () use ($owner, $trip, $variance): void {
             $fifty = FuelIssue::query()->where('trip_id', $trip->id)->where('litres_x100', 5_000)->firstOrFail();
+
+            $this->withSession(['auth.password_confirmed_at' => time()]);
 
             Livewire::actingAs($owner)
                 ->test('pages::fuel.trip-panel', ['trip' => $trip])
@@ -729,6 +744,8 @@ final class FuelRenderSweep extends TestCase
         });
 
         $this->attempt('the owner decides the variance and resolving closes its alert', function () use ($owner, $variance): void {
+            $this->withSession(['auth.password_confirmed_at' => time()]);
+
             Livewire::actingAs($owner)
                 ->test('pages::fuel.index')
                 ->call('startVariance', $variance->id)
@@ -815,7 +832,7 @@ final class FuelRenderSweep extends TestCase
             );
 
             throw new Exception(sprintf(
-                '%s: %d filled actions on screen together (%s) — §5 allows one per view',
+                '%s: %d filled actions on screen together (%s) — the design allows one per view',
                 $label,
                 $count,
                 implode(' | ', $labels),
@@ -854,6 +871,7 @@ final class FuelRenderSweep extends TestCase
 
         $this->purge();
         $this->alignCounters('before the run, after an earlier run\'s debris');
+        $this->driftBefore = $this->driftScopes();
 
         try {
             $this->sweep();
@@ -1008,6 +1026,23 @@ final class FuelRenderSweep extends TestCase
         echo "  counters aligned to the surviving rows ({$when})\n";
     }
 
+    /**
+     * The scopes the integrity sweep currently reports as drifting, keyed `company=N scope`.
+     *
+     * @return list<string>
+     */
+    private function driftScopes(): array
+    {
+        Artisan::call('documents:number-integrity');
+
+        preg_match_all('/^\s*DRIFT\s+company=(\d+)\s+(\S+)/m', Artisan::output(), $matches, PREG_SET_ORDER);
+
+        return array_map(
+            static fn (array $match): string => 'company='.$match[1].' '.$match[2],
+            $matches,
+        );
+    }
+
     private function assertNothingSurvives(): void
     {
         $leftovers = [
@@ -1042,13 +1077,15 @@ final class FuelRenderSweep extends TestCase
         // last surviving number reads as drift. Align first, then ask the command.
         $this->alignCounters('after cleanup, so the counters match the rows that survived');
 
-        $exit = Artisan::call('documents:number-integrity');
+        $drift = array_values(array_diff($this->driftScopes(), $this->driftBefore));
 
-        if ($exit !== 0) {
+        if ($drift !== []) {
             $this->failures++;
-            echo '  FAIL  number integrity — '.mb_substr(str_replace("\n", ' ', Artisan::output()), 0, 200)."\n";
+            echo '  FAIL  number integrity — this sweep burned numbers in '.implode(', ', $drift)."\n";
         } else {
-            echo "  ok    the counters and the surviving rows agree\n";
+            echo '  ok    this sweep added no drift to the counters'
+                .($this->driftBefore === [] ? '' : ' ('.count($this->driftBefore).' scope(s) were already drifting before it)')
+                ."\n";
         }
 
         echo '  ok    the demo fleet is intact: '.DB::table('trucks')->count()." trucks registered\n";

@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * A single-use invitation to a staff account (§9.1). Public registration is off, so this row plus
+ * A single-use invitation to a staff account. Public registration is off, so this row plus
  * {@see AcceptInvitation()} is the only way a user record comes into
  * existence — which is why the row carries the role it grants, the address it was sent to, and the
  * proof of what happened to it.

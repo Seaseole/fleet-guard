@@ -6,7 +6,7 @@ use App\Http\Controllers\Cutover\DownloadCutoverErrorsController;
 use Illuminate\Support\Facades\Route;
 
 /*
- * §15.2 Phase 0.5 — legacy intake and the opening-balance rehearsal.
+ * Phase 0.5 — legacy intake and the opening-balance rehearsal.
  *
  * One screen serves both halves of the workflow on purpose: upload, validate and preview are the
  * accountant's work (`cutover.import`), while posting and reversing are the Owner's

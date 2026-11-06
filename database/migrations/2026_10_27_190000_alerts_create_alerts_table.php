@@ -10,28 +10,28 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.4 ALERT — the single source of truth for "needs attention" (§14.1).
+     * ALERT — the single source of truth for "needs attention".
      *
-     * Three things in this table are not in §4.4's sketch, and each one is here because the sketch
-     * contradicted §10's own rule for the same aggregate:
+     * Three things in this table are not in the sketch, and each one is here because the sketch
+     * contradicted the design's own rule for the same aggregate:
      *
-     * 1. `muted_until` — §10 (line "`muted` with an expiry so muting cannot silently become
-     *    permanent") requires an expiry, and the schema block in §4.4 lists no column to hold it.
+     * 1. `muted_until` — (line "`muted` with an expiry so muting cannot silently become
+     *    permanent") requires an expiry, and the schema block in the design lists no column to hold it.
      *    A mute with no expiry is a resolved alert wearing a different name.
      * 2. `acknowledged_at` / `muted_*` / `resolved_*` as three separate dated decisions rather than
      *    one `resolved_at`. The state machine has three exits and they are made by different people
      *    for different reasons; one column would make "who dismissed this" unanswerable.
-     * 3. `first_seen_at` / `last_seen_at` / `notify_count`. The cooldown promise in §14.1 is "a
+     * 3. `first_seen_at` / `last_seen_at` / `notify_count`. The cooldown promise in the design is "a
      *    nightly job cannot email the same expiring licence fourteen times" — which is a statement
      *    about how often a condition was *seen* and how many times it was *delivered*. Neither is
      *    derivable from a row that only records the first insert.
      *
-     * `cooldown_key` is unique **per company**, not globally. §4.4 writes `UK` beside it, but a
+     * `cooldown_key` is unique **per company**, not globally. The design writes `UK` beside it, but a
      * subject id is only unique inside its own tenant for the rows that have no ULID at all — two
      * companies' `ledger:verify` failure both name the subject `command/ledger:verify`, and a global
      * unique would let the first company's alert swallow the second's. Silently.
      *
-     * `type` is a string + CHECK rather than a MySQL ENUM, for the §6.1 reason repeated on every
+     * `type` is a string + CHECK rather than a MySQL ENUM, for the reason repeated on every
      * value list in this app: the telematics phase adds `geofence` and `route_deviation` (already
      * listed here) and something later adds more. A CHECK edit is a deliberate act; an ENUM rebuild
      * is a table lock.
@@ -45,12 +45,12 @@ return new class extends Migration
             $table->string('type', 32);
             $table->string('severity', 8)->default('warning');
 
-            // The thing the alert is about. Unconstrained for §4.4's own reason: the subject is a
+            // The thing the alert is about. Unconstrained for the design's own reason: the subject is a
             // truck's licence in Phase 1 and an invoice in Phase 4, and neither table exists yet.
             $table->string('subject_type', 120)->nullable();
             $table->char('subject_id', 26)->nullable();
 
-            // The company business day the condition was true on (§2: derived against the company's
+            // The company business day the condition was true on (derived against the company's
             // zone, never the storage zone — see Validity::for()).
             $table->date('occurred_on');
 
@@ -84,9 +84,9 @@ return new class extends Migration
             $table->index(['state', 'muted_until'], 'alerts_mute_expiry_index');
         });
 
-        // §4.4's value list, plus `self_check_failure`. §14.6's last line — "every one is scheduled;
-        // every failure raises an alert" — needs a type, and none of §4.4's ten fits: a digest
-        // mismatch on the private disk is not a `posting_failure`, which §11.3 reserves for a posting
+        // The value list, plus `self_check_failure`. The last line — "every one is scheduled;
+        // every failure raises an alert" — needs a type, and none of the ten fits: a digest
+        // mismatch on the private disk is not a `posting_failure`, which reserves for a posting
         // that hit a locked period. Reusing that name would put integrity drift on the ledger
         // exceptions screen and hide it from the Owner where the accounting team would never look.
         DB::statement("alter table `alerts` add constraint `alerts_type_allowed` check (type in ('doc_expiry', 'service_due', 'overdue_invoice', 'fuel_variance', 'geofence', 'route_deviation', 'loan_due', 'cash_shortage', 'permit_expiry', 'posting_failure', 'self_check_failure'))");
@@ -99,31 +99,31 @@ return new class extends Migration
         DB::statement('alter table `alerts` add constraint `alerts_subject_is_a_pair` check ((subject_type is null and subject_id is null) or (subject_type is not null and subject_id is not null))');
 
         // Every exit from `open` is a dated decision by a named person. Three-valued logic is the
-        // trap §20.7 recorded twice: an expression that evaluates to UNKNOWN passes, so each arm
+        // trap recorded twice: an expression that evaluates to UNKNOWN passes, so each arm
         // spells out `is not null` before comparing it.
         DB::statement('alter table `alerts` add constraint `alerts_acknowledge_dated` check ((acknowledged_at is null and acknowledged_by is null) or (acknowledged_at is not null and acknowledged_by is not null))');
 
-        // A resolution can be made by a person *or* by the scheduler that raised it: §14.6's self-check
+        // A resolution can be made by a person *or* by the scheduler that raised it: The self-check
         // alerts exist to say "the nightly sweep found this", and the same sweep finding it clean must
         // close them, or the register fills with accurate alerts about problems that no longer exist.
         // `operational_events` solved the identical problem in slice 7 the same way — `actor_id`
         // nullable, `actor_kind` says which principal it was — so the rule is copied rather than
         // reinvented. The asymmetry that matters is in the last arm: a `user` resolution must name the
-        // user, because "somebody resolved this" with nobody attached is the row §10.1 refuses.
+        // user, because "somebody resolved this" with nobody attached is the row the design refuses.
         DB::statement("alter table `alerts` add constraint `alerts_resolve_dated` check ((resolved_at is null and resolved_by_kind is null) or (resolved_at is not null and resolved_by_kind is not null and (resolved_by_kind = 'scheduler' or `resolved_by` is not null)))");
         DB::statement("alter table `alerts` add constraint `alerts_resolve_by_kind_allowed` check (resolved_by_kind is null or resolved_by_kind in ('user', 'scheduler'))");
         DB::statement('alter table `alerts` add constraint `alerts_mute_dated` check ((muted_until is null and muted_by is null and mute_reason is null) or (muted_until is not null and muted_by is not null))');
 
-        // §10: a mute is temporary, so it has to carry an end and a reason. And the state has to
+        // A mute is temporary, so it has to carry an end and a reason. And the state has to
         // agree with the columns: `resolved` without `resolved_at` is a row that claims a decision
-        // nobody made, and `muted` past its expiry is the permanent mute §10 forbids — that one is
+        // nobody made, and `muted` past its expiry is the permanent mute the design forbids — that one is
         // enforced by the sweep that reopens it, but the pair rule stops a hand-edited row from
         // pretending.
         DB::statement('alter table `alerts` add constraint `alerts_state_matches_its_columns` check ((state = \'acknowledged\' and `acknowledged_at` is not null) or (state = \'resolved\' and `resolved_at` is not null) or (state = \'muted\' and `muted_until` is not null) or (state = \'open\'))');
 
-        // §10.1: a nullable reason is how you lose the plot six months later. Resolving an expiring
+        // A nullable reason is how you lose the plot six months later. Resolving an expiring
         // licence says "this is dealt with" about a paper that may not be, so the register has to say
-        // how — the rule §4.4 applies to a void, applied to the state that closes an alert.
+        // how — the rule the design applies to a void, applied to the state that closes an alert.
         $charLength = DB::connection()->getDriverName() === 'sqlite' ? 'length' : 'char_length';
         DB::statement("alter table `alerts` add constraint `alerts_resolved_explained` check ((state <> 'resolved') or (`resolve_reason` is not null and {$charLength}(trim(`resolve_reason`)) > 0))");
         DB::statement("alter table `alerts` add constraint `alerts_muted_explained` check ((state <> 'muted') or (`muted_until` is not null and `mute_reason` is not null and {$charLength}(trim(`mute_reason`)) > 0))");

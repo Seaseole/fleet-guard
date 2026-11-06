@@ -21,17 +21,17 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 
 /*
- * One bill, exactly as the ledger received it (§6.8): the supplier's document number, the lines with
+ * One bill, exactly as the ledger received it: the supplier's document number, the lines with
  * the account each one debited, the entry the posting left behind, and the money that has since gone out.
  *
- * The ledger summary is `LedgerService::totalsByAccount` narrowed by the `bill_id` dimension (§4.2) —
+ * The ledger summary is `LedgerService::totalsByAccount` narrowed by the `bill_id` dimension —
  * the same one door every other read of the book goes through; this page does not re-add the lines
  * and hope they match the entry. After a void the pair nets to zero and the summary says so; after a
- * payment the debit on `2110` is the one the payment wrote (§20.36), and the same card shows it.
+ * payment the debit on `2110` is the one the payment wrote, and the same card shows it.
  *
  * "Still owed" here is the balance projection of the application rows, never an edited status: a bill
  * whose due date has passed says so in words, and one that has been paid refuses its own void, because
- * unposting a liability the bank has discharged would leave the cash nowhere to sit (§20.33's rule).
+ * unposting a liability the bank has discharged would leave the cash nowhere to sit (the rule).
  */
 new #[Title('Bill')] class extends Component {
     public string $billId = '';
@@ -56,7 +56,7 @@ new #[Title('Bill')] class extends Component {
         $now = Carbon::now();
         $this->payOn = $now->toDateString();
         // Prefilled with what is still owed: the common case is paying the paper in full, and a blank
-        // box invites a clerk to retype a figure the screen already knows (§5.1's minor units, typed).
+        // box invites a clerk to retype a figure the screen already knows (the minor units, typed).
         $this->payAmount = number_format($bill->balance_amount / 100, 2, '.', '');
     }
 
@@ -139,7 +139,7 @@ new #[Title('Bill')] class extends Component {
         $this->paid = null;
 
         if (! Gate::allows('bills.create')) {
-            $this->error = __('Paying a supplier bill needs the bills.create ability (§9.3).');
+            $this->error = __('Paying a supplier bill needs the bills.create ability.');
 
             return;
         }
@@ -198,7 +198,7 @@ new #[Title('Bill')] class extends Component {
 <div class="grid gap-6">
     @php $bill = $this->billModel; @endphp
 
-    <header class="grid gap-1">
+    <header class="fg-page-header grid gap-1.5">
         <div class="flex items-center gap-3">
             <x-ui.button variant="ghost" size="sm" :href="route('accounting.bills')" wire:navigate>{{ __('Back to register') }}</x-ui.button>
             <x-ui.badge :tone="$bill->status === BillLifecycle::Void ? 'neutral' : ($bill->status === BillLifecycle::Draft ? 'warning' : ($bill->balance_amount === 0 ? 'success' : ($bill->isOverdue() ? 'danger' : 'info')))">
@@ -216,7 +216,7 @@ new #[Title('Bill')] class extends Component {
         </x-ui.text>
         @if ($bill->linked_source !== null)
             <x-ui.text>
-                {{ __('This paper documents a :kind the ledger already owes — it posted nothing of its own (§20.36).', ['kind' => mb_strtolower($bill->linked_source->label())]) }}
+                {{ __('This paper documents a:kind the ledger already owes — it posted nothing of its own.', ['kind' => mb_strtolower($bill->linked_source->label())]) }}
             </x-ui.text>
         @endif
         @if ($bill->status->isOpenItem())
@@ -249,9 +249,9 @@ new #[Title('Bill')] class extends Component {
             <x-slot name="head">
                 <tr>
                     <x-ui.table.th>{{ __('What was done') }}</x-ui.table.th>
-                    <x-ui.table.th>{{ __('Category') }}</x-ui.table.th>
+                    <x-ui.table.th hideBelow="lg">{{ __('Category') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Account') }}</x-ui.table.th>
-                    <x-ui.table.th>{{ __('Leg') }}</x-ui.table.th>
+                    <x-ui.table.th hideBelow="lg">{{ __('Leg') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('Net') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('VAT') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('Gross') }}</x-ui.table.th>
@@ -265,9 +265,9 @@ new #[Title('Bill')] class extends Component {
                             <div class="text-xs text-fg-ink-muted">{{ __('released by the void') }}</div>
                         @endif
                     </x-ui.table.td>
-                    <x-ui.table.td>{{ $line->category->label() }}</x-ui.table.td>
+                    <x-ui.table.td hideBelow="lg">{{ $line->category->label() }}</x-ui.table.td>
                     <x-ui.table.td><span class="fg-identifier">{{ $line->expense_account_code }}</span></x-ui.table.td>
-                    <x-ui.table.td>
+                    <x-ui.table.td hideBelow="lg">
                         @if ($line->truck_id !== null)
                             <div>{{ $this->truckLabels[$line->truck_id] ?? 'truck '.$line->truck_id }}</div>
                         @endif
@@ -288,7 +288,10 @@ new #[Title('Bill')] class extends Component {
                 </tr>
             @endforelse
             <tr wire:key="bill-totals">
-                <x-ui.table.td colspan="4" class="font-medium">{{ __('Bill total (gross)') }}</x-ui.table.td>
+                <x-ui.table.td colspan="2" class="font-medium">{{ __('Bill total (gross)') }}</x-ui.table.td>
+                {{-- The spacer covers the two columns that drop below lg; without it the totals row's figures
+                     would sit two slots right of the figures they add up. --}}
+                <x-ui.table.td colspan="2" hideBelow="lg"></x-ui.table.td>
                 <x-ui.table.td numeric>{{ $this->money($bill->amount - $bill->tax_amount) }}</x-ui.table.td>
                 <x-ui.table.td numeric>{{ $this->money($bill->tax_amount) }}</x-ui.table.td>
                 <x-ui.table.td numeric class="font-medium">{{ $this->money($bill->amount) }}</x-ui.table.td>
@@ -296,7 +299,7 @@ new #[Title('Bill')] class extends Component {
         </x-ui.table>
     </x-ui.card>
 
-    <x-ui.card :title="__('What the ledger holds')" :description="__('The entry narrowed by this bill\'s dimension — read through the ledger door, not re-added here (§4.2, §6.2).')">
+    <x-ui.card :title="__('What the ledger holds')":description="__('The entry narrowed by this bill\'s dimension — read through the ledger door, not re-added here.')">
         <x-ui.table :caption="__('Ledger turnover for :number', ['number' => $bill->number])">
             <x-slot name="head">
                 <tr>
@@ -315,9 +318,9 @@ new #[Title('Bill')] class extends Component {
                 <tr>
                     <x-ui.table.td colspan="3">
                         @if ($bill->linked_source !== null)
-                            {{ __('This bill documents an obligation Phase 3 already posted, so it wrote no entry of its own — the turnover under the movement is on the fuel card or the parts register (§20.36).') }}
+                            {{ __('This bill documents an obligation Phase 3 already posted, so it wrote no entry of its own — the turnover under the movement is on the fuel card or the parts register.') }}
                         @else
-                            {{ __('The ledger holds nothing under this bill — a draft posts nothing (§6.8).') }}
+                            {{ __('The ledger holds nothing under this bill — a draft posts nothing.') }}
                         @endif
                     </x-ui.table.td>
                 </tr>
@@ -326,7 +329,7 @@ new #[Title('Bill')] class extends Component {
     </x-ui.card>
 
     @if ($this->payments->isNotEmpty())
-        <x-ui.card :title="__('Money that has gone out')" :description="__('The application rows are the truth of the balance above; the projection is only what makes it a query (§10.4, copied sideways).')">
+        <x-ui.card :title="__('Money that has gone out')":description="__('The application rows are the truth of the balance above; the projection is only what makes it a query (copied sideways).')">
             <x-ui.table :caption="__('Payments applied to :number', ['number' => $bill->number])">
                 <x-slot name="head">
                     <tr>
@@ -357,7 +360,7 @@ new #[Title('Bill')] class extends Component {
 
     @if ($bill->status === BillLifecycle::Recorded && $bill->balance_amount > 0)
         @can('bills.create')
-            <x-ui.card :title="__('Pay this bill')" :description="__('Money leaves the till as Dr 2110 / Cr the chosen account and is applied here first; anything over settles the supplier\'s next-oldest paper, and a figure no bill has claimed stays as an advance on 2110 (§20.36).')">
+            <x-ui.card :title="__('Pay this bill')":description="__('Money leaves the till as Dr 2110 / Cr the chosen account and is applied here first; anything over settles the supplier\'s next-oldest paper, and a figure no bill has claimed stays as an advance on 2110.')">
                 <form wire:submit="pay" class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
                     <x-ui.input type="number" step="0.01" min="0" name="payAmount" :label="__('Amount')" :hint="__('Prefilled with the balance; type less to pay part of it.')" wire:model="payAmount" required />
 
@@ -384,10 +387,10 @@ new #[Title('Bill')] class extends Component {
         @can('bills.create')
             @if ($bill->hasPayments())
                 <x-ui.alert tone="warning" :title="__('This bill cannot be voided')">
-                    {{ __('Money has already been applied to it, so the payable is partly settled and unposting the debt would leave the cash nowhere to sit. A paid bill is corrected by a debit note (§20.33).') }}
+                    {{ __('Money has already been applied to it, so the payable is partly settled and unposting the debt would leave the cash nowhere to sit. A paid bill is corrected by a debit note.') }}
                 </x-ui.alert>
             @else
-                <x-ui.card :title="__('Void this bill')" :description="__('Mirrors the posting through the ledger\'s own reversal door (§6.4) and releases the lines, or releases the movement this paper documented (§20.36). The document keeps its number and its record — it is never deleted.')">
+                <x-ui.card :title="__('Void this bill')":description="__('Mirrors the posting through the ledger\'s own reversal door and releases the lines, or releases the movement this paper documented. The document keeps its number and its record — it is never deleted.')">
                     <form wire:submit="void" class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                         <x-ui.input name="voidReason" :label="__('Reason')" :hint="__('At least ten characters; stored on the document and in the operational trail.')" wire:model="voidReason" required />
                         <x-ui.button type="submit" variant="danger">{{ __('Void bill') }}</x-ui.button>

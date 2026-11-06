@@ -21,7 +21,7 @@ final class NumberingError extends RuntimeException
     {
         return new self(sprintf(
             'Unknown numbering scope "%s". Declare it in config/fleet.php under numbering.scopes with a '
-            .'format and a restart policy; §17 Q2/Q3 are unresolved precisely so that adding a fiscal '
+            .'format and a restart policy; Q2/Q3 are unresolved precisely so that adding a fiscal '
             .'sequence is a config change, not a migration.',
             $scope,
         ));
@@ -31,7 +31,7 @@ final class NumberingError extends RuntimeException
     {
         return new self(sprintf(
             'Scope "%s" has restart policy "%s", which is not one of continuous, calendar_year or '
-            .'financial_year (§7.4). A misspelt policy here would silently change when a fiscal '
+            .'financial_year. A misspelt policy here would silently change when a fiscal '
             .'sequence restarts, so it is refused rather than defaulted.',
             $scope,
             $restart,

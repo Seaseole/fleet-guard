@@ -10,9 +10,9 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 PART — the stock the stores actually holds (§15.2 phase 3, slice 3e).
+     * PART — the stock the stores actually holds (phase 3, slice 3e).
      *
-     * Phase 1 deliberately shipped the catalogue without these three columns, because §17 Q5 asks
+     * Phase 1 deliberately shipped the catalogue without these three columns, because Q5 asks
      * whether stores is a staffed perpetual inventory or an issue register. Slice 3e answers it the
      * way the phase's definition of done requires — "parts stock and the ledger agree after an issue"
      * — and the answer is a valued stock book: `stock_value_base` is what the shelf is worth, and

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Domain\Kernel\Money\Money;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
+use App\Domain\Kernel\Identity\ConfirmsRecentPassword;
 use App\Domain\Maintenance\Actions\AddWorkOrderLine;
 use App\Domain\Maintenance\Actions\ApproveWorkOrder;
 use App\Domain\Maintenance\Actions\CancelWorkOrder;
@@ -33,24 +34,25 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 
 /*
- * One work order (§3.2, §10.6) — where the estimate becomes a job, and the job becomes a cost.
+ * One work order — where the estimate becomes a job, and the job becomes a cost.
  *
  * The screen is the state machine's own face. Every button exists because the transition table says
- * the move is there, and every button is gated by the seat §9.3 gives that move: the workshop raises,
+ * the move is there, and every button is gated by the seat the design gives that move: the workshop raises,
  * plans, starts, holds, completes and inspects; only `work_orders.approve` may bless the spend above
  * the limit; only `work_orders.close` may freeze the costs and decide what is an asset.
  *
- * The lines stop being editable at `in_progress` — §10.6's rule, enforced by the Actions and printed
+ * The lines stop being editable at `in_progress` — the rule, enforced by the Actions and printed
  * here as a plain sentence rather than a greyed table. After that the costs are what the work took,
  * and the paths that write them arrive slice by slice: parts now leave the stores shelf into this
  * job (costed at the shelf's average, posted to 5310 or 5320 against the truck and the job), while
  * timesheets and supplier bills are still to come.
  *
  * Nothing on this screen is a state transition that touches the ledger; the part issue is the one
- * costing path that posts, and it posts where the movement is recorded rather than at close (§10.6:
+ * costing path that posts, and it posts where the movement is recorded rather than at close (
  * "posting is not a state").
  */
 new #[Title('Work order')] class extends Component {
+    use ConfirmsRecentPassword;
     /** The ULID, held as a key: the Livewire snapshot is client-readable, and a stale model would act on a row the page no longer shows. */
     public string $workOrderId = '';
 
@@ -181,7 +183,7 @@ new #[Title('Work order')] class extends Component {
     /**
      * Whether the shelf may feed this job: the seat holds `work_orders.create`, and the machine must
      * be at a point where the work is sanctioned — a draft or an estimate waiting for an approver may
-     * not draw stock (§10.6).
+     * not draw stock.
      */
     public function canIssueParts(): bool
     {
@@ -242,6 +244,10 @@ new #[Title('Work order')] class extends Component {
     {
         abort_unless($this->canApprove(), 403);
 
+        if (! $this->confirmRecentPassword()) {
+            return;
+        }
+
         try {
             $approve($this->order, (int) auth()->id());
         } catch (InvalidArgumentException|DomainException $refused) {
@@ -256,6 +262,10 @@ new #[Title('Work order')] class extends Component {
     public function reject(RejectWorkOrder $reject): void
     {
         abort_unless($this->canApprove(), 403);
+
+        if (! $this->confirmRecentPassword()) {
+            return;
+        }
 
         $this->validate(['rejectReason' => ['required', 'string', 'max:160']]);
 
@@ -611,7 +621,7 @@ new #[Title('Work order')] class extends Component {
     /**
      * The one affirmative action this state offers, or null when the machine has nothing left to do.
      *
-     * §5 allows exactly one filled button per view, and which move that is depends on the state. So the
+     * The design allows exactly one filled button per view, and which move that is depends on the state. So the
      * page asks this method rather than printing six primaries behind six conditions — the lint reads
      * the source, and a static `variant="primary"` per branch is six primaries to it whatever the
      * render does. Moves that need a reason or a date open their dialog; the rest are one round trip.
@@ -646,7 +656,7 @@ new #[Title('Work order')] class extends Component {
         $this->dispatch('toast', message: $message, kind: 'success');
     }
 
-    /** "45.32" → 4532, without ever building a float (§20.4). */
+    /** "45.32" → 4532, without ever building a float. */
     private function scaledHundredths(string $input, string $label): int
     {
         $text = trim(str_replace([' ', ','], ['', '.'], $input));
@@ -660,7 +670,7 @@ new #[Title('Work order')] class extends Component {
 }; ?>
 
 <div class="grid gap-6">
-    <header class="flex flex-wrap items-end justify-between gap-3">
+    <header class="fg-page-header flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div class="grid gap-1">
             <div class="flex flex-wrap items-center gap-2">
                 <x-ui.heading size="xl" level="1">{{ $this->order->wo_no }}</x-ui.heading>
@@ -671,7 +681,7 @@ new #[Title('Work order')] class extends Component {
             <x-ui.text>{{ $this->order->title }}</x-ui.text>
 
             <x-ui.text size="sm" color="muted">
-                <a href="{{ route('fleet.show', ['truck' => $this->order->truck_id]) }}" wire:navigate class="text-accent hover:underline">{{ $this->order->truck?->label() ?? __('Truck #:id', ['id' => $this->order->truck_id]) }}</a>
+                <a href="{{ route('fleet.show', ['truck' => $this->order->truck_id]) }}" wire:navigate class="text-accent-ink hover:underline">{{ $this->order->truck?->label() ?? __('Truck #:id', ['id' => $this->order->truck_id]) }}</a>
                 · {{ __('opened :date', ['date' => $this->order->opened_on?->format('d M Y') ?? '—']) }}
                 @if ($this->order->planned_for !== null)
                     · {{ __('planned for :date', ['date' => $this->order->planned_for->format('d M Y')]) }}
@@ -712,7 +722,7 @@ new #[Title('Work order')] class extends Component {
 
     <div class="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         {{-- What the order is, and the money it is accountable for. --}}
-        <section class="grid gap-4 rounded-fg-lg border border-fg-line bg-fg-surface p-5">
+        <section class="grid gap-4 fg-panel p-5">
             <x-ui.subheading>{{ __('The job') }}</x-ui.subheading>
 
             <dl class="grid grid-cols-2 gap-4 text-sm">
@@ -775,7 +785,7 @@ new #[Title('Work order')] class extends Component {
             @endif
         </section>
 
-        <section class="grid gap-4 rounded-fg-lg border border-fg-line bg-fg-surface p-5">
+        <section class="grid gap-4 fg-panel p-5">
             <x-ui.subheading>{{ __('Costs') }}</x-ui.subheading>
 
             <dl class="grid grid-cols-2 gap-3 text-sm">
@@ -835,7 +845,7 @@ new #[Title('Work order')] class extends Component {
                 @if ($this->canEditLines())
                     {{ __('The lines are the estimate the approval limit measured. Adding or removing one re-checks it: an approved order that grows past the limit goes back to an approver.') }}
                 @else
-                    {{ __('The lines are fixed from the moment the vehicle is in the workshop (§10.6). The costs that followed are what the work took.') }}
+                    {{ __('The lines are fixed from the moment the vehicle is in the workshop. The costs that followed are what the work took.') }}
                 @endif
             </x-ui.text>
 
@@ -855,7 +865,7 @@ new #[Title('Work order')] class extends Component {
                 <x-ui.table.th numeric>{{ __('Qty') }}</x-ui.table.th>
                 <x-ui.table.th numeric>{{ __('Unit cost') }}</x-ui.table.th>
                 <x-ui.table.th numeric>{{ __('Amount') }}</x-ui.table.th>
-                <x-ui.table.th>{{ __('Capital') }}</x-ui.table.th>
+                <x-ui.table.th hideBelow="lg">{{ __('Capital') }}</x-ui.table.th>
                 @if ($this->canEditLines())
                     <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                 @endif
@@ -870,7 +880,7 @@ new #[Title('Work order')] class extends Component {
                     <x-ui.table.td numeric nowrap>{{ $line->quantityLabel() }}</x-ui.table.td>
                     <x-ui.table.td numeric nowrap>{{ $this->money(Money::ofMinor($line->unit_cost_minor, $line->currency_code)) }}</x-ui.table.td>
                     <x-ui.table.td numeric nowrap>{{ $this->money($line->amount()) }}</x-ui.table.td>
-                    <x-ui.table.td>
+                    <x-ui.table.td hideBelow="lg">
                         @if ($line->capital_candidate)
                             <x-ui.badge tone="info">{{ __('candidate') }}</x-ui.badge>
                         @else
@@ -951,8 +961,8 @@ new #[Title('Work order')] class extends Component {
         </x-ui.card>
     @endif
 
-    {{-- The machine's own record, in the order the engine wrote it (§4.4). --}}
-    <section class="grid gap-4 rounded-fg-lg border border-fg-line bg-fg-surface p-5">
+    {{-- The machine's own record, in the order the engine wrote it. --}}
+    <section class="grid gap-4 fg-panel p-5">
         <x-ui.subheading>{{ __('Trail') }}</x-ui.subheading>
 
         @if ($this->trail === [])

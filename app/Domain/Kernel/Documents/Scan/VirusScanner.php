@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Domain\Kernel\Documents\Scan;
 
 /**
- * §14.4's virus scan step, as the seam rather than the answer.
+ * The virus scan step, as the seam rather than the answer.
  *
- * The design doc is explicit that §17 Q8 is open: on Linux with a sidecar the honest adapter is
+ * The design doc is explicit that Q8 is open: on Linux with a sidecar the honest adapter is
  * ClamAV over INSTREAM, and on Laravel Cloud there is no local daemon, so the real choices are a
  * hosted scanning API or documented defence-in-depth. Making the *step* an interface is what keeps
  * that an environment decision instead of a code rewrite — the caller is the upload Action and it

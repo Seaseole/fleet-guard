@@ -24,15 +24,15 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
- * Records one slip — the purchase the fleet paid for fuel (§4.3 FUEL_PURCHASE, §5.2, §6.8).
+ * Records one slip — the purchase the fleet paid for fuel (FUEL_PURCHASE).
  *
  * A slip has two possible destinations, and the difference is what the ledger records:
  *
  * - **A pump-card slip** the trucks will drain. The row is operational, not accounting:
- *   `posted_to_ledger` stays false because §6.8's `FuelPurchaseRecorded` entry needs the supplier
+ *   `posted_to_ledger` stays false because the `FuelPurchaseRecorded` entry needs the supplier
  *   bill, and supplier bills are Phase 5's. Writing a journal entry without the liability would make
  *   the ledger claim the fleet paid cash for diesel it owes for.
- * - **A delivery into a bulk tank** (§15.2 phase 3). It becomes stock the moment it is unloaded, so
+ * - **A delivery into a bulk tank**. It becomes stock the moment it is unloaded, so
  *   it posts `Dr 1180 Bulk fuel stock / Cr 2110 Supplier payable` in the same transaction that
  *   records the movement. The payable is real and Phase 5's bill will settle it against 2110 — this
  *   action does not pre-empt the bill, it only stops the stock account from going negative.
@@ -50,7 +50,7 @@ final class CreateFuelPurchase
     public function __invoke(FuelPurchaseDto $dto, ?int $actorId = null, ?KioskAuthority $kiosk = null): FuelPurchase
     {
         if ($kiosk === null && ! Gate::allows('fuel.record')) {
-            throw new InvalidArgumentException('Recording a fuel purchase is workshop recording (§9.3).');
+            throw new InvalidArgumentException('Recording a fuel purchase is workshop recording.');
         }
 
         if ($dto->sourceUuid !== null && $dto->sourceUuid !== '') {
@@ -131,8 +131,8 @@ final class CreateFuelPurchase
     private function postReceipt(FuelPurchase $purchase, BulkTank $tank, string $baseCurrency, ?int $actorId): void
     {
         $accounts = $this->chart->byCode();
-        $stock = $accounts['1180'] ?? throw new InvalidArgumentException('Account 1180 Bulk fuel stock is not in this company\'s chart. Seed the chart first (§6.2).');
-        $payable = $accounts['2110'] ?? throw new InvalidArgumentException('Account 2110 Accounts payable is not in this company\'s chart. Seed the chart first (§6.2).');
+        $stock = $accounts['1180']?? throw new InvalidArgumentException('Account 1180 Bulk fuel stock is not in this company\'s chart. Seed the chart first.');
+        $payable = $accounts['2110']?? throw new InvalidArgumentException('Account 2110 Accounts payable is not in this company\'s chart. Seed the chart first.');
 
         $base = $purchase->baseMoney();
         $foreign = $purchase->currency_code === $baseCurrency ? null : $purchase->amountMoney();
@@ -154,7 +154,7 @@ final class CreateFuelPurchase
             fxRateRef: $purchase->fx_rate_ref,
         ));
 
-        // §7 R7: a delivery that would take the tank past its stated capacity is a figure to look at,
+        // R7: a delivery that would take the tank past its stated capacity is a figure to look at,
         // not a delivery to refuse — the capacity is what somebody measured once, the litres are what
         // the pump delivered, and refusing would push the difference into a wrong-but-accepted number.
         $projected = $tank->stock_litres_x100 + $purchase->litres;

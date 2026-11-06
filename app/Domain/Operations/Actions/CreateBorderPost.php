@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * Registers a gate (§4.4, D1). The DTO has already refused an unknown country and impossible
+ * Registers a gate (D1). The DTO has already refused an unknown country and impossible
  * coordinates; the Action owns the write so the future API shares one door.
  *
  * A duplicate name in the same country is refused with the existing post's name rather than a raw

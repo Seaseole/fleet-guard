@@ -10,7 +10,7 @@ declare(strict_types=1);
  * click which commits says so when it refuses. A gate that is correct in a script and invisible on the
  * board is a gate the yard discovers at the border.
  *
- * The other half of what this file watches is what the screen must *not* show. §9.3 hides margins from
+ * The other half of what this file watches is what the screen must *not* show. Hides margins from
  * the seat that reads a dispatch board most often, so a quoted amount must never reach this HTML —
  * the one assertion here that a passing domain test would sail straight past.
  *
@@ -18,7 +18,7 @@ declare(strict_types=1);
  * entered, exited, charged and finished through the trip's own section, and the same section read by a
  * dispatcher who holds `crossborder.view` and none of the controls.
  *
- * Not a test suite: `tests/` stays out of the repository (§14.6). Fixtures live in the `OPR` namespace
+ * Not a test suite: `tests/` stays out of the repository. Fixtures live in the `OPR` namespace
  * on the development database; everything created is removed and then asserted removed, including the
  * two operational counters, which `documents:number-integrity` compares against the surviving rows.
  *
@@ -149,7 +149,7 @@ final class OperationsRenderSweep extends TestCase
 
         /*
          * Fixtures through the Actions, the way the board writes them: a priced, accepted job (only
-         * `accepted`/`in_execution` may run a trip, §4.1), an available truck, a driver whose papers cover
+         * `accepted`/`in_execution` may run a trip), an available truck, a driver whose papers cover
          * the week, and a second driver whose licence lapsed last week.
          */
         $customer = (app(CreateCustomer::class))(new CustomerDto(name: 'OPR Board Customer', code: 'OPR-CUST', paymentTerms: 'net_30'));
@@ -223,7 +223,7 @@ final class OperationsRenderSweep extends TestCase
             allowanceRateBase: 30_000,
         ));
 
-        echo "== The board renders for the seats §9.3 says may read it ==\n";
+        echo "== The board renders for the seats the design says may read it ==\n";
 
         $this->attempt('the owner opens /dispatch and the week is a grid of seven days', function () use ($owner, $monday, $week): void {
             $html = (string) $this->actingAs($owner, 'web')->get("/dispatch?week={$week}")->assertOk()->getContent();
@@ -242,7 +242,7 @@ final class OperationsRenderSweep extends TestCase
             }
         });
 
-        $this->pageContains($dispatcher, '/dispatch?week='.$week, 'B 941 OPR', 'a dispatcher may open the board (§9.3: this is their screen)');
+        $this->pageContains($dispatcher, '/dispatch?week='.$week, 'B 941 OPR', 'a dispatcher may open the board (this is their screen)');
 
         $this->attempt('the week lives in the URL, so a board survives a refresh and a shared link', function () use ($owner, $monday): void {
             Livewire::actingAs($owner)
@@ -251,7 +251,7 @@ final class OperationsRenderSweep extends TestCase
                 ->assertSet('start', $monday->toDateString());
         });
 
-        echo "\n== §9.3 the board shows the commitment, never the price ==\n";
+        echo "\n== the board shows the commitment, never the price ==\n";
 
         $this->attempt('the accepted job is offered; its quoted amount never reaches the HTML', function () use ($owner, $job, $truck, $monday): void {
             $board = (string) Livewire::actingAs($owner)
@@ -282,7 +282,7 @@ final class OperationsRenderSweep extends TestCase
                 ->html();
 
             if (! str_contains($html, 'B 941 OPR')) {
-                throw new Exception('the workshop manager was locked out of a screen §9.3 gives trips.view on');
+                throw new Exception('the workshop manager was locked out of a screen the design gives trips.view on');
             }
 
             // The affordance, not the words "Plan a trip": the plan dialog's *title* is that same string
@@ -360,16 +360,16 @@ final class OperationsRenderSweep extends TestCase
                 ->assertHasErrors('plan');
 
             if (Trip::query()->where('job_id', $enquiry->id)->exists()) {
-                throw new Exception('a trip was created against an enquiry (§4.1)');
+                throw new Exception('a trip was created against an enquiry');
             }
         });
 
         echo "\n== DoD on the board: the expired licence is visible before the click, and the click refuses ==\n";
 
-        $this->attempt('the cell carries the §10.2 findings, and dispatch is refused from the dialog', function () use ($owner, $lapsed, $job, $truck, $monday): void {
+        $this->attempt('the cell carries the findings, and dispatch is refused from the dialog', function () use ($owner, $lapsed, $job, $truck, $monday): void {
             // The lapsed driver is *listed*, labelled and selectable. The plan dialog does not hide a
             // driver the gate would refuse, because a dispatcher who cannot find a name assumes the board
-            // is broken; the refusal belongs at the commitment (§10.2), and this proves it stays there.
+            // is broken; the refusal belongs at the commitment, and this proves it stays there.
             Livewire::actingAs($owner)
                 ->test('pages::operations.dispatch', ['start' => $monday->toDateString()])
                 ->call('openPlan', $truck->id, $monday->addDays(4)->toDateString())
@@ -419,6 +419,47 @@ final class OperationsRenderSweep extends TestCase
             }
         });
 
+        $this->attempt('the plan dialog puts the band on the option, and keeps the reason after the list closes', function () use ($owner, $truck, $monday, $lapsed, $driver): void {
+            $day = $monday->addDays(4)->toDateString();
+
+            $before = (string) Livewire::actingAs($owner)
+                ->test('pages::operations.dispatch', ['start' => $monday->toDateString()])
+                ->call('openPlan', $truck->id, $day)
+                ->html();
+
+            // The gate itself is proven above; what this proves is that the same answer reaches the
+            // dispatcher's eye before the click, in the two ways a list can say it.
+            $option = $this->driverOption($before, (int) $lapsed->id);
+
+            if (! str_contains($option, 'text-danger')) {
+                throw new Exception('the lapsed driver was offered with no tone on the option: '.$option);
+            }
+
+            if (! str_contains($option, 'licence Expired')) {
+                throw new Exception('the option carried a colour and no reason: '.$option);
+            }
+
+            $after = (string) Livewire::actingAs($owner)
+                ->test('pages::operations.dispatch', ['start' => $monday->toDateString()])
+                ->call('openPlan', $truck->id, $day)
+                ->set('planDriverId', (string) $lapsed->id)
+                ->html();
+
+            if (! str_contains($after, 'role="status"') || ! str_contains($after, 'days ago')) {
+                throw new Exception('choosing the lapsed driver printed no standing line with its distance');
+            }
+
+            $clean = (string) Livewire::actingAs($owner)
+                ->test('pages::operations.dispatch', ['start' => $monday->toDateString()])
+                ->call('openPlan', $truck->id, $day)
+                ->set('planDriverId', (string) $driver->id)
+                ->html();
+
+            if (str_contains($clean, 'role="status"')) {
+                throw new Exception('a driver whose papers cover the day was printed as a paper problem');
+            }
+        });
+
         echo "\n== The same dialog commits once the papers are clean, and the reservation follows ==\n";
 
         $this->attempt('dispatch from the board moves planned → assigned and holds the vehicle', function () use ($owner, $job, $truck, $driver, $monday): void {
@@ -455,7 +496,7 @@ final class OperationsRenderSweep extends TestCase
             $this->assignedTripId = $trip->id;
         });
 
-        echo "\n== §10.2 a hold is a blocker with a reason, and it frees the truck ==\n";
+        echo "\n== a hold is a blocker with a reason, and it frees the truck ==\n";
 
         $this->attempt('a blank reason is a field error, and a stated one puts the trip on hold', function () use ($owner, $monday): void {
             if ($this->assignedTripId === '') {
@@ -485,7 +526,7 @@ final class OperationsRenderSweep extends TestCase
             }
 
             if (DB::table('vehicle_assignments')->where('trip_id', $trip->id)->whereNull('to_at')->exists()) {
-                throw new Exception('a held trip still holds the truck — §10.2 counts a held unit as free');
+                throw new Exception('a held trip still holds the truck — counts a held unit as free');
             }
 
             $this->heldTripId = $trip->id;
@@ -550,10 +591,10 @@ final class OperationsRenderSweep extends TestCase
             }
         });
 
-        echo "\n== The jobs board: §10.3's decisions, driven through its own buttons ==\n";
+        echo "\n== The jobs board: The decisions, driven through its own buttons ==\n";
 
         $this->pageContains($owner, '/jobs', $job->job_no, 'the register lists the accepted fixture job');
-        $this->pageContains($dispatcher, '/jobs', $job->job_no, 'a dispatcher may open the jobs board (§9.3 gives the row C/C)');
+        $this->pageContains($dispatcher, '/jobs', $job->job_no, 'a dispatcher may open the jobs board (the design gives the row C/C)');
 
         $this->attempt('a seat without jobs.view is refused the register', function () use ($workshop): void {
             $status = $this->actingAs($workshop, 'web')->get('/jobs')->getStatusCode();
@@ -570,16 +611,16 @@ final class OperationsRenderSweep extends TestCase
                 ->html();
 
             if (! str_contains($html, 'trip')) {
-                throw new Exception('the row carries no derived trip count (§10.3 answers it from the children)');
+                throw new Exception('the row carries no derived trip count (the design answers it from the children)');
             }
 
-            // The engine-level half of the rule: §10.3 refuses to store these four, so the schema must
+            // The engine-level half of the rule: The design refuses to store these four, so the schema must
             // not offer a column for them — a screen cannot be tricked into a stale badge.
             $columns = array_column(DB::select('show columns from freight_jobs'), 'Field');
 
             foreach (['all_trips_completed', 'ready_to_invoice', 'invoiced', 'settled'] as $derived) {
                 if (in_array($derived, $columns, true)) {
-                    throw new Exception("freight_jobs stores {$derived} — §10.3 says it must not");
+                    throw new Exception("freight_jobs stores {$derived} — the design says it must not");
                 }
             }
         });
@@ -626,7 +667,7 @@ final class OperationsRenderSweep extends TestCase
             }
 
             if (! str_contains($made->job_no, 'JOB-')) {
-                throw new Exception('the job has no allocated reference ('.$made->job_no.', §7.1)');
+                throw new Exception('the job has no allocated reference ('.$made->job_no.')');
             }
 
             $html = (string) Livewire::actingAs($owner)
@@ -679,7 +720,7 @@ final class OperationsRenderSweep extends TestCase
             }
 
             if ((int) $quoted->quoted_amount !== 420_000) {
-                throw new Exception('the quote is '.$quoted->quoted_amount.' minor units, not 420000 (§5.1: minor units, no float)');
+                throw new Exception('the quote is '.$quoted->quoted_amount.' minor units, not 420000 (minor units, no float)');
             }
 
             $html = (string) Livewire::actingAs($owner)
@@ -728,7 +769,7 @@ final class OperationsRenderSweep extends TestCase
             }
         });
 
-        $this->attempt('a decline needs a reason, and the reason is kept on the trail (§4.4)', function () use ($owner, $enquiry): void {
+        $this->attempt('a decline needs a reason, and the reason is kept on the trail', function () use ($owner, $enquiry): void {
             Livewire::actingAs($owner)
                 ->test('pages::operations.jobs')
                 ->call('openDecision', $enquiry->id, 'decline')
@@ -742,7 +783,7 @@ final class OperationsRenderSweep extends TestCase
                 ->call('commitDecision')
                 ->assertHasNoErrors();
 
-            // `operational_events.aggregate_type` is the noun, not the class (§4.4: one trail query groups
+            // `operational_events.aggregate_type` is the noun, not the class (one trail query groups
             // by what a person recognises), so the lookup is 'job' rather than the FQCN.
             $trail = DB::table('operational_events')
                 ->where('aggregate_type', 'job')
@@ -759,7 +800,7 @@ final class OperationsRenderSweep extends TestCase
             }
         });
 
-        $this->attempt('closing is refused while the job still has a trip on the road (§10.3)', function () use ($owner, $job): void {
+        $this->attempt('closing is refused while the job still has a trip on the road', function () use ($owner, $job): void {
             Livewire::actingAs($owner)
                 ->test('pages::operations.jobs')
                 ->call('openDecision', $job->id, 'close')
@@ -781,7 +822,7 @@ final class OperationsRenderSweep extends TestCase
 
             $trip = Trip::query()->findOrFail($this->assignedTripId);
 
-            // A released hold has to clear the whole §10.2 gate again — that is the point of the hold — and
+            // A released hold has to clear the whole gate again — that is the point of the hold — and
             // the board is where the operator does it.
             Livewire::actingAs($owner)
                 ->test('pages::operations.dispatch', ['start' => $trip->planned_departure_at->timezone(CurrentCompany::timezone())->toDateString()])
@@ -799,7 +840,7 @@ final class OperationsRenderSweep extends TestCase
                 }
             }
 
-            // §4.4's trail is the screen's spine: every move, in the order the engine wrote them.
+            // The trail is the screen's spine: every move, in the order the engine wrote them.
             $moves = Trip::query()->find($trip->id) === null ? 0 : (int) DB::table('operational_events')
                 ->where('aggregate_type', 'trip')
                 ->where('aggregate_id', $trip->id)
@@ -868,7 +909,7 @@ final class OperationsRenderSweep extends TestCase
                 ->call('addLoad')
                 ->assertHasNoErrors('load');
 
-            // §10.2 measures against the weaker of the two limits: this trailer carries 30 t, so 40 t of
+            // Measures against the weaker of the two limits: this trailer carries 30 t, so 40 t of
             // freight is refused even though the truck is rated to 32 t and would refuse it too.
             Livewire::actingAs($owner)
                 ->test('pages::operations.detail', ['trip' => $trip])
@@ -884,7 +925,7 @@ final class OperationsRenderSweep extends TestCase
                 ->assertHasErrors('load')
                 ->html());
 
-            // The truck is rated 32 t and the trailer 30 t; §10.2 measures against the weaker, so the
+            // The truck is rated 32 t and the trailer 30 t; Measures against the weaker, so the
             // screen has to say which one stopped it.
             if (! str_contains($refused, 'trailer')) {
                 throw new Exception('the overloading refusal did not name the trailer: '.mb_substr(strip_tags($refused), 0, 200));
@@ -1018,6 +1059,8 @@ final class OperationsRenderSweep extends TestCase
         $this->attempt('a closed trip re-opens only with a reason, and the reason lands on the trail', function () use ($owner): void {
             $trip = Trip::query()->findOrFail($this->assignedTripId);
 
+            $this->withSession(['auth.password_confirmed_at' => time()]);
+
             Livewire::actingAs($owner)
                 ->test('pages::operations.detail', ['trip' => $trip])
                 ->call('reopen')
@@ -1040,11 +1083,11 @@ final class OperationsRenderSweep extends TestCase
                 ->value('reason');
 
             if (! str_contains((string) $reason, 'wrong load')) {
-                throw new Exception('the trail lost the reason the operator typed (§4.4)');
+                throw new Exception('the trail lost the reason the operator typed');
             }
         });
 
-        echo "\n== §6.6 the money on the trip page: three abilities, none widening another ==\n";
+        echo "\n== the money on the trip page: three abilities, none widening another ==\n";
 
         $baseCurrency = CurrentCompany::model()->base_currency_code;
 
@@ -1077,7 +1120,7 @@ final class OperationsRenderSweep extends TestCase
             $refreshed = Trip::query()->findOrFail($trip->id);
 
             if ($refreshed->fuel_cost_base !== 25_000 || $refreshed->direct_cost_base !== 25_000 || $refreshed->contribution_base !== -25_000) {
-                throw new Exception('the page posted the cost but the §6.6 projection did not move: '.json_encode([
+                throw new Exception('the page posted the cost but the projection did not move: '.json_encode([
                     $refreshed->fuel_cost_base, $refreshed->direct_cost_base, $refreshed->contribution_base,
                 ]));
             }
@@ -1104,7 +1147,7 @@ final class OperationsRenderSweep extends TestCase
             }
         });
 
-        // A chargeable the POD builder would have written: §9.3 gives the dispatcher `invoices.view` and
+        // A chargeable the POD builder would have written: The design gives the dispatcher `invoices.view` and
         // not `trips.margin.view`, so this row must be readable without the margin beside it.
         $earningTrip = Trip::query()->findOrFail($this->assignedTripId);
 
@@ -1126,7 +1169,7 @@ final class OperationsRenderSweep extends TestCase
             'updated_at' => Carbon::now(),
         ]);
 
-        $this->attempt('a dispatcher reads the billing rows and is never shown the margin or the cost form (§9.3)', function () use ($dispatcher): void {
+        $this->attempt('a dispatcher reads the billing rows and is never shown the margin or the cost form', function () use ($dispatcher): void {
             $trip = Trip::query()->findOrFail($this->assignedTripId);
             $html = (string) Livewire::actingAs($dispatcher)->test('pages::operations.detail', ['trip' => $trip])->html();
 
@@ -1138,7 +1181,7 @@ final class OperationsRenderSweep extends TestCase
 
             foreach (['Revenue posted', 'Direct costs', 'Contribution', 'Record a cost', 'Record and post'] as $hidden) {
                 if (str_contains($html, $hidden)) {
-                    throw new Exception("a dispatcher was shown {$hidden} — §9.3 keeps the margin off this seat");
+                    throw new Exception("a dispatcher was shown {$hidden} — the design keeps the margin off this seat");
                 }
             }
 
@@ -1157,7 +1200,7 @@ final class OperationsRenderSweep extends TestCase
             }
         });
 
-        echo "\n== §10.9 the border: the register, then the four acts on the trip ==\n";
+        echo "\n== the border: the register, then the four acts on the trip ==\n";
 
         $this->pageContains($owner, '/crossborder', 'Gates on file', 'the owner opens the gate register');
 
@@ -1270,7 +1313,7 @@ final class OperationsRenderSweep extends TestCase
                 ->pluck('a.code', 'l.direction');
 
             if (($lines['debit'] ?? null) !== '5400' || ($lines['credit'] ?? null) !== '1110') {
-                throw new Exception('the charge posted '.json_encode($lines->all()).', not 5400 → 1110 (§6.6)');
+                throw new Exception('the charge posted '.json_encode($lines->all()).', not 5400 → 1110');
             }
 
             $page()->call('finishCrossing', $crossingId)->assertHasNoErrors('crossing');
@@ -1281,14 +1324,14 @@ final class OperationsRenderSweep extends TestCase
                 throw new Exception('finishing left the crossing at '.$status);
             }
 
-            // §6.6's projection moved with the posting: 250.00 of fuel plus 450.00 at the gate.
+            // The projection moved with the posting: 250.00 of fuel plus 450.00 at the gate.
             $fresh = Trip::query()->findOrFail($trip->id);
 
             if ($fresh->border_cost_base !== 45_000 || $fresh->direct_cost_base !== 70_000) {
                 throw new Exception('the rollup is '.json_encode([$fresh->border_cost_base, $fresh->direct_cost_base]).', not 45000/70000');
             }
 
-            // §4.4: three moves, three events, in order.
+            // Three moves, three events, in order.
             $states = DB::table('operational_events')
                 ->where('aggregate_type', 'border_crossing')
                 ->where('aggregate_id', $crossingId)
@@ -1328,9 +1371,9 @@ final class OperationsRenderSweep extends TestCase
             }
         });
 
-        echo "\n== §9.3 on the border: the dispatcher reads the gate and cannot move or charge it ==\n";
+        echo "\n== on the border: the dispatcher reads the gate and cannot move or charge it ==\n";
 
-        $this->pageContains($dispatcher, '/crossborder', 'Gates on file', 'a dispatcher may open the register (§9.3 gives crossborder.view)');
+        $this->pageContains($dispatcher, '/crossborder', 'Gates on file', 'a dispatcher may open the register (the design gives crossborder.view)');
 
         $this->attempt('the register offers no gate form to a seat without crossborder.manage', function () use ($dispatcher): void {
             $html = (string) Livewire::actingAs($dispatcher)->test('pages::crossborder.index')->html();
@@ -1357,7 +1400,7 @@ final class OperationsRenderSweep extends TestCase
 
             foreach (['Plan the crossing', 'Add a charge', 'Finish the costs', 'Capture and post', 'Capture a border charge'] as $hidden) {
                 if (str_contains($html, $hidden)) {
-                    throw new Exception("a dispatcher was shown {$hidden} — §9.3 keeps crossings at crossborder.view");
+                    throw new Exception("a dispatcher was shown {$hidden} — the design keeps crossings at crossborder.view");
                 }
             }
         });
@@ -1377,7 +1420,7 @@ final class OperationsRenderSweep extends TestCase
             }
         });
 
-        echo "\n== §14.3/§16 R6 the live map: a truck on the road, the simulator, and what the page prints ==\n";
+        echo "\n== / R6 the live map: a truck on the road, the simulator, and what the page prints ==\n";
 
         $this->attempt('a trip goes on the road and the simulator files five fixes under it', function () use ($owner, $customer, $truck, $driver, $monday): void {
             // The border section ends acting as the dispatcher, and the truck's state event is written
@@ -1450,7 +1493,7 @@ final class OperationsRenderSweep extends TestCase
                 }
             }
 
-            // §9.3: `gps.view` is held by seats that may not read a price. The corridor is on the page;
+            // `gps.view` is held by seats that may not read a price. The corridor is on the page;
             // the quote behind it is not.
             foreach (['555555', '5 555', '555 555'] as $forbidden) {
                 if (str_contains($html, $forbidden)) {
@@ -1526,7 +1569,7 @@ final class OperationsRenderSweep extends TestCase
             }
         });
 
-        echo "\n== §5 one filled action per view, counted on the page a real state renders ==\n";
+        echo "\n== one filled action per view, counted on the page a real state renders ==\n";
 
         // lint-architecture keeps the modules apart and lint-ui keeps the source honest about variants, but
         // only a render can say how many filled buttons a user is actually looking at: the static pass
@@ -1567,29 +1610,59 @@ final class OperationsRenderSweep extends TestCase
             $this->assertOneFilledAction($html, '/trips/{trip}');
         });
 
-        echo "\n== §15.2's cross-phase rule: the phase ships dashboard figures, counted from real rows ==\n";
+        echo "\n== the cross-phase rule: the phase ships dashboard figures, counted from real rows ==\n";
 
-        $this->attempt('the overview carries the four operations cards, and the planned count is the register\'s', function () use ($owner): void {
+        $this->attempt('the overview carries the five stages in work order, and the planned count is the register\'s', function () use ($owner): void {
             $html = (string) Livewire::actingAs($owner)
                 ->test('pages::dashboard.dashboard')
                 ->html();
 
+            // Redesigned 2026-11-03 (docs/HOME-DESIGN.md): the band is now `x-ui.pipeline`, and the one
+            // "Jobs waiting on a decision" figure became the two stages actually keeps apart —
+            // unpriced enquiries and quoted-and-unanswered. The labels moved; the rule did not.
             foreach ([
-                'Jobs waiting on a decision',
+                'Enquiries',
+                'Quoted, awaiting',
                 'Planned, not dispatched',
                 'On the road',
-                'Proof of delivery outstanding',
+                'Proof outstanding',
             ] as $label) {
                 if (! str_contains($html, $label)) {
-                    throw new Exception("the overview is missing the {$label} card");
+                    throw new Exception("the overview is missing the {$label} stage");
                 }
             }
 
-            // Not a decoration: the figure has to be the count the register would list.
+            // Not a decoration, and not a label check either: the number under the stage has to be the
+            // count the register would list. The stage's own slice of the HTML is searched, so a stray
+            // "3" somewhere else on the page cannot pass it.
             $planned = (int) Trip::query()->where('status', TripStatus::Planned->value)->count();
+            $road = (int) Trip::query()->whereIn('status', [
+                TripStatus::Departed->value,
+                TripStatus::InTransit->value,
+                TripStatus::AtBorder->value,
+                TripStatus::Arrived->value,
+            ])->count();
 
             if ($planned === 0) {
                 throw new Exception('the sweep left no planned trip to count — the assertion would pass on an empty screen');
+            }
+
+            foreach ([
+                ['Planned, not dispatched', 'On the road', $planned],
+                ['On the road', 'Proof outstanding', $road],
+            ] as [$from, $to, $expected]) {
+                $start = strpos($html, $from);
+                $end = strpos($html, $to, $start + strlen($from));
+
+                if ($start === false || $end === false) {
+                    throw new Exception("the {$from} stage could not be isolated for counting");
+                }
+
+                $slice = substr($html, $start, $end - $start);
+
+                if (! preg_match('/>\s*'.preg_quote((string) $expected, '/').'\s*</', $slice)) {
+                    throw new Exception("the {$from} stage does not show the register's {$expected}");
+                }
             }
 
             $this->actingAs($owner, 'web')->get('/dashboard')->assertOk()->assertSee('Planned, not dispatched', false);
@@ -1601,10 +1674,10 @@ final class OperationsRenderSweep extends TestCase
                 ->html();
 
             if (! str_contains($html, 'jobs.view')) {
-                throw new Exception('the masked jobs card did not name the ability (§9.3\'s mask-not-delete rule)');
+                throw new Exception('the masked jobs card did not name the ability (the mask-not-delete rule)');
             }
 
-            // The trip cards stay live for this seat: §9.3 gives Workshop Manager `trips.view`.
+            // The trip cards stay live for this seat: The design gives Workshop Manager `trips.view`.
             if (! str_contains($html, 'On the road')) {
                 throw new Exception('a seat with trips.view lost the trip figures it is entitled to read');
             }
@@ -1743,7 +1816,7 @@ final class OperationsRenderSweep extends TestCase
      * `@if ($this->canDepart())`, and it has to treat a dialog as its own view. Neither limitation applies
      * once the page is rendered — the dialog markup is inert unless it carries `open`, and the branches have
      * resolved to whatever the trip's actual state allows. `bg-accent text-on-accent` is the primary
-     * variant's signature in the component (§5's one filled action per view), and danger-solid does not match
+     * variant's signature in the component (the one filled action per view), and danger-solid does not match
      * it, so a confirm-step's destructive button is not counted as competing.
      */
     private function assertOneFilledAction(string $html, string $label): void
@@ -1769,12 +1842,30 @@ final class OperationsRenderSweep extends TestCase
             );
 
             throw new Exception(sprintf(
-                '%s: %d filled actions on screen together (%s) — §5 allows one per view',
+                '%s: %d filled actions on screen together (%s) — the design allows one per view',
                 $label,
                 $count,
                 implode(' | ', $labels),
             ));
         }
+    }
+
+    /** The markup one driver's option carries — id, tone, name and reason between the open and the close. */
+    private function driverOption(string $html, int $driverId): string
+    {
+        // The view breaks the option's five attributes across lines for readability, so the search runs on a
+        // flattened copy. Matching the raw HTML would report "no option printed" for a row that is there.
+        $flat = preg_replace('/\s+/', ' ', $html) ?? $html;
+
+        $start = strpos($flat, 'value="'.$driverId.'" class=');
+
+        if ($start === false) {
+            throw new Exception('the driver select printed no option for driver '.$driverId);
+        }
+
+        $end = strpos($flat, '</option>', $start);
+
+        return substr($flat, $start, ($end === false ? strlen($flat) : $end) - $start);
     }
 
     private function pageContains(User $user, string $path, string $needle, string $label): void
@@ -1941,7 +2032,7 @@ final class OperationsRenderSweep extends TestCase
         CurrentCompany::forget();
 
         /*
-         * The money slice writes a journal entry through the page, and §6.3 refuses to delete one without
+         * The money slice writes a journal entry through the page, and the design refuses to delete one without
          * the hatch. Lift it for exactly this run's entries, lower it in the same call, and let the purge
          * proceed on a ledger that is immutable again.
          */
@@ -2006,7 +2097,7 @@ final class OperationsRenderSweep extends TestCase
         // sweeps above cannot reach it. The seat's own rows go with the seat.
         $this->deleteIn('operational_events', 'actor_id', $checkIds);
         // A counter remembers who last drew from it; the probe seats drew the run's job and trip
-        // numbers, so that pointer must let go before the account can (§7.4's FK is a real one).
+        // numbers, so that pointer must let go before the account can (the FK is a real one).
         if ($checkIds !== []) {
             DB::table('number_sequences')->whereIn('last_used_by', $checkIds)->update(['last_used_by' => null]);
         }
@@ -2088,9 +2179,17 @@ final class OperationsRenderSweep extends TestCase
                 ->whereRaw('`aggregate_id` not in (select `id` from `border_crossings`)')
                 ->count(),
             // The map's rows: a surviving fix or projection would put a truck on the live map that the
-            // fleet register no longer has, and a surviving feed would keep ingesting for it.
-            'gps fixes' => (int) DB::table('gps_positions')->where('provider_message_id', 'like', 'SIM-%')->count(),
-            'gps projections' => (int) DB::table('latest_positions')->count(),
+            // fleet register no longer has. The check is by orphan rather than by `SIM-%`, because the
+            // demo fleet's own trip carries simulator fixes from its seeded run — counting every
+            // simulator row would report the demo as this sweep's leftover.
+            'gps fixes' => (int) DB::table('gps_positions')
+                ->whereRaw('`truck_id` not in (select `id` from `trucks`)')
+                ->orWhereRaw('`trip_id` is not null and `trip_id` not in (select `id` from `trips`)')
+                ->count(),
+            'gps projections' => (int) DB::table('latest_positions')
+                ->whereRaw('`truck_id` not in (select `id` from `trucks`)')
+                ->orWhereRaw('`trip_id` is not null and `trip_id` not in (select `id` from `trips`)')
+                ->count(),
             'gps feeds' => (int) DB::table('gps_provider_accounts')->where('adapter', 'simulator')->count(),
         ];
 

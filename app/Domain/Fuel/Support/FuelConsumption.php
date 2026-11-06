@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Domain\Fuel\Support;
 
 /**
- * §10.9's consumption arithmetic, in one place so the Action that judges and the screen that
+ * The consumption arithmetic, in one place so the Action that judges and the screen that
  * prints cannot disagree about a percentage.
  *
- * Every figure is in the spec's two-decimal integer scale (§5.5): litres per 100 km ×100, and a
+ * Every figure is in the spec's two-decimal integer scale: litres per 100 km ×100, and a
  * signed percentage ×100. The division rounds half-up on both sides of zero, because PHP's `intdiv`
  * truncates toward zero and a variance of -6.005% must print as -6.01% just as +6.005% prints +6.01%.
  */

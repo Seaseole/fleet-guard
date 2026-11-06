@@ -65,7 +65,7 @@ final class CurrentCompany
     }
 
     /**
-     * The company's business day, as a timezone name (§2: UTC stores, the company zone displays).
+     * The company's business day, as a timezone name (UTC stores, the company zone displays).
      *
      * Anything that compares a *date* to today has to use this and not `now()`: an expiry derived
      * against the storage zone would report a licence as expired two hours early in Gaborone, and

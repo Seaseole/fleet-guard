@@ -9,7 +9,7 @@ use App\Domain\Operations\Models\TripAccessToken;
 use Illuminate\Support\Facades\DB;
 
 /**
- * §9.6 — turn the string on the driver's phone into a live token, or refuse.
+ * Turn the string on the driver's phone into a live token, or refuse.
  *
  * The link is the identity and the PIN is the second factor, typed on the page the link opens. That split
  * is what "a 6-digit PIN for bad-signal entry" means in practice: a driver who cannot tap the URL reads

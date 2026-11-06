@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 return new class extends Migration
 {
     /**
-     * A trip cost can be settled from stock (§6.8, `FuelIssueRecorded` for a bulk tank): diesel that
+     * A trip cost can be settled from stock (`FuelIssueRecorded` for a bulk tank): diesel that
      * was already paid for when it entered the tank is not paid for again when a truck takes it, so
      * the cost's credit side is `1180 Bulk fuel stock` and not a cash or payable account.
      *

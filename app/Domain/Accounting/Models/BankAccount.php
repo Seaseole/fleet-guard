@@ -15,9 +15,9 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * A bank, cash or wallet account (§4.2 BANK_ACCOUNT) — the account the ledger will move money
- * through once the ledger slice lands, and today the subject that proves the §9.4 field-gate rule
- * and the §9.5 encrypted-column pattern actually hold together.
+ * A bank, cash or wallet account (BANK_ACCOUNT) — the account the ledger will move money
+ * through once the ledger slice lands, and today the subject that proves the field-gate rule
+ * and the encrypted-column pattern actually hold together.
  *
  * Nothing here decrypts implicitly. The attributes a screen binds to are `number_masked` and
  * {@see maskedNumber()}; plaintext is reachable only through {@see revealedNumber()}, which asks
@@ -47,7 +47,7 @@ final class BankAccount extends Model implements AuditableContract
     use Auditable, BelongsToCompany, HasMaskedSecret;
 
     /**
-     * §9.5's promise, applied to the audit trail: the ciphertext never belongs in a second table.
+     * The promise, applied to the audit trail: the ciphertext never belongs in a second table.
      *
      * `audits.new_values` is a text column any permission-holder with `audit.view` can read, and
      * the mask is already recorded through the ordinary `number_masked` attribute — so logging the
@@ -62,7 +62,7 @@ final class BankAccount extends Model implements AuditableContract
         'remember_token',
     ];
 
-    /** The §9.5 column prefix for this model's secret: `number_encrypted` + `number_masked`. */
+    /** The column prefix for this model's secret: `number_encrypted` + `number_masked`. */
     public const NUMBER = 'number';
 
     protected $fillable = [
@@ -96,7 +96,7 @@ final class BankAccount extends Model implements AuditableContract
     }
 
     /**
-     * The gated read (§9.4). Returns null rather than throwing when the gate is closed so a caller
+     * The gated read. Returns null rather than throwing when the gate is closed so a caller
      * that forgot to ask still cannot print a number it was not entitled to — the gate's answer is
      * the value, not an exception to catch.
      */
@@ -106,7 +106,7 @@ final class BankAccount extends Model implements AuditableContract
     }
 
     /**
-     * The only write path for the secret. Called from the Actions, which is what keeps §9.5's
+     * The only write path for the secret. Called from the Actions, which is what keeps the
      * "adding encryption later needs a re-encrypt migration" honest: the ciphertext, its mask and
      * its key version are always written together or not at all.
      */

@@ -8,7 +8,7 @@ use App\Domain\Kernel\Documents\Models\DocumentVersion;
 use RuntimeException;
 
 /**
- * An update tried to change the bytes a version describes (§10.8's layer 1).
+ * An update tried to change the bytes a version describes (the layer 1).
  *
  * The ledger gets the same treatment from four database layers because a wrong posting corrupts a
  * number; here one model guard is enough because the failure is not arithmetic but evidence —
@@ -25,7 +25,7 @@ final class DocumentVersionIsImmutable extends RuntimeException
     {
         return new self(sprintf(
             'Document version %d (document %s) is immutable — %s cannot be changed once the bytes are stored. '
-            .'A correction is another version with the new bytes, never an edit of the row that describes the old ones (§10.8).',
+            .'A correction is another version with the new bytes, never an edit of the row that describes the old ones.',
             $version->version_seq,
             $version->document_id,
             implode(', ', $columns),

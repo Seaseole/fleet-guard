@@ -8,12 +8,12 @@ use App\Domain\Operations\RouteRateType;
 use InvalidArgumentException;
 
 /**
- * The price offered on a job (§4.1 JOB: rate type, quoted amount, currency, base amount).
+ * The price offered on a job (JOB: rate type, quoted amount, currency, base amount).
  *
- * The amount arrives as the **typed string** a person put in the field, never a float — §20.4's rule
+ * The amount arrives as the **typed string** a person put in the field, never a float — the rule
  * that a float has already lost the digits, enforced once at the screen boundary by `Money::ofMajor()`.
  *
- * A base-currency quote needs no rate: §5.3's `base_amount == round(amount × fx_rate)` with
+ * A base-currency quote needs no rate: The `base_amount == round(amount × fx_rate)` with
  * `fx_rate = 1`. Anything else must say which rate converted it and on which date, because a quote
  * re-priced at today's rate would quietly rewrite what the customer was offered.
  *
@@ -51,7 +51,7 @@ final readonly class JobQuoteDto
         }
 
         if ($rate !== null && $rateDate === null) {
-            throw new InvalidArgumentException('A stated rate must name the date it was struck (§5.2).');
+            throw new InvalidArgumentException('A stated rate must name the date it was struck.');
         }
     }
 

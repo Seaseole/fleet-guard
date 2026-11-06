@@ -18,10 +18,10 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.3 DRIVER — the employee as a driver, and the holder of the two dates that decide dispatch.
+ * DRIVER — the employee as a driver, and the holder of the two dates that decide dispatch.
  *
- * `licence_expires_on` and `permit_expires_on` are the single source §10.2 reads at
- * `planned → assigned`. The scan of the card is a §4.4 document attached to this row; it carries no
+ * `licence_expires_on` and `permit_expires_on` are the single source the design reads at
+ * `planned → assigned`. The scan of the card is a document attached to this row; it carries no
  * expiry of its own, so a lapsed licence cannot be reported twice under two different dates.
  *
  * A null expiry is **not** "valid forever": it means no paper has been recorded, and
@@ -49,7 +49,7 @@ final class Driver extends Model implements AuditableContract
 {
     use Auditable, BelongsToCompany, CanTransition, HasMaskedSecret;
 
-    /** The §9.5 column prefix: `licence_no_encrypted` + `licence_no_masked`. */
+    /** The column prefix: `licence_no_encrypted` + `licence_no_masked`. */
     public const LICENCE = 'licence_no';
 
     /** @var list<string> */
@@ -84,7 +84,7 @@ final class Driver extends Model implements AuditableContract
     }
 
     /**
-     * §10.1's table. `left` is terminal: rehiring is a new driver row against the same employee
+     * The table. `left` is terminal: rehiring is a new driver row against the same employee
      * (or no row at all), because a trail that says the same person left twice is unreadable.
      *
      * @return array<string, list<string>>
@@ -126,7 +126,7 @@ final class Driver extends Model implements AuditableContract
         return $this->maskedSecret(self::LICENCE);
     }
 
-    /** Date-only, as §10.2 requires: a paper valid "today" is valid on today's departure. */
+    /** Date-only, as the design requires: a paper valid "today" is valid on today's departure. */
     public function licenceValidOn(CarbonInterface $on): bool
     {
         return $this->licence_expires_on !== null

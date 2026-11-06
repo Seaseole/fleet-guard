@@ -9,7 +9,7 @@ use App\Domain\Fleet\Models\Equipment;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Adds a piece of yard equipment (§4.3, D1).
+ * Adds a piece of yard equipment (D1).
  */
 final class CreateEquipment
 {

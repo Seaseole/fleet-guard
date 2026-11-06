@@ -12,7 +12,7 @@ use Illuminate\Console\Command;
  * Nightly proof that the bytes on the private disk are still the bytes the index rows describe.
  *
  * Exit code 1 on drift, so the scheduler alarms rather than logs — the same shape as `ledger:verify`
- * (§14.6's "silence is loud" rule for the production self-checks).
+ * (the "silence is loud" rule for the production self-checks).
  *
  * This is the layer that gives `document_versions.sha256` its meaning. The column is written from the
  * bytes at upload and nothing re-reads them afterwards, so without this command the digest is a record
@@ -85,7 +85,7 @@ class DocumentsVerifyIntegrity extends Command
         foreach ($report['unattributable'] as $line) {
             $this->error('finding with no company, so no alert was raised: '.$line);
         }
-        $this->line('A version row is immutable (§10.8): a mismatch is investigated against the backup and the '
+        $this->line('A version row is immutable: a mismatch is investigated against the backup and the '
             .'storage layer, never corrected by editing the row to match the file — that is how a replaced document '
             .'becomes the document we always had.');
 

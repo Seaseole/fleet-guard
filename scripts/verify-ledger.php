@@ -25,10 +25,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * Phase 0 ledger verification (DESIGN.md §20.5).
+ * Phase 0 ledger verification.
  *
- * Not the test suite — tests are local-only by owner decision (§14.6). This is the runnable proof
- * of the four §6.3 layers: that a balanced journal posts, that an unbalanced one is refused at
+ * Not the test suite — tests are local-only by owner decision. This is the runnable proof
+ * of the four layers: that a balanced journal posts, that an unbalanced one is refused at
  * every layer that claims to refuse it, and that `ledger:verify` can actually see drift.
  *
  * It cleans up after itself through LedgerBarrier::withLiftedGuard(), which is deliberate: the
@@ -95,7 +95,7 @@ $today = now()->startOfMonth()->addDays(5);
 
 $money = fn (int $minor): Money => Money::ofMinor($minor, CurrentCompany::model()->base_currency_code);
 
-echo "\nPosting a balanced manual journal (§15.2 Phase 0)\n";
+echo "\nPosting a balanced manual journal\n";
 echo "---------------------------------------------------\n";
 
 $entry = $ledger->post(PostingDto::inBaseCurrency(
@@ -131,14 +131,14 @@ str_starts_with($entry->entry_no, 'JV-')
     : failed('entry_no came from the allocator', $entry->entry_no);
 
 $entry->period_id !== null && Period::query()->find($entry->period_id)?->period === $today->format('Y-m')
-    ? ok('the period row was resolved and created (§6.5)')
+    ? ok('the period row was resolved and created')
     : failed('period resolution', (string) $entry->period_id);
 
 $entry->posted_on->toDateString() === $today->toDateString()
     ? ok('posted_on is the business date, not the run date')
     : failed('posted_on', $entry->posted_on->toDateString());
 
-echo "\nRefusals — the layers under LedgerService (§6.3)\n";
+echo "\nRefusals — the layers under LedgerService\n";
 echo "-------------------------------------------------\n";
 
 refuses('app refuses an out-of-balance journal', fn () => $ledger->post(PostingDto::inBaseCurrency(
@@ -240,10 +240,10 @@ $fuel->line_count === 2
     : failed('fuel posting with dimensions', $fuel->description ?? '');
 
 $fuel->refresh()->lines()->where('truck_id', 1)->exists()
-    ? ok('the typed dimension landed in its own column (§6.2)')
+    ? ok('the typed dimension landed in its own column')
     : failed('typed dimension column', 'truck_id was not written');
 
-echo "\nImmutability (§6.3 layers 1 and 3)\n";
+echo "\nImmutability (layers 1 and 3)\n";
 echo "------------------------------------\n";
 
 refuses('the model refuses an update to a posted entry', function () use ($entry) {
@@ -295,7 +295,7 @@ JournalEntry::query()->count() === $before
     ? ok('re-posting the same event created no second entry (ADR-0001 #3)')
     : failed('replay guard', 'a duplicate entry appeared');
 
-echo "\nPeriod lock (§6.3 layer 4, §6.5)\n";
+echo "\nPeriod lock (layer 4)\n";
 echo "---------------------------------\n";
 
 // firstOrCreate, not create: this script must be re-runnable, and a run that died part-way (or a

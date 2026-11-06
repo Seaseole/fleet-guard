@@ -10,7 +10,7 @@ use Carbon\CarbonImmutable;
 use InvalidArgumentException;
 
 /**
- * §16 R6's first adapter — and the only one Phase 2 needs.
+ * R6's first adapter — and the only one Phase 2 needs.
  *
  * It parses the payload `gps:simulate` writes, which is deliberately shaped like a real provider's
  * webhook: a batch of messages, an opaque id per message, a truck identifier and a fix. The simulator
@@ -34,7 +34,7 @@ final class SimulatorProvider implements GpsProvider
         $messages = $payload['messages'] ?? null;
 
         if (! is_array($messages) || $messages === []) {
-            throw new InvalidArgumentException('A simulator batch carries a non-empty "messages" array (§14.3 batched ingest).');
+            throw new InvalidArgumentException('A simulator batch carries a non-empty "messages" array (batched ingest).');
         }
 
         $positions = [];
@@ -60,7 +60,7 @@ final class SimulatorProvider implements GpsProvider
         $lng = $message['lng'] ?? null;
 
         if (! is_string($id) || trim($id) === '') {
-            throw new InvalidArgumentException(sprintf('Simulator message %d has no id — the retry guard needs one (§14.3).', $number));
+            throw new InvalidArgumentException(sprintf('Simulator message %d has no id — the retry guard needs one.', $number));
         }
 
         if (! is_numeric($truckId) || (int) $truckId <= 0) {

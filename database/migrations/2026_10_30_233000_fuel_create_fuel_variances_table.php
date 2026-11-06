@@ -10,15 +10,15 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 FUEL_VARIANCE — the consumption snapshot taken when a trip completes (§15.2 phase 3).
+     * FUEL_VARIANCE — the consumption snapshot taken when a trip completes.
      *
-     * The figures the arithmetic used are stored with the result, for §5.5's reason: consumption per
+     * The figures the arithmetic used are stored with the result, for the reason: consumption
      * 100 km is computed, never stored as truth, and this row is the *analysis snapshot* the design
      * allows — litres, the distance the trip actually covered and the tonnes it carried, so a figure
      * challenged six months later can be recomputed rather than trusted.
      *
      * One row per trip: a re-completed trip re-measures the same span. `state` is the small machine of
-     * §10.9 — a variance is acknowledged or disputed by the person who looked at it, and closed by a
+     * A variance is acknowledged or disputed by the person who looked at it, and closed by a
      * seat holding `fuel.waive_variance`; every state past `open` must carry the note that says why.
      */
     public function up(): void

@@ -12,7 +12,7 @@ use RuntimeException;
  * it.
  *
  * It exists so the upload Action has a single shape to accept from three very different sources — a
- * Livewire component's `TemporaryUploadedFile`, a kiosk POST (§9.6), and a verifier script writing
+ * Livewire component's `TemporaryUploadedFile`, a kiosk POST, and a verifier script writing
  * a fixture from disk — and so the client's declared MIME type travels as a *claim* rather than as
  * the type anything trusts. The trusted type is
  * {@see ContentSniffer::sniff()}'s answer, and the two are compared so a spoofed

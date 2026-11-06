@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * A dip reading against the book, and the variance posted where a variance belongs (§15.2 phase 3).
+ * A dip reading against the book, and the variance posted where a variance belongs.
  *
  * Reconciliation is the point of keeping a stock value at all: the litrage in the tank is measured,
  * the book says what it should be, and the difference is a fact to record — not an error to hide by
@@ -51,7 +51,7 @@ final class ReconcileBulkTank
         ?int $actorId = null,
     ): BulkTankMovement {
         if (! Gate::allows('fuel.record')) {
-            throw new InvalidArgumentException('Reconciling a bulk tank is workshop recording (§9.3).');
+            throw new InvalidArgumentException('Reconciling a bulk tank is workshop recording.');
         }
 
         if ($physicalLitresX100 < 0) {
@@ -112,8 +112,8 @@ final class ReconcileBulkTank
         ?int $actorId,
     ): void {
         $accounts = $this->chart->byCode();
-        $stock = $accounts['1180'] ?? throw new InvalidArgumentException('Account 1180 Bulk fuel stock is not in this company\'s chart. Seed the chart first (§6.2).');
-        $variance = $accounts['5110'] ?? throw new InvalidArgumentException('Account 5110 Fuel stock variance is not in this company\'s chart. Seed the chart first (§6.2).');
+        $stock = $accounts['1180']?? throw new InvalidArgumentException('Account 1180 Bulk fuel stock is not in this company\'s chart. Seed the chart first.');
+        $variance = $accounts['5110']?? throw new InvalidArgumentException('Account 5110 Fuel stock variance is not in this company\'s chart. Seed the chart first.');
 
         $base = CurrentCompany::model()->base_currency_code;
         $amount = Money::ofMinor(abs($valueDelta), $base);

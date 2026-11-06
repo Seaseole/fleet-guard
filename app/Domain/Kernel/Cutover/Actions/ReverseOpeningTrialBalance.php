@@ -15,7 +15,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Carbon;
 
 /**
- * §15.2 Phase 0.5's rollback — the rehearsal's "undo", done as the ledger allows it (§6.4).
+ * Phase 0.5's rollback — the rehearsal's "undo", done as the ledger allows it.
  *
  * The posted entry is never edited or deleted. The mirror posts at today's date with
  * `reverses_entry_id` and the batch's `netting_group`, so a report can net the pair and a person can

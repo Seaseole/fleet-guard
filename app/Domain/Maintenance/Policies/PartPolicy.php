@@ -8,7 +8,7 @@ use App\Domain\Maintenance\Models\Part;
 use App\Models\User;
 
 /**
- * Who may read and maintain the parts catalogue (§9.3 "Work orders / Parts stock").
+ * Who may read and maintain the parts catalogue ("Work orders / Parts stock").
  *
  * Workshop Manager and Stores Clerk hold `parts.manage`; the Owner holds everything; the
  * Operations Manager and Accountant read. Deleting a catalogue row is not a path — a part that is

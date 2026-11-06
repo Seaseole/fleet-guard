@@ -8,10 +8,10 @@ use Illuminate\Support\Facades\DB;
 return new class extends Migration
 {
     /**
-     * §9.5 — `audits.auditable_id` is a ULID column, and the published migration made it a BIGINT.
+     * `audits.auditable_id` is a ULID column, and the published migration made it a BIGINT.
      *
      * `2026_10_26_131410_create_audits_table` is the package's own stub, and `morphs('auditable')`
-     * is what it ships: an `unsignedBigInteger`. §4.4's schema says `char26 auditable_id`. Half the
+     * is what it ships: an `unsignedBigInteger`. The schema says `char26 auditable_id`. Half the
      * audited models — `freight_jobs`, `trips`, `trip_costs`, `fuel_purchases`, `fuel_issues`,
      * `chargeables`, `border_costs`, `border_crossings`, `proof_of_deliveries` and
      * `trip_access_tokens` — are keyed by ULID, so for those the audit insert was not a silent

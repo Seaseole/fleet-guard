@@ -8,10 +8,10 @@ use App\Domain\Operations\Models\RouteRate;
 use App\Models\User;
 
 /**
- * Who may see and reprice a rate card (§9.3 "Jobs and trips").
+ * Who may see and reprice a rate card ("Jobs and trips").
  *
  * Reading a card is part of reading routes (`routes.view`); the *amount* on it is additionally
- * behind `seeCustomerTerms` at the field layer. Writing is `routes.manage` — §9.3 gives the
+ * behind `seeCustomerTerms` at the field layer. Writing is `routes.manage` — the design gives the
  * Operations Manager the routes row as well as the Owner, which is right: the person who negotiates
  * the corridor is the person who files the price.
  */

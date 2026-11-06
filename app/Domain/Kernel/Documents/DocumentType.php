@@ -7,7 +7,7 @@ namespace App\Domain\Kernel\Documents;
 use App\Domain\Kernel\Documents\Exceptions\UnconfiguredDocumentType;
 
 /**
- * §4.4 DOCUMENT.type — the ten kinds of paper the fleet has to keep.
+ * DOCUMENT.type — the ten kinds of paper the fleet has to keep.
  *
  * The allowlist and the size cap are per type and come from `fleet.documents.types`, not from this
  * enum, because both are numbers an owner will want to move (a POD cap tuned to phone cameras, a
@@ -76,12 +76,12 @@ enum DocumentType: string
     }
 
     /**
-     * Whether this kind carries an expiry that the §10.8 validity axis should be computed for.
+     * Whether this kind carries an expiry that the validity axis should be computed for.
      *
      * Only some do: a POD, a delivery note and a work order record an event that already happened
      * and never expires, while a licence, permit, insurance policy and customs paper all have a
      * date after which they are worthless. The distinction exists because the nightly derivation
-     * (§10.8) must not raise `DocumentExpiryImminent` for a weighbridge ticket.
+     * must not raise `DocumentExpiryImminent` for a weighbridge ticket.
      */
     public function expires(): bool
     {

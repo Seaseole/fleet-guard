@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 BREAKDOWN — a truck stopped, where, why, and what it cost the operation
-     * (§15.2 phase 3, slice 3f).
+     * BREAKDOWN — a truck stopped, where, why, and what it cost the operation
+     * (phase 3, slice 3f).
      *
      * A breakdown is an operational fact before it is a repair: the hours lost and the cause are what
      * the owner reads, and the work order is what the workshop answers with. `work_order_id` is
@@ -21,7 +21,7 @@ return new class extends Migration
      * `recoverable_from_driver` is a claim about cause, so the table refuses it beside any cause but
      * `driver`: a mechanical failure or a road hazard is not recoverable from the person who was
      * driving, and a row that said so would be a claim nobody could defend. Whether the amount is in
-     * fact recovered is Phase 4's settlement (§10.6's recovery posting), not this row.
+     * fact recovered is Phase 4's settlement (the recovery posting), not this row.
      */
     public function up(): void
     {

@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * Names a gate on a trip's route — §10.9's `planned`, the only state a crossing may be born in.
+ * Names a gate on a trip's route — the `planned`, the only state a crossing may be born in.
  *
  * The post's country is copied onto the row (see the model): the gate's own record may be corrected
  * later, but where *this truck* went must not change underneath a report. A retried plan returns the
@@ -39,12 +39,12 @@ final class PlanBorderCrossing
         ?int $actorId = null,
     ): BorderCrossing {
         if (! Gate::allows('crossborder.manage')) {
-            throw new InvalidArgumentException('Planning a crossing is cross-border management, and this seat may not record it (§9.3).');
+            throw new InvalidArgumentException('Planning a crossing is cross-border management, and this seat may not record it.');
         }
 
         if (in_array($trip->status, [TripStatus::Cancelled, TripStatus::Aborted, TripStatus::Closed], true)) {
             throw new InvalidArgumentException(sprintf(
-                'Trip %s is %s and cannot acquire a border crossing. Re-open a closed trip first (§10.2).',
+                'Trip %s is %s and cannot acquire a border crossing. Re-open a closed trip first.',
                 $trip->trip_no,
                 $trip->status->label(),
             ));

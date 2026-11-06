@@ -72,13 +72,13 @@ use Illuminate\Support\Facades\Schema;
 use Symfony\Component\Console\Output\ConsoleOutput;
 
 /*
- * verify-maintenance — §15.2 phase 3's third slice (3d): service schedules and work orders.
+ * verify-maintenance — phase 3's third slice (3d): service schedules and work orders.
  *
  * Proves, against the live MySQL 9.1 instance:
  *
- *   - the schema carries §4.3/§10.6's promises as CHECKs, including the approval control written as
+ *   - the schema carries /the promises as CHECKs, including the approval control written as
  *     a database fact, the hold's reason, and the line's rounding;
- *   - a schedule's due state is derived (§10.8's argument) and moves only when the service is done;
+ *   - a schedule's due state is derived (the argument) and moves only when the service is done;
  *   - the whole machine walks: raise → (threshold) → approve → start → hold → resume → complete →
  *     inspect → close, with each illegal edge refused;
  *   - completing against a schedule advances it and resolves the `service_due` alert in the same
@@ -86,7 +86,7 @@ use Symfony\Component\Console\Output\ConsoleOutput;
  *   - a line added after approval that crosses the limit asks again, and taking it back off
  *     returns the order to approved;
  *   - slice 3e's shelf: a receipt, an issue to a job and a physical count each move the valued stock
- *     and post where §6.8 says they belong, a job that is not sanctioned cannot draw stock, and an
+ *     and post where the design says they belong, a job that is not sanctioned cannot draw stock, and an
  *     emptied shelf is worth nothing;
  *   - slice 3f's three registers: a tyre's fitment is one open position (the generated unique columns
  *     say so twice), its removal writes the cost per kilometre the stint cost, an inspection's verdict
@@ -210,7 +210,7 @@ $wipeFixtures = static function (array $truckIds) use ($alignWorkOrderCounter): 
 
 /**
  * The shelf this run built: movements first, then the journal entries those movements posted (under
- * §6.3's lifted barrier, because an entry cannot be deleted while the guard is up), then the parts.
+ * The lifted barrier, because an entry cannot be deleted while the guard is up), then the parts.
  */
 $wipeParts = static function (): void {
     $partIds = DB::table('parts')->where('sku', 'like', 'XMT-%')->pluck('id')->all();
@@ -243,7 +243,7 @@ $wipeFixtures($xmtTruckIds);
 ok('an interrupted run\'s fixtures are gone and the work-order counter matches the surviving rows');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §4.3/§10.6 the schema states the promises ==\n";
+echo "\n== / the schema states the promises ==\n";
 
 $scheduleDdl = (string) ((array) DB::select('show create table service_schedules')[0])['Create Table'];
 
@@ -257,7 +257,7 @@ foreach ([
     check(str_contains($scheduleDdl, $name), "service_schedules carries {$name}");
 }
 
-check(! str_contains($scheduleDdl, '`state`'), '...and stores no state column — the due state is derived (§10.8)');
+check(! str_contains($scheduleDdl, '`state`'), '...and stores no state column — the due state is derived');
 
 $workOrderDdl = (string) ((array) DB::select('show create table work_orders')[0])['Create Table'];
 
@@ -276,7 +276,7 @@ foreach ([
     check(str_contains($workOrderDdl, $name), "work_orders carries {$name}");
 }
 
-check(Schema::hasColumns('work_orders', ['previous_state', 'state_changed_at', 'approval_required_amount_base', 'capitalised_amount_base']), '...and §10.1/§10.6\'s state, threshold and capitalisation columns');
+check(Schema::hasColumns('work_orders', ['previous_state', 'state_changed_at', 'approval_required_amount_base', 'capitalised_amount_base']), '...and /the state, threshold and capitalisation columns');
 
 $lineDdl = (string) ((array) DB::select('show create table work_order_lines')[0])['Create Table'];
 
@@ -285,7 +285,7 @@ foreach (['work_order_lines_kind_allowed', 'work_order_lines_amount_is_rounded_p
 }
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §4.3/§15.2 3e the shelf and its stock book ==\n";
+echo "\n== / 3e the shelf and its stock book ==\n";
 
 $partDdl = (string) ((array) DB::select('show create table parts')[0])['Create Table'];
 
@@ -315,7 +315,10 @@ echo "\n== fixtures ==\n";
 
 $base = CurrentCompany::model()->base_currency_code;
 
-$owner = User::query()->findOrFail(1);
+// The Owner seat is the account the deployment names, not row 1: on a development database row 1
+// may have been re-seated, and a harness that signs in the wrong seat fails at the first gated
+// write before it tests anything. `FLEET_OWNER_EMAIL` is the documented override.
+$owner = User::query()->where('email', config('fleet.identity.owner_email'))->firstOrFail();
 Auth::login($owner);
 
 $truck = app(CreateTruck::class)(new TruckDto(
@@ -344,7 +347,7 @@ check($schedule->remainingOn($truck->refresh(), $today) === 600, 'the truck is 6
 check($schedule->stateOn($today) === ServiceDueState::DueSoon, '...which the derived state reads as due soon, not overdue');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §14.1 the service_due source sees the schedule and the loop closes ==\n";
+echo "\n== the service_due source sees the schedule and the loop closes ==\n";
 
 $thresholds = ThresholdSet::fromRows(collect([
     new ReminderThreshold(['family' => 'service', 'days_before' => 60, 'recipients' => ['workshop_manager'], 'active' => true]),
@@ -372,7 +375,7 @@ $alert = $candidate === null ? null : app(RaiseAlert::class)->handle($candidate)
 check($alert !== null && $alert->type === AlertType::ServiceDue && $alert->state === AlertState::Open, 'the engine raised a live service_due alert for it');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.6 the machine: raise → start → hold → resume → complete → inspect → close ==\n";
+echo "\n== the machine: raise → start → hold → resume → complete → inspect → close ==\n";
 
 $under = app(RaiseWorkOrder::class)(new WorkOrderDto(
     truckId: $truck->id,
@@ -423,7 +426,7 @@ $completed = app(CompleteWorkOrder::class)($resumed, 119_600);
 check($completed->status === WorkOrderStatus::Completed, 'the order completes at the odometer the workshop read');
 check($completed->completion_odometer_km === 119_600, '...and the reading is on the row');
 check($completed->truck->refresh()->odometer_km === 119_600, '...and the truck\'s projection followed the reading');
-check($completed->truck->status === FleetStatus::Available, '...and the vehicle is released: back on the road for dispatch (§10.6)');
+check($completed->truck->status === FleetStatus::Available, '...and the vehicle is released: back on the road for dispatch');
 
 $schedule->refresh();
 check($schedule->last_done_at_value === 119_600, 'the linked schedule is closed at the completion odometer');
@@ -444,7 +447,7 @@ check($closed->capitalised === false && $closed->capitalised_amount_base === 0, 
 refuses('a closed order refuses a new line', fn () => app(AddWorkOrderLine::class)($closed, new WorkOrderLineDto(WorkOrderLineKind::Labour, 'Extra', 100, 1_000, $base)));
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.6 the threshold is the control ==\n";
+echo "\n== the threshold is the control ==\n";
 
 $over = app(RaiseWorkOrder::class)(new WorkOrderDto(
     truckId: $truck->id,
@@ -469,7 +472,7 @@ check($approved->approval_required_amount_base === 500_000, '...while the limit 
 refuses('approving twice is not a move the machine has', fn () => app(ApproveWorkOrder::class)($approved, $owner->id));
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.6 an estimate that grows asks again ==\n";
+echo "\n== an estimate that grows asks again ==\n";
 
 $grows = app(RaiseWorkOrder::class)(new WorkOrderDto(
     truckId: $truck->id,
@@ -496,7 +499,7 @@ $cancelled = app(CancelWorkOrder::class)($shrunk, 'Tyre order withdrawn; the fau
 check($cancelled->status === WorkOrderStatus::Cancelled, 'an approved order that is no longer wanted is cancelled with its sentence');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.6 capitalising is a decision at close, bounded by the spend ==\n";
+echo "\n== capitalising is a decision at close, bounded by the spend ==\n";
 
 $capital = app(RaiseWorkOrder::class)(new WorkOrderDto(
     truckId: $truck->id,
@@ -522,7 +525,7 @@ check($capitalised->capitalised === true && $capitalised->capitalised_amount_bas
 check($capitalised->capitalisedAmount()->format() === $capitalised->partsTotal()->format(), '...which is the whole spend on this order');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.6 the refusals are machines, not habits ==\n";
+echo "\n== the refusals are machines, not habits ==\n";
 
 $fresh = app(RaiseWorkOrder::class)(new WorkOrderDto(
     truckId: $truck->id,
@@ -539,7 +542,7 @@ $cancelledFresh = app(CancelWorkOrder::class)($fresh, 'Raised twice by mistake.'
 check($cancelledFresh->status === WorkOrderStatus::Cancelled, 'a fresh order is cancelled, leaving the first inspection to stand');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §15.2 3e a receipt, an issue and a count move the shelf and the ledger ==\n";
+echo "\n== 3e a receipt, an issue and a count move the shelf and the ledger ==\n";
 
 $otherTruck = app(CreateTruck::class)(new TruckDto(
     registrationNo: 'BWD998XMT',
@@ -728,7 +731,7 @@ $oil->refresh();
 check($oil->isLowStock() === true, '...and an empty shelf reads low against its reorder level of 2');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §15.2 3f the three registers state their promises ==\n";
+echo "\n== 3f the three registers state their promises ==\n";
 
 $tyreDdl = (string) ((array) DB::select('show create table tyres')[0])['Create Table'];
 check(str_contains($tyreDdl, 'tyres_company_serial_unique'), 'a tyre serial is unique within the company');
@@ -766,7 +769,7 @@ $breakdownDdl = (string) ((array) DB::select('show create table breakdowns')[0])
 check(str_contains($breakdownDdl, 'breakdowns_cause_allowed'), 'breakdowns state their cause vocabulary');
 check(str_contains($breakdownDdl, 'breakdowns_recovery_names_a_driver'), '...and only a driver-caused stop can be recovered from the driver');
 
-echo "\n== §9.3 the seats that write the three registers ==\n";
+echo "\n== the seats that write the three registers ==\n";
 
 $dispatcher = RoleKey::Dispatcher->permissions();
 $stores = RoleKey::StoresClerk->permissions();
@@ -781,7 +784,7 @@ check(in_array('inspections.record', $workshop, true) && in_array('breakdowns.re
 check(PermissionCatalogue::knows('tyres.manage') && PermissionCatalogue::knows('breakdowns.record'), '...and all three names are in the catalogue the founder edits');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §4.3 TYRE a fitment is one open position and a removal prices the stint ==\n";
+echo "\n== TYRE a fitment is one open position and a removal prices the stint ==\n";
 
 $frontTyre = app(CreateTyre::class)(new TyreDto(
     serial: 'XMT-TYR-0001',
@@ -863,7 +866,7 @@ refuses(
 $scrapped = app(RemoveTyre::class)($frontTyre->refresh(), $today->copy()->addDays(40), 140_000, TyreStatus::Scrap);
 check($scrapped->kilometresRun() === 8_500 && $frontTyre->refresh()->status === TyreStatus::Scrap, '...and a wasted casing leaves the rack as scrap with its own rate');
 
-echo "\n== §4.3 INSPECTION the verdict must agree with the checklist ==\n";
+echo "\n== INSPECTION the verdict must agree with the checklist ==\n";
 
 $preTrip = array_fill_keys(InspectionKind::PreTrip->checklistKeys(), true);
 
@@ -954,7 +957,7 @@ refuses(
     'another truck',
 );
 
-echo "\n== §4.3 BREAKDOWN one stop, one repair ==\n";
+echo "\n== BREAKDOWN one stop, one repair ==\n";
 
 refuses(
     'recovering from the driver needs a driver-caused stop',

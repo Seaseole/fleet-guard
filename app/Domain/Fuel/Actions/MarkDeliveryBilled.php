@@ -9,10 +9,10 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * §20.36 — Fuel's own stamp: the delivery's supplier paper has arrived (or has been released).
+ * Fuel's own stamp: the delivery's supplier paper has arrived (or has been released).
  *
  * The `bill_id` column lives on Fuel's row, and `RecordBill`/`VoidBill` may not write another
- * module's table (§3.1 D5), so the link is made through this door: Accounting asks with the two ids
+ * module's table (D5), so the link is made through this door: Accounting asks with the two ids
  * as **strings** — no model crosses the boundary — and Fuel locks its own row, refuses a delivery
  * that is not unbilled-posted stock, and stamps it.
  *
@@ -40,7 +40,7 @@ final class MarkDeliveryBilled
 
             if ($purchase->bulk_tank_id === null || ! $purchase->posted_to_ledger) {
                 throw new InvalidArgumentException(sprintf(
-                    'Purchase %s is a pump slip, not a posted bulk delivery — a slip becomes an expense when the diesel is issued to a trip, and its payable arrives through the issue, not this door (§20.26).',
+                    'Purchase %s is a pump slip, not a posted bulk delivery — a slip becomes an expense when the diesel is issued to a trip, and its payable arrives through the issue, not this door.',
                     $purchase->id,
                 ));
             }

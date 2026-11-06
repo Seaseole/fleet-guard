@@ -7,15 +7,15 @@ namespace App\Domain\Kernel\Identity;
 use InvalidArgumentException;
 
 /**
- * The permission catalogue — the machine-readable form of the §9.3 matrix.
+ * The permission catalogue — the machine-readable form of the matrix.
  *
  * One source of names on purpose. The seeder creates exactly these rows, the role definitions
  * may only cite these names, the navigation config filters on them, the exports ask them, and
  * `fleet:permissions audit` compares the database against this list. A permission string that
  * exists only in a Blade file is a permission nobody can grant, which is the silent half of the
- * "field-level rules are auditable" promise in §9.4.
+ * "field-level rules are auditable" promise in.
  *
- * Names are `capability.action`, lower snake, one dot. Deliberately not colons: §9.1's MFA rule
+ * Names are `capability.action`, lower snake, one dot. Deliberately not colons: The MFA rule
  * was written as "any role holding `financial:*` or `accounting:*` permissions", but a prefix
  * test on names would be a lie — the money-hiding permissions are spread over `trips.`, `fleet.`,
  * `bank.`, `ledger.` and `payroll.`. So the category is a property of each entry instead of a
@@ -24,7 +24,7 @@ use InvalidArgumentException;
 final class PermissionCatalogue
 {
     /**
-     * Groups mirror the §9.3 rows so the matrix and this file can be read side by side.
+     * Groups mirror the rows so the matrix and this file can be read side by side.
      *
      * @var array<string, array<string, string>>
      */
@@ -32,12 +32,12 @@ final class PermissionCatalogue
         'Overview' => [
             'dashboard.view' => 'See the operational dashboard cards',
             'dashboard.financial' => 'See the financial dashboard cards',
-            'alerts.view' => 'See the alert register (§14.1)',
+            'alerts.view' => 'See the alert register',
             'alerts.acknowledge' => 'Acknowledge an alert or mute it with an end date',
             // Its own name rather than a second meaning on `alerts.acknowledge`, because `Resolved` is
             // the one state the engine cannot leave: `alerts_resolved_is_final` refuses every transition
             // out of it. A grant list that reads "acknowledge or mute" but also closes records
-            // permanently is the silent half of the auditable-matrix promise (§9.4).
+            // permanently is the silent half of the auditable-matrix promise.
             'alerts.resolve' => 'Close an alert with a reason — the register\'s terminal state',
         ],
         'Fleet' => [
@@ -52,7 +52,7 @@ final class PermissionCatalogue
             'jobs.view' => 'See jobs',
             'jobs.create' => 'Create a job',
             'jobs.quote' => 'Quote a job',
-            // §10.3: `closed` is the one job state only the Owner may set, so it needs its own
+            // `closed` is the one job state only the Owner may set, so it needs its own
             // permission instead of riding on `jobs.create`. The Owner is the only role that holds
             // every name, which is what makes that sentence enforceable rather than a comment.
             'jobs.close' => 'Close a job',
@@ -61,7 +61,7 @@ final class PermissionCatalogue
             'trips.plan' => 'Plan a trip',
             'trips.dispatch' => 'Dispatch a trip',
             'trips.complete' => 'Complete a trip',
-            // §10.2's `completed → closed` is an accounting act (it freezes the costs of a period),
+            // The `completed → closed` is an accounting act (it freezes the costs of a period),
             // which is why it is not folded into `trips.complete`.
             'trips.close' => 'Close a completed trip and freeze its costs',
             'trips.reopen' => 'Reopen a completed trip',
@@ -112,6 +112,7 @@ final class PermissionCatalogue
             'bank.view' => 'See bank and cash accounts',
             'bank.manage' => 'Change bank and cash account details',
             'bank.number.view' => 'Reveal a full bank account number',
+            'bank.reconcile' => 'Open, edit and sign bank and cash reconciliations',
             'ledger.view' => 'See the journal',
             'ledger.post' => 'Post a journal entry',
             'ledger.journal.manual' => 'Post a manual journal',
@@ -162,12 +163,15 @@ final class PermissionCatalogue
             'queues.view' => 'Read deployment queue health',
             'queues.retry' => 'Retry a failed deployment job after re-authentication',
             'kiosk.token.issue' => 'Issue and revoke trip kiosk tokens',
+            // The "silence is loud": the dashboard says when the books last left the building and
+            // whether the copy read back. A backup nobody can see the age of is a promise, not a control.
+            'backups.view' => 'See when the ledger was last exported off-site and whether the copy verified',
         ],
     ];
 
     /**
      * Permissions that move, reveal or export money. Holding any of these is what makes MFA
-     * mandatory for the role (§9.1), and what makes an export re-auth gated (§9.3 legend ⚑).
+     * mandatory for the role, and what makes an export re-auth gated (legend ⚑).
      *
      * @var list<string>
      */
@@ -213,7 +217,7 @@ final class PermissionCatalogue
     ];
 
     /**
-     * The §9.3 legend ⚑ column: abilities that must sit behind `reauth` (§9.1) — either they
+     * The legend ⚑ column: abilities that must sit behind `reauth` — either they
      * move a posted number, reveal an secret, delete evidence, or change who can do any of that.
      *
      * @var list<string>
@@ -281,7 +285,7 @@ final class PermissionCatalogue
             }
         }
 
-        throw new InvalidArgumentException("Permission '{$name}' is not in the catalogue (§9.3).");
+        throw new InvalidArgumentException("Permission '{$name}' is not in the catalogue.");
     }
 
     public static function isFinancial(string $name): bool
@@ -318,7 +322,7 @@ final class PermissionCatalogue
     {
         foreach ($names as $name) {
             if (! self::knows($name)) {
-                throw new InvalidArgumentException("Unknown permission '{$name}' in {$context} — add it to the catalogue or fix the name (§9.3).");
+                throw new InvalidArgumentException("Unknown permission '{$name}' in {$context} — add it to the catalogue or fix the name.");
             }
         }
 

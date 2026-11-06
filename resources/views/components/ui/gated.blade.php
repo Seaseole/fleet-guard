@@ -1,18 +1,19 @@
 @props([
-    'gate' => null,
+    'can' => false,
     'masked' => null,
     'label' => null,
 ])
 
 {{--
-    The §9.4 rendering rule in one place: a sensitive field is asked through a named gate, and the
+    The rendering rule in one place: a sensitive field is asked through a named gate, and the
     closed answer is a placeholder rather than an empty cell. `@can` expressions scattered around
     columns are what make "who can see this number?" unanswerable, so a screen uses this component
-    instead of writing the check.
+    instead of writing the check — and the check itself is the caller's, not the primitive's:
+    authorization lives in the page, the policy behind it, never in `ui/`.
 
-    `masked` is what the caller already holds — §9.5's `*_masked` column, not a decryption.
+    `masked` is what the caller already holds — the `*_masked` column, not a decryption.
 --}}
-@can($gate)
+@if ($can)
     {{ $slot }}
 @else
     <span
@@ -23,4 +24,4 @@
 
         <span class="font-mono text-xs">{{ $masked ?? '—' }}</span>
     </span>
-@endcan
+@endif

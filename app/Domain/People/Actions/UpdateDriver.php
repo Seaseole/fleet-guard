@@ -9,10 +9,10 @@ use App\Domain\People\Models\Driver;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Edits a driver's papers and terms (§4.3, D1).
+ * Edits a driver's papers and terms (D1).
  *
  * Status is deliberately absent: it moves through {@see ChangeDriverStatus}, which writes the
- * §10.1 event and enforces the reason rule. An edit form that could post `status` would be the
+ * Event and enforces the reason rule. An edit form that could post `status` would be the
  * second, silent way to suspend someone.
  */
 final class UpdateDriver

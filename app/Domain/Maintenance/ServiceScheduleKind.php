@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Maintenance;
 
 /**
- * How a service schedule measures its interval (§4.3).
+ * How a service schedule measures its interval.
  *
  * `km` and `hours` are counters the truck accrues as it works; `date` is the calendar's; `condition`
  * is a person's judgement and is the only kind with no due point at all. The four are one enum rather

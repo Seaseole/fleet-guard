@@ -16,7 +16,7 @@ use App\Domain\Operations\Models\Route;
 use InvalidArgumentException;
 
 /**
- * §15.2 Phase 1 — the corridor register.
+ * Phase 1 — the corridor register.
  *
  * Matched by code. The distance stays the string the file wrote until {@see RouteDto} has read it,
  * because the DTO is where the "positive, under a million, kilometres not miles" rule lives; parsing

@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * §10.6's `draft|approved|planned → cancelled`: the job was withdrawn before anyone worked on it.
+ * The `draft|approved|planned → cancelled`: the job was withdrawn before anyone worked on it.
  *
  * `cancelled` and `rejected` are different words on purpose — a rejection was the spend being refused,
  * a cancellation is an approved job going away (the truck was sold, the fault was misdiagnosed, the
@@ -27,7 +27,7 @@ final class CancelWorkOrder
     public function __invoke(WorkOrder $workOrder, string $reason, ?int $actorId = null): WorkOrder
     {
         if (! Gate::allows('work_orders.create')) {
-            throw new InvalidArgumentException('Withdrawing a work order is a workshop act (§9.3).');
+            throw new InvalidArgumentException('Withdrawing a work order is a workshop act.');
         }
 
         $reason = trim($reason);
@@ -46,7 +46,7 @@ final class CancelWorkOrder
 
             if (! in_array($locked->status, [WorkOrderStatus::Draft, WorkOrderStatus::Approved, WorkOrderStatus::Planned], true)) {
                 throw new InvalidArgumentException(sprintf(
-                    '%s is %s. Only work that has not started is cancelled; a job under way is put on hold (§10.6).',
+                    '%s is %s. Only work that has not started is cancelled; a job under way is put on hold.',
                     $locked->wo_no,
                     strtolower($locked->status->label()),
                 ));

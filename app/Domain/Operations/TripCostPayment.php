@@ -7,7 +7,7 @@ namespace App\Domain\Operations;
 /**
  * How a trip cost was settled at capture time — the credit side of the cost's journal entry.
  *
- * The three money cases are the three places money actually leaves from (§6.8): the cash box, the
+ * The three money cases are the three places money actually leaves from: the cash box, the
  * bank account, or the supplier's ledger. `supplier_credit` is not "unpaid": the bill exists, the
  * cost is real, and the payable is the liability that says so.
  *

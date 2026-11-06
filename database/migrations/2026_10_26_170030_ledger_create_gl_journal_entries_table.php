@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.2 / §6.1 GL_JOURNAL_ENTRY — the header row of the ledger (§6.1 decision 3).
+     * / GL_JOURNAL_ENTRY — the header row of the ledger (decision 3).
      *
      * The FX block lives HERE and not on the lines: a line in a different currency from its own
      * entry is a re-design, not a column. `posted_at` is the UTC instant and `posted_on` is the
@@ -18,7 +18,7 @@ return new class extends Migration
      * one timestamp cannot be both an audit instant and an accounting date.
      *
      * `total_debit`/`total_credit`/`line_count` are computed by the poster and verified by
-     * `ledger:verify`: a CHECK cannot aggregate across rows (§6.3 layer 2).
+     * `ledger:verify`: a CHECK cannot aggregate across rows (layer 2).
      */
     public function up(): void
     {
@@ -33,7 +33,7 @@ return new class extends Migration
             $table->string('status', 8)->default('draft');
             $table->string('description', 255);
 
-            // §5.2 block, named as Fx::toColumns() emits it. The entry has no single `amount`
+            // Block, named as Fx::toColumns() emits it. The entry has no single `amount`
             // column: its foreign/base pair is (sum of lines in currency_code, total_*_base).
             $table->char('currency_code', 3);
             $table->decimal('fx_rate', 19, 8);
@@ -83,20 +83,20 @@ return new class extends Migration
             $table->foreign('reverses_entry_id')->references('id')->on('gl_journal_entries');
         });
 
-        // ── §6.3 layer 2: CHECK constraints (raw DDL — Blueprint::check() does not exist) ──
+        // ── layer 2: CHECK constraints (raw DDL — Blueprint::check() does not exist) ──
         DB::statement('alter table `gl_journal_entries` add constraint `gl_journal_entries_status_allowed` check (status in (\'draft\', \'posted\', \'void\'))');
         DB::statement('alter table `gl_journal_entries` add constraint `gl_journal_entries_posted_balanced` check (status <> \'posted\' or (total_debit = total_credit and total_debit > 0))');
         DB::statement('alter table `gl_journal_entries` add constraint `gl_journal_entries_draft_is_empty` check (status <> \'draft\' or (total_debit = 0 and total_credit = 0))');
         DB::statement('alter table `gl_journal_entries` add constraint `gl_journal_entries_posted_has_lines` check (status <> \'posted\' or line_count >= 2)');
 
-        // §5.1 rule 2 stated as data: 1 foreign unit = X base, always, so a same-currency row
+        // Rule 2 stated as data: 1 foreign unit = X base, always, so a same-currency row
         // whose rate is not 1 is an inverted feed. This is the constraint that protects the
         // convention even when the poster is a panic-edited SQL client rather than the Action.
         DB::statement('alter table `gl_journal_entries` add constraint `gl_journal_entries_same_currency_rate_is_one` check (currency_code <> base_currency_code or fx_rate = 1)');
         DB::statement('alter table `gl_journal_entries` add constraint `gl_journal_entries_rate_positive` check (fx_rate > 0)');
 
         if (DB::connection()->getDriverName() !== 'sqlite') {
-            // ── §6.3 layer 4: refuse a posting into a locked period ──
+            // ── layer 4: refuse a posting into a locked period ──
             // A CHECK cannot read another table, so this one has to be a trigger. The period row is
             // resolved by the poster and stored on the entry, which keeps this a single-row lookup.
             DB::statement(<<<'SQL'
@@ -119,10 +119,10 @@ return new class extends Migration
             end
             SQL);
 
-            // ── §6.3 layer 3: immutability, unless the barrier row is present ──
+            // ── layer 3: immutability, unless the barrier row is present ──
             // The one permitted update is the transition of an *unpublished* entry — draft → posted
             // (which is where the poster writes the totals) and draft → void. A posted entry is never
-            // updated: §6.4 corrects it with a reversing entry instead.
+            // updated: Corrects it with a reversing entry instead.
             DB::statement(<<<'SQL'
             create trigger `gl_journal_entries_bu` before update on `gl_journal_entries`
             for each row

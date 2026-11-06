@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Domain\Kernel\Alerts;
 
 /**
- * §4.4's `alerts.severity` value list.
+ * The `alerts.severity` value list.
  *
- * Severity is what decides delivery, not display: §14.1's "critical financial and safety alerts"
+ * Severity is what decides delivery, not display: The "critical financial and safety alerts"
  * cannot be opted out of, and the only honest reading of that is the severity the alert carried when
  * it fired. A screen can render it with `tone()`; a user cannot mute it.
  */
@@ -26,7 +26,7 @@ enum AlertSeverity: string
         };
     }
 
-    /** The `ui/badge` tone for this severity; the caller supplies the icon (DESIGN-SYSTEM.md §1.5). */
+    /** The `ui/badge` tone for this severity; the caller supplies the icon. */
     public function tone(): string
     {
         return match ($this) {
@@ -37,7 +37,7 @@ enum AlertSeverity: string
     }
 
     /**
-     * Whether this severity outranks a user's opt-out (§14.1).
+     * Whether this severity outranks a user's opt-out.
      *
      * Named as a question about the rule rather than as `isCritical()` so the call site says which
      * promise it is enforcing.

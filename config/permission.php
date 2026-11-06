@@ -106,7 +106,7 @@ return [
         'model_morph_key' => 'model_id',
 
         /*
-         * Roles are company-keyed (§8: "number_sequences, gl_accounts, gl_periods, document
+         * Roles are company-keyed ("number_sequences, gl_accounts, gl_periods, document
          * storage paths and RBAC roles are all company-keyed"). The column is the same
          * `company_id` the rest of the schema uses, so a role grant and the row it authorises
          * are pinned by one value — not by two knobs that can drift apart.
@@ -138,9 +138,9 @@ return [
      *
      * To enable, set to true, and then create listeners to watch these events.
      *
-     * Enabled: §9.5 requires an audit row for every permission change, and RoleAttachedEvent /
+     * Enabled: The design requires an audit row for every permission change, and RoleAttachedEvent /
      * RoleDetachedEvent are the only hooks that see a change made through the package rather
-     * than through one of our Actions. The listener lands with the audit slice (§9.5).
+     * than through one of our Actions. The listener lands with the audit slice.
      */
     'events_enabled' => true,
 
@@ -154,7 +154,7 @@ return [
      * (view the latest version of this package's migration file)
      *
      * Enabled before the first run of the permission migration, so the company key is part
-     * of the pivot primary keys rather than bolted on afterwards (§8: single-tenant today,
+     * of the pivot primary keys rather than bolted on afterwards (single-tenant today,
      * but a second company must become data rather than a rewrite).
      */
 
@@ -165,7 +165,7 @@ return [
      *
      * Not DefaultTeamResolver: that keeps its own mutable `$teamId`, which is a second
      * tenant knob beside `CurrentCompany`. Anything that can forget one and not the other is
-     * a cross-company role grant waiting to happen — the same class of bug §20.4 recorded for
+     * a cross-company role grant waiting to happen — the same class of bug recorded for
      * the queue worker. This resolver reads the tenancy context, so there is exactly one.
      */
     'team_resolver' => CompanyTeamResolver::class,

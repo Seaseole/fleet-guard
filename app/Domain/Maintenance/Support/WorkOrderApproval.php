@@ -10,13 +10,13 @@ use App\Domain\Maintenance\Models\WorkOrder;
 use App\Domain\Maintenance\WorkOrderStatus;
 
 /**
- * §10.6's threshold, applied to whatever the order currently totals.
+ * The threshold, applied to whatever the order currently totals.
  *
  * The rule is one sentence — an order whose estimate is above the limit needs an approver before it
  * can be worked — but it has to be asked in three places (raise, add a line, remove one), and asking
  * it in three places is how a control drifts into two answers. The limit is read from the company's
  * settings once per call: an owner who lowers it next month wants the next order judged by the new
- * figure, while the rows already raised keep the number they were judged by (§10.6's copy-onto-the-row
+ * figure, while the rows already raised keep the number they were judged by (the copy-onto-the-row
  * rule).
  *
  * An order an approver has already looked at is left alone. The approver approved a job, not a
@@ -33,7 +33,7 @@ final class WorkOrderApproval
     }
 
     /**
-     * Bring the order's approval state in line with its total, moving it only along edges §10.6 has.
+     * Bring the order's approval state in line with its total, moving it only along edges the design has.
      */
     public function apply(WorkOrder $workOrder, ?int $actorId = null): WorkOrder
     {

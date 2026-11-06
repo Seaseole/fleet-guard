@@ -13,14 +13,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * §14.4's `sha256`, actually re-checked. A digest nobody compares with the file is a claim sitting in
+ * The `sha256`, actually re-checked. A digest nobody compares with the file is a claim sitting in
  * a column, and the interesting failures — an object replaced, truncated in a bucket sync, deleted by
  * hand — are invisible until somebody reads the bytes again.
  *
  * Five findings, ordered by what they mean:
  *
  *  - **missing** — the row is right and the disk is not; a storage or backup problem, and the reason
- *    §14.5 replicates the private bucket;
+ *    Replicates the private bucket;
  *  - **digest** — the object exists and is *different*; the most serious thing this can see, because
  *    it looks exactly like a healthy row;
  *  - **size** — a truncated write, usually the same incident as digest and worth naming separately
@@ -30,7 +30,7 @@ use Illuminate\Support\Facades\Storage;
  *  - **orphan bytes** — an object with no row, invisible to every screen and unbounded in cost. The
  *    upload Action deletes its own on failure, so an orphan means something else happened.
  *
- * Reads are scope-free on purpose: this is the sanctioned cross-company path (§8 T4) and a per-tenant
+ * Reads are scope-free on purpose: this is the sanctioned cross-company path (T4) and a per-tenant
  * sweep would report a clean bill of health for the tenants it never looked at.
  */
 final class DocumentIntegrityVerifier
@@ -47,7 +47,7 @@ final class DocumentIntegrityVerifier
         /** @var array<string, true> $indexed disk:path pairs the index rows account for */
         $indexed = [];
 
-        // A cursor, not `get()`: this sweep walks the whole archive (§14.3's no-unbounded-get rule
+        // A cursor, not `get()`: this sweep walks the whole archive (the no-unbounded-get rule
         // applies most strongly to the command that exists to read all of it).
         /** @var DocumentVersion $version */
         foreach (DocumentVersion::query()->withoutGlobalScopes()->orderBy('id')->cursor() as $version) {
@@ -125,7 +125,7 @@ final class DocumentIntegrityVerifier
                 }
             });
 
-        // The unique index makes two current versions impossible (§10.8); counting them anyway is how a
+        // The unique index makes two current versions impossible; counting them anyway is how a
         // future migration that dropped that index gets reported rather than discovered.
         foreach ($currents as $documentId => $total) {
             if ($total > 1) {
@@ -144,9 +144,9 @@ final class DocumentIntegrityVerifier
 
         foreach (Storage::disk(DocumentStore::Disk)->allFiles() as $path) {
             if (! isset($indexed[DocumentStore::Disk.':'.$path])) {
-                // §14.4's path is `company/{id}/…`, so an orphan usually still names the tenant whose
+                // The path is `company/{id}/…`, so an orphan usually still names the tenant whose
                 // bytes it is. One that does not is a stray object at the disk root: the finding is real,
-                // but there is no honest company to put it on, and §14.6's alert refuses to guess.
+                // but there is no honest company to put it on, and the alert refuses to guess.
                 $segments = explode('/', str_replace('\\', '/', $path));
                 $at = array_search('company', $segments, true);
 

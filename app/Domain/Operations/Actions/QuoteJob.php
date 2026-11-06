@@ -20,14 +20,14 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * Puts a price on a job (§4.1, §10.3's `enquiry → quoted`, §5's money rules).
+ * Puts a price on a job (the `enquiry → quoted`, the money rules).
  *
- * `base_amount` is computed here and never recomputed later (§5.3: authoritative, frozen at write
+ * `base_amount` is computed here and never recomputed later (authoritative, frozen at write
  * time), which is why the rate and its date must be *named or resolvable* at the moment of quoting —
  * a quote whose base figure came from a rate that moves next week would silently change what the
  * jobs board says the corridor is worth.
  *
- * A job already `quoted` may be re-quoted without a state move: §10.3 has no `quoted → enquiry`
+ * A job already `quoted` may be re-quoted without a state move: The design has no `quoted → enquiry`
  * edge, and a second number on the same offer is an edit of the offer, not a new lifecycle event.
  */
 final class QuoteJob
@@ -43,7 +43,7 @@ final class QuoteJob
             $foreign = Money::ofMajor($dto->amountMajor, Currency::of($foreignCode));
 
             if ($foreign->minorUnits <= 0) {
-                throw new InvalidArgumentException('A quote of zero is not an offer — state a price or decline the job (§10.3).');
+                throw new InvalidArgumentException('A quote of zero is not an offer — state a price or decline the job.');
             }
 
             $quotedOn = $dto->rateDate === null
@@ -53,11 +53,11 @@ final class QuoteJob
             if ($foreignCode === $baseCode) {
                 $baseMinor = $foreign->minorUnits;
             } else {
-                $rate = $dto->rate ?? $this->rates->resolve($foreignCode, Carbon::instance($quotedOn))?->rate;
+                $rate = $dto->rate ?? $this->rates->resolve($foreignCode, Carbon::instance($quotedOn))?->rate();
 
                 if ($rate === null || (float) $rate <= 0) {
                     throw new InvalidArgumentException(sprintf(
-                        'There is no %s/%s rate for %s and none was stated. Quote in %s, name the rate, or record the day\'s rate first (§5.4).',
+                        'There is no %s/%s rate for %s and none was stated. Quote in %s, name the rate, or record the day\'s rate first.',
                         $foreignCode,
                         $baseCode,
                         $quotedOn->toDateString(),

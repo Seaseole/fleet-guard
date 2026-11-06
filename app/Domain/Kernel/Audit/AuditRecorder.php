@@ -13,13 +13,13 @@ use Illuminate\Support\Facades\Auth;
 /**
  * The only two ways an event row gets written.
  *
- * One door rather than `SecurityEvent::create(...)` at each call site for the reason §7.2 gives for
+ * One door rather than `SecurityEvent::create(...)` at each call site for the reason the design gives for
  * the numbering allocator: the fields that make a trail worth reading — actor, IP, company, moment —
  * are the ones a busy call site gets wrong or omits, and an event with a null actor answers nothing.
  * Here they are resolved once, the same way, every time.
  *
- * Synchronous by design (§11.1 puts audit rows inside the business transaction): a download that is
- * queued and then fails leaves the file served with no record of it, which is the exact hole §14.4
+ * Synchronous by design (the design puts audit rows inside the business transaction): a download that is
+ * queued and then fails leaves the file served with no record of it, which is the exact hole
  * closes.
  */
 final class AuditRecorder
@@ -53,8 +53,8 @@ final class AuditRecorder
     }
 
     /**
-     * A state transition on an aggregate (§10.1). The `reason` is the argument the caller has to
-     * think about: §4.4 makes it mandatory for destructive transitions and the DB CHECK enforces
+     * A state transition on an aggregate. The `reason` is the argument the caller has to
+     * think about: The design makes it mandatory for destructive transitions and the DB CHECK enforces
      * it, so passing one here is not a nicety — an event without it fails the insert.
      *
      * @param  array<string, mixed>  $context

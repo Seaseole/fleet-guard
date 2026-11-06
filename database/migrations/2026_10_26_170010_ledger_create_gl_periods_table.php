@@ -10,12 +10,12 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §6.5 GL_PERIOD. A period is a row rather than a date calculation so that "this month is
+     * GL_PERIOD. A period is a row rather than a date calculation so that "this month is
      * locked" is data an auditor can read, and so the lock trigger is a single-row lookup instead
-     * of a date-range scan (§6.5: `posted_on → period_id` is resolved and stored at write time).
+     * of a date-range scan (`posted_on → period_id` is resolved and stored at write time).
      *
      * `period` is 'YYYY-MM' and the fiscal calendar comes from `companies.fiscal_year_starts_on`,
-     * never from this table — §17 Q3 is unresolved and must not become a migration.
+     * never from this table — Q3 is unresolved and must not become a migration.
      */
     public function up(): void
     {

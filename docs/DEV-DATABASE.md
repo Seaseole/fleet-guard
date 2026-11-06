@@ -2,8 +2,8 @@
 
 Fleet Guard's dev database is **MySQL 9.1.0, on the port in `.env` (`DB_PORT`)**. The engine is what
 matters, not the port: local DDL has to be exercised against the same engine Laravel Cloud runs, which
-is why this project does not use this machine's MariaDB. Decided 2026-10-26 (`DESIGN.md` §16 R1,
-§20.3, ADR-0005); the *instance* moved on 2026-10-29, below.
+is why this project does not use this machine's MariaDB. Decided 2026-10-26 (`DESIGN.md` R1,
+, ADR-0005); the *instance* moved on 2026-10-29, below.
 
 | | Engine | Port | Serves |
 |---|---|---|---|
@@ -121,7 +121,7 @@ decision to make knowingly, not by accident.
 
 ## The finding that justified the switch
 
-`DESIGN.md` §6.3 layer 3 makes the ledger immutable with `BEFORE UPDATE` / `BEFORE DELETE`
+`DESIGN.md` layer 3 makes the ledger immutable with `BEFORE UPDATE` / `BEFORE DELETE`
 triggers that `SIGNAL SQLSTATE '45000'`. Measured here on 2026-10-26:
 
 ```
@@ -145,7 +145,7 @@ Consequences carried forward:
 2. **Cloud confirmation is an outstanding Phase −1 item** (ADR-0005): whether managed MySQL
    already ships `log_bin_trust_function_creators=1`, or whether the ledger migrations must
    run under a higher-privilege account than the runtime account.
-3. If neither is available on Cloud, §6.3 loses its database-enforced layer and the design
+3. If neither is available on Cloud, loses its database-enforced layer and the design
    falls back to app guards + `CHECK` constraints + `ledger:verify`, which is what R2 already
    assumes for grant-level immutability. That would be an ADR-0001 amendment, not a silent
    substitution.

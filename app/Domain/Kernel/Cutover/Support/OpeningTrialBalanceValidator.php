@@ -14,7 +14,7 @@ use DomainException;
 use RuntimeException;
 
 /**
- * Validates an opening trial balance (§15.2 Phase 0.5) into rows the ledger can take.
+ * Validates an opening trial balance into rows the ledger can take.
  *
  * Two kinds of failure, kept apart on purpose. A **row error** is about one spreadsheet line and
  * travels into the downloadable error report beside that line. A **batch error** is about the file
@@ -38,6 +38,7 @@ final class OpeningTrialBalanceValidator
 
         $table = $parsed->table;
         $accounts = $this->chart->byCode();
+        $covered = OpeningCoverage::openedByDetail();
         $positions = array_flip($table->headers);
         $seen = [];
         $rows = [];
@@ -98,13 +99,30 @@ final class OpeningTrialBalanceValidator
                     $errors[] = "Account {$account->code} ({$account->name}) is a header account; post to a postable account.";
                 } elseif (! $account->isActive) {
                     $errors[] = "Account {$account->code} ({$account->name}) is inactive.";
+                } elseif (isset($covered[$accountCode])) {
+                    // The two doors for one account, asked first: `1150` is either the accountant's
+                    // control total or the sum of the imported open items — never both, or the opening
+                    // balance sheet claims the customers owe the fleet twice and the tie-out cannot say
+                    // which one is lying. This branch is deliberately before the
+                    // dimension refusal below, because for a dimensional account both are true and the
+                    // one that names the other file is the one the accountant can act on.
+                    $errors[] = sprintf(
+                        'Account %s (%s) was already opened by the %s intake (%s). Leave it out of the trial balance file: '
+                        .'the party-level documents are the balance now, and a control total on top of them counts the same '
+                        .'money twice.',
+                        $account->code,
+                        $account->name,
+                        $covered[$accountCode]['dataset']->label(),
+                        $covered[$accountCode]['filename'],
+                    );
                 } elseif ($account->requiredDimensions !== []) {
-                    // The ledger would refuse this at commit (dimensionRequired), so say it here.
-                    // An opening TB has no dimension columns yet: customer, driver and truck detail
-                    // arrive with the Phase 1 master-data / Phase 5 party importers (§15.2).
+                    // The ledger would refuse this at commit (dimensionRequired), so say it here. An
+                    // opening trial balance has no party columns: those accounts have their own
+                    // intake now, and a control total posted beside a party-level document
+                    // would owe the same money twice.
                     $errors[] = sprintf(
                         'Account %s (%s) requires %s detail, which an opening trial balance cannot carry. '
-                        .'Post the control total to a non-dimensional clearing account until the detail importer lands.',
+                        .'Import and apply the matching opening file (Opening receivables / Opening payables) instead.',
                         $account->code,
                         $account->name,
                         implode(' and ', $account->requiredDimensions),

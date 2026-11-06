@@ -8,7 +8,7 @@ use App\Domain\Kernel\Money\Currency;
 use Illuminate\Database\Seeder;
 
 /**
- * The currencies this business can actually be invoiced in. §5.4: BWP plus the SADC corridor
+ * The currencies this business can actually be invoiced in. BWP plus the SADC corridor
  * set — ZAR at Beitbridge, USD for fuel and cross-border contracts, ZMW and MZN on the Lusaka
  * and Beira runs, ZWG and BRL as the occasional ones.
  *

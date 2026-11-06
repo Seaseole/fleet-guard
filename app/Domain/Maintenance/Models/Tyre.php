@@ -16,7 +16,7 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.3 TYRE — a casing with a serial, bought once and moved between positions until it is worn out.
+ * TYRE — a casing with a serial, bought once and moved between positions until it is worn out.
  *
  * The tyre is the asset; {@see TyrePosition} rows are the life it leads. Keeping the cost on the tyre
  * rather than spreading it over fitments means a tyre retreaded and refitted still knows what it cost,

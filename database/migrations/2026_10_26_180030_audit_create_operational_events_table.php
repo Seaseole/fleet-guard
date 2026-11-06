@@ -10,15 +10,15 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.4 OPERATIONAL_EVENT — the state-machine trail: which aggregate moved, from what to what,
-     * who moved it, and why (§10.1's "every state change is an event with an actor").
+     * OPERATIONAL_EVENT — the state-machine trail: which aggregate moved, from what to what,
+     * who moved it, and why (the "every state change is an event with an actor").
      *
      * Separate from `security_events` because the question it answers is different. That table
      * answers "who touched this paper"; this one answers "why is this work order closed" and is
-     * what §10.2's trip audit and Phase 5's period-close investigation read.
+     * what the trip audit and Phase 5's period-close investigation read.
      *
      * A document's `current → superseded` and `→ voided` transitions land here, which is how the
-     * §10.8 lifecycle can be reconstructed after the fact rather than merely asserted.
+     * Lifecycle can be reconstructed after the fact rather than merely asserted.
      */
     public function up(): void
     {
@@ -32,12 +32,12 @@ return new class extends Migration
             $table->string('to_state', 32);
 
             // A transition can be caused by a person, a kiosk token, the scheduler or the system
-            // itself (§9.2's two non-user principals), so `actor_id` is nullable and `actor_kind`
-            // carries the distinction — attribution survives the shared driver phone (§9.6).
+            // itself (the two non-user principals), so `actor_id` is nullable and `actor_kind`
+            // carries the distinction — attribution survives the shared driver phone.
             $table->foreignId('actor_id')->nullable()->constrained('users');
             $table->string('actor_kind', 12)->default('user');
 
-            // §4.4: mandatory for destructive transitions, and the CHECK below is what makes it
+            // Mandatory for destructive transitions, and the CHECK below is what makes it
             // mandatory rather than a form courtesy. It is a separate column and not a key inside
             // `context` because a reason has to be found, indexed and read without knowing which
             // aggregate moved — `grep` for a reason is a `select reason`, not a json path.
@@ -53,7 +53,7 @@ return new class extends Migration
 
         DB::statement('alter table `operational_events` add constraint `operational_events_actor_kind_allowed` check (actor_kind in (\'user\', \'kiosk\', \'system\', \'scheduler\'))');
 
-        // §10.1: a destructive transition without a stated reason is the one this table exists to
+        // A destructive transition without a stated reason is the one this table exists to
         // prevent, so it is a data rule and not a form courtesy. Voiding a document, reopening a
         // trip and reversing a payment all arrive here with a reason; a non-destructive move does
         // not need one.

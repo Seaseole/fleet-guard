@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 VEHICLE_ASSIGNMENT — who drove what, with which trailer, from when to when.
+     * VEHICLE_ASSIGNMENT — who drove what, with which trailer, from when to when.
      *
      * The brief's "history is mandatory" is why this is an append-only table and not three columns
      * on `trucks`: ending an assignment sets `to_at`, it never deletes or overwrites. The pair

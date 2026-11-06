@@ -10,10 +10,10 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 FUEL_CARD — a pump card the fleet holds, as master data (the card itself is not in the
-     * §4.3 sketch; purchases name `fuel_card_id`, so the row has to exist somewhere).
+     * FUEL_CARD — a pump card the fleet holds, as master data (the card itself is not in the
+     * Sketch; purchases name `fuel_card_id`, so the row has to exist somewhere).
      *
-     * The card number is the §9.5 trio: `<base>_encrypted` holds the ciphertext, `<base>_masked`
+     * The card number is the trio: `<base>_encrypted` holds the ciphertext, `<base>_masked`
      * holds the display form, `key_version` records which key made it. A fuel card number is a
      * payment instrument — the same class of secret as a bank number — so it never lands in a plain
      * column and reading it back is a named, audited call, not an Eloquent cast.

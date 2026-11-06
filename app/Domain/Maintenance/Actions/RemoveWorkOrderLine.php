@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * Removes a cost line from a work order that has not been started (§10.6).
+ * Removes a cost line from a work order that has not been started.
  *
  * A removed estimate is not a reversed cost — nothing was ever posted — so the row is deleted and the
  * totals are recomputed. If the removal brings the estimate back under the approval limit while the
@@ -27,7 +27,7 @@ final class RemoveWorkOrderLine
     public function __invoke(WorkOrder $workOrder, WorkOrderLine $line, ?int $actorId = null): WorkOrder
     {
         if (! Gate::allows('work_orders.create')) {
-            throw new InvalidArgumentException('Editing a work order’s lines is a workshop act (§9.3).');
+            throw new InvalidArgumentException('Editing a work order’s lines is a workshop act.');
         }
 
         return DB::transaction(function () use ($workOrder, $line, $actorId): WorkOrder {

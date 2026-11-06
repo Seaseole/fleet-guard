@@ -10,12 +10,12 @@ use InvalidArgumentException;
 /**
  * One line as a screen hands it to an Action (D1).
  *
- * `quantityX100` and `unitCostMinor` are integers at §5.5's scale; the DTO's job is to refuse a line
+ * `quantityX100` and `unitCostMinor` are integers at the scale; the DTO's job is to refuse a line
  * that cannot be priced (no description, a zero quantity, a free part) and to produce the base amount
  * by the one rounding the schema restates — `quantity × unit ÷ 100`, HALF_UP, once.
  *
  * Currency is carried rather than assumed so the Action can refuse a foreign line **by name**: the
- * §5.2 rate block lives on `trip_costs`, and a workshop line entered in ZAR arrives with the supplier
+ * Rate block lives on `trip_costs`, and a workshop line entered in ZAR arrives with the supplier
  * bill in Phase 5, not with an invented rate here.
  */
 final readonly class WorkOrderLineDto
@@ -44,7 +44,7 @@ final readonly class WorkOrderLineDto
         }
 
         if ($unitCostMinor <= 0) {
-            throw new InvalidArgumentException('A line unit cost must be above zero — a free part is a warranty recovery, not a line (§10.6).');
+            throw new InvalidArgumentException('A line unit cost must be above zero — a free part is a warranty recovery, not a line.');
         }
 
         if (preg_match('/^[A-Z]{3}$/', $currencyCode) !== 1) {

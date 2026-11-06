@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * §4.3 TYRE_POSITION — one stint of one casing on one wheel of one truck.
+ * TYRE_POSITION — one stint of one casing on one wheel of one truck.
  *
  * A row is opened when a tyre is fitted and closed when it is taken off, never edited afterwards. The
  * two unique constraints (through the generated `open_position`/`open_tyre_id` columns) are what make

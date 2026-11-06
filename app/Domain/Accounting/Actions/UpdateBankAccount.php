@@ -6,22 +6,28 @@ namespace App\Domain\Accounting\Actions;
 
 use App\Domain\Accounting\Data\BankAccountDto;
 use App\Domain\Accounting\Models\BankAccount;
+use App\Domain\Accounting\Support\LedgerAccountLink;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Changes bank-account details. §9.1 lists this as a re-authenticated action — the `reauth`
+ * Changes bank-account details. The design lists this as a re-authenticated action — the `reauth`
  * middleware is task #21 and the catalogue already marks `bank.manage` with ⚑, so the route is the
  * only piece that will still need to be added.
  *
  * An omitted or masked `account_number` leaves the stored secret untouched rather than blanking it:
- * §9.5's rule is that a masked value is a display form, not data, and a form that round-trips its
+ * The rule is that a masked value is a display form, not data, and a form that round-trips its
  * own mask must not be able to overwrite the real number with `••••4521`.
  */
 final class UpdateBankAccount
 {
-    public function __invoke(BankAccount $account, BankAccountDto $dto): BankAccount
+    public function __invoke(BankAccount $account, BankAccountDto $dto, ?LedgerAccountLink $links = null): BankAccount
     {
-        return DB::transaction(function () use ($account, $dto): BankAccount {
+        // The link moves only when the old chart account has no posted movement (the
+        // gl_account_id is what the cash-flow statement reads as "cash"; re-pointing a row with
+        // history would rewrite the statement under a reader's feet).
+        $glAccountId = ($links ??= app(LedgerAccountLink::class))->assertChangeSafe($account, $dto->glAccountId);
+
+        return DB::transaction(function () use ($account, $dto, $glAccountId): BankAccount {
             $account->fill([
                 'name' => $dto->name,
                 'institution' => $dto->institution,
@@ -31,6 +37,7 @@ final class UpdateBankAccount
                 'opened_on' => $dto->openedOn,
                 'active' => $dto->active,
                 'notes' => $dto->notes,
+                'gl_account_id' => $glAccountId,
             ]);
 
             if (! $dto->preservesMaskedNumber()) {

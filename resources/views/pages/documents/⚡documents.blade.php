@@ -12,9 +12,9 @@ use App\Domain\Kernel\Documents\Models\Document;
 use App\Domain\Kernel\Documents\Models\DocumentVersion;
 use App\Domain\Kernel\Documents\DocumentType;
 use App\Domain\Kernel\Documents\Lifecycle as DocumentLifecycle;
+use App\Domain\Kernel\Identity\ConfirmsRecentPassword;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\LengthAwarePaginator as Pagination;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -23,7 +23,7 @@ use Livewire\Component;
 use Livewire\WithFileUploads;
 
 /*
- * The document register (§14.4, §15.2 Phase 0's "a signed document download").
+ * The document register (Phase 0's "a signed document download").
  *
  * The signed URL is minted on the click and never at render. A sixty-second TTL rendered into the
  * table would produce a link that is dead before anybody's hand reaches the mouse, and a dead link
@@ -34,6 +34,7 @@ use Livewire\WithFileUploads;
  * "something went wrong" would delete the only explanation the operator gets.
  */
 new #[Title('Documents')] class extends Component {
+    use ConfirmsRecentPassword;
     use WithFileUploads;
 
     public string $versioningId = '';
@@ -101,13 +102,42 @@ new #[Title('Documents')] class extends Component {
     }
 
     /**
-     * @return Collection<int, Document>
+     * The register's rows, filtered and narrowed in SQL.
+     *
+     * The visibility used to be a PHP `filter()` over the whole table, which meant the register
+     * read every document to show twenty-five — and a count read them all a second time. The scope
+     * carries the same rule as the policy; pagination belongs to the database.
+     *
+     * @return LengthAwarePaginator<int, Document>
      */
     #[Computed]
-    public function visibleDocuments(): Collection
+    public function documents(): LengthAwarePaginator
     {
+        $page = max(1, $this->page);
+
+        return new Pagination(
+            $this->registerQuery()->with('currentVersion')->forPage($page, 25)->get(),
+            $this->authorizedCount,
+            25,
+            $page,
+            ['path' => url()->current(), 'query' => request()->query()],
+        );
+    }
+
+    #[Computed]
+    public function authorizedCount(): int
+    {
+        return $this->registerQuery()->reorder()->count();
+    }
+
+    /** @return \Illuminate\Database\Eloquent\Builder<Document> */
+    private function registerQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        /** @var \App\Models\User $user */
+        $user = auth()->user();
+
         return Document::query()
-            ->with('currentVersion')
+            ->visibleTo($user)
             ->when($this->search !== '', function ($query): void {
                 $like = '%'.str_replace(['%', '_'], ['\%', '\_'], $this->search).'%';
                 $query->where('title', 'like', $like);
@@ -117,33 +147,7 @@ new #[Title('Documents')] class extends Component {
             ->orderByRaw("case when lifecycle in ('draft','current') then 0 else 1 end")
             ->orderByRaw('case when expires_on is null then 1 else 0 end')
             ->orderBy('expires_on')
-            ->get()
-            // §14.4's role-based visibility is enforced on the list as well as the download: a
-            // title alone identifies a competitor's contract, so the register must not show a row
-            // the person looking at it may not open.
-            ->filter(fn (Document $document): bool => Gate::allows('view', $document))
-            ->values();
-    }
-
-    /** @return LengthAwarePaginator<int, Document> */
-    #[Computed]
-    public function documents(): LengthAwarePaginator
-    {
-        $visible = $this->visibleDocuments();
-
-        return new Pagination(
-            $visible->forPage(max(1, $this->page), 25)->values(),
-            $visible->count(),
-            25,
-            max(1, $this->page),
-            ['path' => url()->current(), 'query' => request()->query()],
-        );
-    }
-
-    #[Computed]
-    public function authorizedCount(): int
-    {
-        return Document::query()->get()->filter(fn (Document $document): bool => Gate::allows('view', $document))->count();
+            ->orderBy('id');
     }
 
     public function saveVersion(UploadDocumentVersion $versions): void
@@ -236,21 +240,14 @@ new #[Title('Documents')] class extends Component {
 
         abort_unless(Gate::allows('deleteVersion', $version->document), 403);
 
-        // §9.3 marks the documents delete column ⚑. The rest of the register is an ordinary read, so
+        // Marks the documents delete column ⚑. The rest of the register is an ordinary read, so
         // the re-auth cannot live on the route without asking for a password to *look* at the list —
-        // it lives on the action. `auth.password_confirmed_at` is what Fortify's own
-        // RequirePassword middleware writes, so this is the same clock the manual journal route
-        // checks, read here rather than duplicated into a second implementation.
-        $confirmed = (int) session()->get('auth.password_confirmed_at', 0);
-
-        if (time() - $confirmed > (int) config('fleet.identity.reauth_window_seconds')) {
-            session(['url.intended' => url()->current()]);
-            $this->redirectRoute('password.confirm');
-
+        // it lives on the action, through the same clock Fortify's RequirePassword writes.
+        if (! $this->confirmRecentPassword()) {
             return;
         }
 
-        // §4.4 makes a reason mandatory for a destructive act. The operational_events CHECK enforces
+        // The design makes a reason mandatory for a destructive act. The operational_events CHECK enforces
         // it for a transition, but a delete removes the row rather than changing its state, so the
         // screen is the layer that has to ask — and it asks here, not in a confirm() with no field.
         $this->validate(
@@ -274,10 +271,10 @@ new #[Title('Documents')] class extends Component {
 }; ?>
 
     <div class="grid gap-6">
-        <header class="grid gap-1">
+        <header class="fg-page-header grid gap-1.5">
             <x-ui.heading size="xl" level="1">{{ __('Documents') }}</x-ui.heading>
             <x-ui.text>
-                {{ __('Private disk, one current copy per document, and every download signed for sixty seconds and audited (§14.4).') }}
+                {{ __('Private disk, one current copy per document, and every download signed for sixty seconds and audited.') }}
             </x-ui.text>
         </header>
 
@@ -439,7 +436,7 @@ new #[Title('Documents')] class extends Component {
                         name="upload"
                         wire:model="upload"
                         :label="__('The file')"
-                        :hint="__('Accepted content: :types · maximum :max MB. The type is read from the bytes, not the extension (§14.4).', [
+                        :hint="__('Accepted content::types · maximum:max MB. The type is read from the bytes, not the extension.', [
                             'types' => implode(', ', $target->type->allowedMimeTypes()),
                             'max' => number_format($target->type->maxBytes() / 1048576, 1),
                         ])"

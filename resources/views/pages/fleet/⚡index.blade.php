@@ -18,6 +18,7 @@ use App\Domain\Fleet\Models\Equipment;
 use App\Domain\Fleet\Models\Trailer;
 use App\Domain\Fleet\Models\Truck;
 use App\Domain\Fleet\Models\VehicleAssignment;
+use App\Domain\Kernel\Identity\ConfirmsRecentPassword;
 use App\Domain\Kernel\Identity\FieldGate;
 use App\Domain\Kernel\Money\Money;
 use App\Domain\Kernel\State\IllegalTransition;
@@ -33,20 +34,22 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /*
- * The fleet register (§3.2, §4.3, §10.1): three tabs behind one route because a truck, a trailer and
+ * The fleet register: three tabs behind one route because a truck, a trailer and
  * a loader are the same question asked of different assets — what do we have, what state is it in,
  * and who has it.
  *
- * Every write goes through an Action and every state move through the §10.1 table, so this screen
+ * Every write goes through an Action and every state move through the table, so this screen
  * never touches `status` directly. The status panel exists because that is the workflow the
  * register is actually used for: something broke, someone parked it, and the office has to record
  * why — a plain edit form would let the same move happen without the mandatory reason.
  *
- * The purchase price is a field gate, not a column (§9.4). A seat without `fleet.cost.view` sees the
+ * The purchase price is a field gate, not a column. A seat without `fleet.cost.view` sees the
  * truck and not the money, and the form hides the field entirely; the save path carries the stored
  * value forward so an ordinary edit by that seat cannot zero a number it never saw.
  */
-new #[Title('Fleet')] class extends Component {
+new #[Title('Fleet')] class extends Component
+{
+    use ConfirmsRecentPassword;
     use WithPagination;
 
     #[Url]
@@ -156,6 +159,13 @@ new #[Title('Fleet')] class extends Component {
         return $this->search !== '' || $this->statusFilter !== '';
     }
 
+    public function openCreate(): void
+    {
+        $this->clearForm();
+
+        $this->dispatch('open-fleet-form');
+    }
+
     public function edit(int $id): void
     {
         $this->formReset();
@@ -168,10 +178,9 @@ new #[Title('Fleet')] class extends Component {
             $this->editEquipment($id);
         }
 
-        // The editor lives below the table: without this, pressing Edit on a row changed nothing the
-        // user could see until they happened to scroll. The view scrolls the form into view and
-        // moves focus to its first field, so the click is acknowledged where the answer is.
-        $this->dispatch('fleet-edit-opened');
+        // The editor is a dialog now, so opening it is the acknowledgement the click needs — the
+        // scroll-into-view this replaced only existed because the form sat below the table.
+        $this->dispatch('open-fleet-form');
     }
 
     public function clearForm(): void
@@ -203,6 +212,7 @@ new #[Title('Fleet')] class extends Component {
         }
 
         $this->clearForm();
+        $this->dispatch('close-fleet-form');
         unset($this->trucks, $this->trailers, $this->equipment, $this->openAssignments);
 
         $this->dispatch('toast', message: __('Saved.'), kind: 'success');
@@ -252,6 +262,10 @@ new #[Title('Fleet')] class extends Component {
 
         if ($to === FleetStatus::Sold) {
             abort_unless(Gate::allows('sell', $asset), 403);
+
+            if (! $this->confirmRecentPassword()) {
+                return;
+            }
         }
 
         $reason = $validated['statusReason'] ?? null;
@@ -337,7 +351,7 @@ new #[Title('Fleet')] class extends Component {
 
     /**
      * Who currently holds each truck on this page — one query and one directory read for the whole
-     * page rather than a join Fleet is forbidden to write across module boundaries (§13 D5).
+     * page rather than a join Fleet is forbidden to write across module boundaries (D5).
      *
      * @return array<int, array{driver: ?string, from: \Illuminate\Support\Carbon, trailer: ?string}>
      */
@@ -714,12 +728,11 @@ new #[Title('Fleet')] class extends Component {
 }; ?>
 
 <div class="grid gap-6">
-    <header class="grid gap-1">
-        <x-ui.heading size="xl" level="1">{{ __('Fleet') }}</x-ui.heading>
-        <x-ui.text>
-            {{ __('Trucks, trailers and yard equipment. Status moves through the transition table, and every move is recorded with who made it and why.') }}
-        </x-ui.text>
-    </header>
+    <x-shell.nameplate
+        :title="__('Fleet')"
+        :stamped="true"
+        :description="__('Trucks, trailers and yard equipment. Status moves through the transition table, and every move is recorded with who made it and why.')"
+    />
 
     {{-- The three registers are three URL-bound views, so they are links and not a widget: a
          `role="tablist"` was claimed here without `tabpanel`, `aria-controls` or arrow keys, which is a
@@ -778,7 +791,7 @@ new #[Title('Fleet')] class extends Component {
                     @if ($this->statusTarget['allowed'] !== [])
                         {{-- Outline, not primary: a status move is a transition that has to explain itself
                              (the reason field below), while the editor form on this page is what creates or
-                             amends the unit. §5 allows one filled action per view. --}}
+                             amends the unit. The design allows one filled action per view. --}}
                         <x-ui.button variant="outline" type="submit">{{ __('Move status') }}</x-ui.button>
                     @endif
 
@@ -789,6 +802,20 @@ new #[Title('Fleet')] class extends Component {
     @endif
 
     <x-ui.card :title="match ($tab) { 'trucks' => __('Trucks'), 'trailers' => __('Trailers'), default => __('Yard equipment') }">
+        @can('fleet.create')
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <x-ui.text size="sm" color="muted">
+                    {{ match ($tab) {
+                        'trailers' => __('A trailer carries its own hubodometer and axle build; it is not a truck and does not borrow one.'),
+                        'equipment' => __('Loaders, generators and toolboxes are kept apart from the trucks so the vehicle count stays honest.'),
+                        default => __('A truck is bought in here, then every later move is a status transition with a reason.'),
+                    } }}
+                </x-ui.text>
+
+                <x-ui.button size="sm" variant="outline" wire:click="openCreate">{{ $this->formTitle() }}</x-ui.button>
+            </div>
+        @endcan
+
         <div class="mb-4 grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]">
             <x-ui.input wire:model.live.debounce.400ms="search" name="search" :label="__('Search')" :hint="__('Registration, fleet number, VIN, make or model')" />
 
@@ -814,8 +841,8 @@ new #[Title('Fleet')] class extends Component {
                     <tr>
                         <x-ui.table.th>{{ __('Truck') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
-                        <x-ui.table.th numeric>{{ __('Odometer') }}</x-ui.table.th>
-                        <x-ui.table.th numeric>{{ __('Capacity') }}</x-ui.table.th>
+                        <x-ui.table.th numeric hideBelow="lg">{{ __('Odometer') }}</x-ui.table.th>
+                        <x-ui.table.th numeric hideBelow="lg">{{ __('Capacity') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Assigned to') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                     </tr>
@@ -824,7 +851,7 @@ new #[Title('Fleet')] class extends Component {
                     @forelse ($this->trucks as $truck)
                         <tr wire:key="truck-{{ $truck->id }}">
                             <x-ui.table.td>
-                                <a href="{{ route('fleet.show', ['truck' => $truck->id]) }}" wire:navigate class="font-medium text-fg-ink hover:text-accent">{{ $truck->label() }}</a>
+                                <a href="{{ route('fleet.show', ['truck' => $truck->id]) }}" wire:navigate class="font-medium text-fg-ink underline-offset-4 hover:text-accent-ink hover:underline">{{ $truck->label() }}</a>
 
                                 <div class="text-xs text-fg-ink-muted">
                                     {{ trim(($truck->make ?? '').' '.($truck->model ?? '')) !== '' ? trim($truck->make.' '.$truck->model) : __('No make recorded') }}
@@ -838,8 +865,8 @@ new #[Title('Fleet')] class extends Component {
                                     <span class="ms-1 text-xs text-fg-ink-muted">{{ __('inactive') }}</span>
                                 @endunless
                             </x-ui.table.td>
-                            <x-ui.table.td numeric>{{ number_format($truck->odometer_km) }}</x-ui.table.td>
-                            <x-ui.table.td numeric>{{ $truck->capacity_tonnes_10_2 === null ? '—' : number_format($truck->capacity_tonnes_10_2, 2) }}</x-ui.table.td>
+                            <x-ui.table.td numeric hideBelow="lg">{{ number_format($truck->odometer_km) }}</x-ui.table.td>
+                            <x-ui.table.td numeric hideBelow="lg">{{ $truck->capacity_tonnes_10_2 === null ? '—' : number_format($truck->capacity_tonnes_10_2, 2) }}</x-ui.table.td>
                             <x-ui.table.td>
                                 @php($open = $this->openAssignments[$truck->id] ?? null)
 
@@ -900,8 +927,8 @@ new #[Title('Fleet')] class extends Component {
                         <x-ui.table.th>{{ __('Trailer') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Type') }}</x-ui.table.th>
                         <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
-                        <x-ui.table.th numeric>{{ __('Odometer') }}</x-ui.table.th>
-                        <x-ui.table.th numeric>{{ __('Capacity') }}</x-ui.table.th>
+                        <x-ui.table.th numeric hideBelow="lg">{{ __('Odometer') }}</x-ui.table.th>
+                        <x-ui.table.th numeric hideBelow="lg">{{ __('Capacity') }}</x-ui.table.th>
                         <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
                     </tr>
                 </thead>
@@ -923,8 +950,8 @@ new #[Title('Fleet')] class extends Component {
                                     <span class="ms-1 text-xs text-fg-ink-muted">{{ __('inactive') }}</span>
                                 @endunless
                             </x-ui.table.td>
-                            <x-ui.table.td numeric>{{ number_format($trailer->odometer_km) }}</x-ui.table.td>
-                            <x-ui.table.td numeric>{{ $trailer->capacity_tonnes_10_2 === null ? '—' : number_format($trailer->capacity_tonnes_10_2, 2) }}</x-ui.table.td>
+                            <x-ui.table.td numeric hideBelow="lg">{{ number_format($trailer->odometer_km) }}</x-ui.table.td>
+                            <x-ui.table.td numeric hideBelow="lg">{{ $trailer->capacity_tonnes_10_2 === null ? '—' : number_format($trailer->capacity_tonnes_10_2, 2) }}</x-ui.table.td>
                             <x-ui.table.td numeric>
                                 <div class="inline-flex items-center gap-1">
                                     @can('update', $trailer)
@@ -983,7 +1010,7 @@ new #[Title('Fleet')] class extends Component {
                                 <x-ui.badge :tone="$item->status->tone()">{{ $item->status->label() }}</x-ui.badge>
                             </x-ui.table.td>
                             <x-ui.table.td numeric>
-                                <x-ui.gated gate="seeVehicleCost" :label="__('the purchase price')">
+                                <x-ui.gated :can="auth()->user()->can('seeVehicleCost')" :label="__('the purchase price')">
                                     {{ \App\Domain\Kernel\Money\Money::ofMinor($item->purchase_amount_base, $this->currencyCode)->format($this->currencyCode) }}
                                 </x-ui.gated>
                             </x-ui.table.td>
@@ -1028,18 +1055,12 @@ new #[Title('Fleet')] class extends Component {
         @endif
     </x-ui.card>
 
+    {{-- The editor is a dialog over the register: a truck's 14 fields used to push the list off the
+         page, and Edit needed a scroll to be seen at all. Native <dialog> traps focus and answers
+         Escape, so the old scroll-and-focus shim is gone. --}}
     @can('fleet.create')
-        <div
-            id="fleet-form"
-            class="scroll-mt-20"
-            x-data
-            x-on:fleet-edit-opened.window="$nextTick(() => {
-                $el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                $el.querySelector('form input:not([disabled]), form select')?.focus({ preventScroll: true });
-            })"
-        >
-        <x-ui.card :title="$this->formTitle()">
-            <form class="grid gap-4" wire:submit="save">
+        <x-ui.dialog name="fleet-form" maxWidth="4xl" :title="$this->formTitle()" x-on:dialog-closed="$wire.call('clearForm')">
+            <form class="grid gap-4 p-5" wire:submit="save">
                 @if ($tab === 'trucks')
                     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                         <x-ui.input wire:model="registrationNo" name="registrationNo" :label="__('Registration number')" required />
@@ -1136,12 +1157,9 @@ new #[Title('Fleet')] class extends Component {
                 <div class="flex items-center gap-3">
                     <x-ui.button type="submit">{{ $editingId === null ? __('Save') : __('Update') }}</x-ui.button>
 
-                    @if ($editingId !== null)
-                        <x-ui.button variant="ghost" type="button" wire:click="clearForm">{{ __('Cancel') }}</x-ui.button>
-                    @endif
+                    <x-ui.button variant="ghost" type="button" x-on:click="$dispatch('close-fleet-form')">{{ __('Cancel') }}</x-ui.button>
                 </div>
             </form>
-        </x-ui.card>
-        </div>
+        </x-ui.dialog>
     @endcan
 </div>

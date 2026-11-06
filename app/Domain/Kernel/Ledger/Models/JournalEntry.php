@@ -14,13 +14,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
- * The journal entry header (§4.2 GL_JOURNAL_ENTRY) — the row the DB CHECK balances and the
- * triggers freeze (§6.3 layers 2–4), and the row this class refuses to update or delete in code
+ * The journal entry header (GL_JOURNAL_ENTRY) — the row the DB CHECK balances and the
+ * triggers freeze (layers 2–4), and the row this class refuses to update or delete in code
  * (layer 1, the layer that produces a readable exception instead of an SQLSTATE).
  *
  * The one permitted transition is away from `draft`: {@see LedgerService}
  * writes the draft, appends its lines, then flips it to `posted` with the totals that the CHECK
- * then verifies. A `posted` entry is never touched again — §6.4 corrects it with a reversal.
+ * then verifies. A `posted` entry is never touched again — corrects it with a reversal.
  *
  * @property string $id
  * @property int $company_id
@@ -89,7 +89,7 @@ final class JournalEntry extends Model
             'fx_rate' => 'decimal:8',
             'voided_at' => 'datetime',
             // MinorUnits, not integer: the totals are the poster's computed values and a float
-            // reaching them means a screen was thinking in major units (§5.1, §20.4).
+            // reaching them means a screen was thinking in major units.
             'total_debit' => MinorUnits::class,
             'total_credit' => MinorUnits::class,
             'line_count' => 'integer',
@@ -98,7 +98,7 @@ final class JournalEntry extends Model
 
     protected static function booted(): void
     {
-        // §6.3 layer 1, matching the trigger exactly: an unpublished entry is still the poster's
+        // Layer 1, matching the trigger exactly: an unpublished entry is still the poster's
         // to finish; a posted or voided one is history. getOriginal() rather than the in-memory
         // attribute, because a caller that assigned ->status itself must not be able to describe
         // its own way past this.

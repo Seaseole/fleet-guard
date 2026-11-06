@@ -14,14 +14,14 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /*
- * The journal browser (§15.2 Phase 0: "read-only journal browser").
+ * The journal browser (Phase 0: "read-only journal browser").
  *
- * Read-only is the design, not a missing feature: §6.3 gives the ledger no update and no delete
+ * Read-only is the design, not a missing feature: The design gives the ledger no update and no delete
  * path, so a browser with an "edit" button would be promising something the database refuses.
  * Corrections are made by reversing an entry, which Phase 5 builds; what this screen owes the
  * owner is the truth, in date order, with the lines underneath it.
  *
- * Totals come from the entry row (§6.6 tier 1 — a list never sums gl_journal_lines). That is why
+ * Totals come from the entry row (tier 1 — a list never sums gl_journal_lines). That is why
  * line_count/total_debit/total_credit are stored at all, and why ledger:verify exists to keep the
  * story the header tells honest.
  */
@@ -130,20 +130,19 @@ new #[Title('Journal')] class extends Component {
 }; ?>
 
     <div class="grid gap-6">
-        <header class="flex flex-wrap items-end justify-between gap-4">
-            <div class="grid gap-1">
-                <x-ui.heading size="xl" level="1">{{ __('Journal') }}</x-ui.heading>
-                <x-ui.text>
-                    {{ __('Posted entries are immutable. A mistake is corrected with a reversing entry, never by editing one. (:ledger_verify)', ['ledger_verify' => 'ledger:verify']) }}
-                </x-ui.text>
-            </div>
-
+        <x-shell.nameplate
+            :title="__('Journal')"
+            :stamped="true"
+            :description="__('Posted entries are immutable. A mistake is corrected with a reversing entry, never by editing one. (:ledger_verify)', ['ledger_verify' => 'ledger:verify'])"
+        >
             @can('ledger.journal.manual')
-                <x-ui.button variant="primary" :href="route('accounting.journal.create')" wire:navigate>
-                    {{ __('New journal') }}
-                </x-ui.button>
+                <x-slot:action>
+                    <x-ui.button variant="primary" :href="route('accounting.journal.create')" wire:navigate>
+                        {{ __('New journal') }}
+                    </x-ui.button>
+                </x-slot:action>
             @endcan
-        </header>
+        </x-shell.nameplate>
 
         <x-ui.card :title="__('Filter')">
             <div class="grid gap-4 sm:grid-cols-[repeat(4,minmax(0,1fr))_auto]">

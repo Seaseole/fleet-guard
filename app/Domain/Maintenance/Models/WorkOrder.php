@@ -27,9 +27,9 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.3 WORK_ORDER — §10.6's machine, and the totals its lines add up to.
+ * WORK_ORDER — the machine, and the totals its lines add up to.
  *
- * The transition table is here rather than in an Action for §10.1's reason: the CHECK in the
+ * The transition table is here rather than in an Action for the reason: the CHECK in the
  * migration and this array are the only two places the vocabulary exists, and they sit next to the
  * enum they came from. The Actions decide *who* may move it and *what else* must be true; this decides
  * whether the move exists.
@@ -39,7 +39,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
  * later edit would silently re-open a month the accountant has already read.
  *
  * Money is exposed as {@see Money} so a screen cannot print a foreign amount with the Pula symbol
- * (§5.1); the row stores base minor units, which is what the close-time capitalise decision and the
+ *; the row stores base minor units, which is what the close-time capitalise decision and the
  * Phase 5 bills will both read.
  *
  * @property string $id
@@ -82,7 +82,7 @@ final class WorkOrder extends Model implements AuditableContract
 {
     use Auditable, BelongsToCompany, CanTransition;
 
-    /** ULID key (§2): the work order names itself on documents and later on ledger dimensions. */
+    /** ULID key: the work order names itself on documents and later on ledger dimensions. */
     protected $keyType = 'string';
 
     public $incrementing = false;
@@ -179,7 +179,7 @@ final class WorkOrder extends Model implements AuditableContract
                 WorkOrderStatus::InProgress->value,
                 // The estimate can grow before work starts: a line added at 3,000 takes a 4,000 order
                 // past a 5,000 limit only in company with the others, and the approval must be asked
-                // again rather than inherited from a total nobody saw (§10.6).
+                // again rather than inherited from a total nobody saw.
                 WorkOrderStatus::AwaitingApproval->value,
                 WorkOrderStatus::Cancelled->value,
             ],
@@ -253,7 +253,7 @@ final class WorkOrder extends Model implements AuditableContract
      * Recompute the four frozen totals from the estimate lines **and the parts actually issued**.
      * The only writer of those columns.
      *
-     * `$requireEditable` is §10.6's two-sided rule. Adding or removing an estimate line is refused
+     * `$requireEditable` is the two-sided rule. Adding or removing an estimate line is refused
      * once the vehicle is in the workshop, because the estimate stops being an estimate; but a part
      * issued *while* the job runs is a fact, and the totals must follow it. The issuing action passes
      * `false`; the line Actions leave the default.
@@ -265,7 +265,7 @@ final class WorkOrder extends Model implements AuditableContract
     {
         if ($requireEditable && ! $this->status->acceptsLines()) {
             throw new InvalidArgumentException(sprintf(
-                '%s is past the point where its costs are facts; a work order’s lines are fixed once the vehicle is released (§10.6).',
+                '%s is past the point where its costs are facts; a work order’s lines are fixed once the vehicle is released.',
                 $this->wo_no,
             ));
         }
@@ -341,7 +341,7 @@ final class WorkOrder extends Model implements AuditableContract
         return Money::ofMinor($this->capitalised_amount_base, $this->base_currency_code);
     }
 
-    /** Whether this order's spend needed an owner's approval when it was raised (§10.6). */
+    /** Whether this order's spend needed an owner's approval when it was raised. */
     public function neededApproval(): bool
     {
         return $this->approval_required_amount_base > 0;

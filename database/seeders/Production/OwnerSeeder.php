@@ -11,7 +11,7 @@ use Illuminate\Database\Seeder;
 use function Laravel\Prompts\password;
 
 /**
- * Creates the Owner account (§9.1). The only production seeder that writes a `users` row, and it
+ * Creates the Owner account. The only production seeder that writes a `users` row, and it
  * writes one.
  *
  * It will not invent an address: `owner@example.test` in a seeder is how a demo mailbox ends up on a
@@ -30,14 +30,14 @@ final class OwnerSeeder extends Seeder
 
         if ($email === '') {
             throw new \RuntimeException(
-                'Set FLEET_OWNER_EMAIL before seeding an Owner — this seeder will not create a placeholder account (§14.6).'
+                'Set FLEET_OWNER_EMAIL before seeding an Owner — this seeder will not create a placeholder account.'
             );
         }
 
         $company = Company::query()->orderBy('id')->first();
 
         if ($company === null) {
-            throw new \RuntimeException('CompanySeeder must run before OwnerSeeder (§9.1 owner-first).');
+            throw new \RuntimeException('CompanySeeder must run before OwnerSeeder (owner-first).');
         }
 
         $owner = (new CreateOwner)(
@@ -53,8 +53,8 @@ final class OwnerSeeder extends Seeder
     /**
      * Read from the process environment rather than `config('fleet.…')`, and deliberately not via
      * the `env()` helper Larastan asks for: a value that goes through config becomes writable to
-     * `bootstrap/cache/config.php` by `config:cache`, which is exactly what §9.1 forbids for a
-     * secret. Prompting belongs to `fleet:setup-owner`, which owns the interactive half (§9.1).
+     * `bootstrap/cache/config.php` by `config:cache`, which is exactly what the design forbids for a
+     * secret. Prompting belongs to `fleet:setup-owner`, which owns the interactive half.
      */
     private function password(): string
     {
@@ -62,7 +62,7 @@ final class OwnerSeeder extends Seeder
 
         if (! is_string($fromEnvironment) || $fromEnvironment === '') {
             throw new \RuntimeException(
-                'OwnerSeeder runs unattended, so it needs FLEET_OWNER_PASSWORD set. To type the password instead, run php artisan fleet:setup-owner (§9.1).'
+                'OwnerSeeder runs unattended, so it needs FLEET_OWNER_PASSWORD set. To type the password instead, run php artisan fleet:setup-owner.'
             );
         }
 

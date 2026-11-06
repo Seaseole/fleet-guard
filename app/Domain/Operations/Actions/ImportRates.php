@@ -21,7 +21,7 @@ use App\Domain\Operations\Support\RouteRateWindow;
 use InvalidArgumentException;
 
 /**
- * §15.2 Phase 1 — the agreed rate card.
+ * Phase 1 — the agreed rate card.
  *
  * A row names its corridor and customer by code, because those codes are what the legacy export
  * carries; the ids are resolved here and again at apply, through the tenant scope.

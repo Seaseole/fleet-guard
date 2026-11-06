@@ -18,7 +18,7 @@ interface RateResolver
     /**
      * True when a document opened today would be pre-filled from a rate older than the corridor
      * should tolerate. The caller decides whether that is a warning badge or a hard stop —
-     * §5.4 makes it a warning, because border posts do not always have a fresh bulletin.
+     * The design makes it a warning, because border posts do not always have a fresh bulletin.
      */
     public function isStale(string $currencyCode, Carbon $on, int $maxAgeDays = 3): bool;
 }

@@ -10,5 +10,5 @@
 
     <span class="flex-1 truncate">{{ __('Search trips, trucks, invoices…') }}</span>
 
-    <kbd class="rounded-fg-sm border border-fg-line bg-fg-surface px-1.5 py-0.5 font-mono text-[0.6875rem]">Ctrl K</kbd>
+    <kbd class="rounded-fg-sm border border-fg-line bg-fg-surface px-1.5 py-0.5 font-mono text-2xs">Ctrl K</kbd>
 </button>

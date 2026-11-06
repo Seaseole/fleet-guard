@@ -16,9 +16,9 @@ use App\Domain\Kernel\Cutover\Support\ImportValues;
 use InvalidArgumentException;
 
 /**
- * §15.2 Phase 1 — the trailer register.
+ * Phase 1 — the trailer register.
  *
- * The type is §4.3's five-value vocabulary; a file that says "curtain side" gets a row error naming
+ * The type is the five-value vocabulary; a file that says "curtain side" gets a row error naming
  * the accepted values rather than a CHECK violation. `fleet_no` and `vin` are alternate unique keys
  * exactly as they are on trucks.
  */

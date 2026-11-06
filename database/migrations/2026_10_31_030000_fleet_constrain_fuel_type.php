@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 return new class extends Migration
 {
     /**
-     * §4.3's `TRUCK.fuel_type` gains a vocabulary: diesel, petrol, paraffin.
+     * The `TRUCK.fuel_type` gains a vocabulary: diesel, petrol, paraffin.
      *
      * The column was a free string with a `diesel` default, so "Diesel" and "DIESEL " could sit
      * beside it and a report grouped by the value would split one product into three. Existing rows

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
- * The §6.3 emergency hatch as a model, so lifting the ledger guard is something the application
+ * The emergency hatch as a model, so lifting the ledger guard is something the application
  * can do *with a record* rather than only by hand in a SQL client.
  *
  * Not tenant-scoped: it is a single-row table below tenancy on purpose — the barrier is the fact
@@ -41,7 +41,7 @@ final class LedgerBarrier extends Model
      * barrier left up is an unaudited window in which the ledger can be rewritten.
      *
      * Callers are maintenance migrations and the `ledger:*` commands. Nothing on a request path
-     * may call this: it is the one switch that turns §6.3 off.
+     * may call this: it is the one switch that turns off.
      */
     public static function withLiftedGuard(string $reason, ?int $by, callable $fix): mixed
     {

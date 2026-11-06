@@ -10,14 +10,14 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §6.8 — one application of a supplier payment to one bill.
+     * One application of a supplier payment to one bill.
      *
      * The allocation rows are the truth of whether a bill is paid; `bills.balance_amount` is their
-     * projection (§10.4's rule, copied to the payable side for the same reason: ageing and the AP
+     * projection (the rule, copied to the payable side for the same reason: ageing and the AP
      * total must be a query, not a walk over every payment on the screen).
      *
      * `settled` marks the application that closed the bill, the same flag that lets the tie-out tell
-     * a zeroed balance from a partly paid one without re-walking the FIFO order (§20.33's decision 3).
+     * a zeroed balance from a partly paid one without re-walking the FIFO order (the decision 3).
      * A reversed row is evidence that counts for nothing — the mirror, not the balance, answers a
      * wrong application, and `reversed` exists so 5c's correction path has the column the customer
      * side already learned to need.

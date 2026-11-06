@@ -17,10 +17,10 @@ use App\Domain\Kernel\Cutover\Support\ImportValues;
 use InvalidArgumentException;
 
 /**
- * §15.2 Phase 1 — the supplier master file.
+ * Phase 1 — the supplier master file.
  *
  * The category defaults to `other` when the file leaves it blank, matching the DTO; a value outside
- * §4.2's six is a row error naming the accepted choices, not a CHECK violation at commit.
+ * The six is a row error naming the accepted choices, not a CHECK violation at commit.
  */
 final class ImportSuppliers implements CutoverDatasetHandler
 {

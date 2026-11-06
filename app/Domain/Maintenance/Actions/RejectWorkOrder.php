@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * §10.6's `awaiting_approval → rejected`: the owner looked at the estimate and said no.
+ * The `awaiting_approval → rejected`: the owner looked at the estimate and said no.
  *
  * The reason is mandatory — the row and `operational_events` both carry it — because a rejected
  * estimate with no sentence tells the workshop nothing about what to do differently, and the truck
@@ -26,7 +26,7 @@ final class RejectWorkOrder
     public function __invoke(WorkOrder $workOrder, string $reason, ?int $actorId = null): WorkOrder
     {
         if (! Gate::allows('work_orders.approve')) {
-            throw new InvalidArgumentException('Rejecting an estimate is the same seat that approves one (§9.3).');
+            throw new InvalidArgumentException('Rejecting an estimate is the same seat that approves one.');
         }
 
         $reason = trim($reason);

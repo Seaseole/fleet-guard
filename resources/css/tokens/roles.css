@@ -1,0 +1,43 @@
+/*
+ | Tier 3 — the contract. `--*-fg-*` is this application's own naming and 672 class references in pages and
+ | partials are written against it. Alongside it sits the shadcn contract (`background`, `foreground`, `card`,
+ | `popover`, `primary`, `secondary`, `muted`, `destructive`, `border`, `input`, `ring`), because a copied
+ | component snippet expects those names. The contract is an **alias layer** over the same variables, not a
+ | second palette: an alias cannot drift from what it points at, which is where a forked palette always ends.
+ |
+ | ONE DELIBERATE DEVIATION from shadcn: their `accent` slot is a hover *surface*, while `--color-accent`
+ | here is the fleet green, referenced 52 times (`text-accent-ink` 32, `border-accent` 6,
+ | `bg-accent-soft` 5). Re-pointing that name would recolour 88 pages to satisfy a label. The hover surface
+ | is therefore `--color-fg-surface-hover`, and shadcn's `accent` role maps onto `--color-muted`.
+ */
+@theme inline {
+    --color-background: var(--color-fg-canvas);
+    --color-foreground: var(--color-fg-ink);
+
+    --color-card: var(--color-fg-surface);
+    --color-card-foreground: var(--color-fg-ink);
+
+    --color-popover: var(--color-fg-surface-raised);
+    --color-popover-foreground: var(--color-fg-ink);
+
+    /* The affirmative action stays distinct from a neutral hover surface. */
+    --color-primary: var(--color-accent);
+    --color-primary-foreground: var(--color-on-accent);
+
+    --color-secondary: var(--color-fg-surface-sunk);
+    --color-secondary-foreground: var(--color-fg-ink);
+
+    --color-muted: var(--color-fg-surface-sunk);
+    --color-muted-foreground: var(--color-fg-ink-muted);
+
+    --color-destructive: var(--color-danger);
+    --color-destructive-foreground: var(--color-on-danger);
+
+    --color-border: var(--color-fg-line);
+    --color-input: var(--color-fg-line-strong);
+    --color-ring: var(--color-focus);
+
+    /* `text-accent-foreground` is referenced once already and had no token behind it, so it painted
+       nothing. Defining it here is the fix; the value is the same white the button uses. */
+    --color-accent-foreground: var(--color-on-accent);
+}

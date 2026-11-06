@@ -16,20 +16,19 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /*
- * The alert register (§14.1) — one screen for "what needs attention", because §14.1's whole argument is
- * that the `Alert` row is the truth and the bell and the email are copies of it. A screen that recomputed
+ * The alert register — one screen for "what needs attention", because the `Alert` row is the truth and the bell and the email are copies of it. A screen that recomputed
  * urgency at render would be a third copy.
  *
- * Rows are ordered by severity first and *age of the condition* second. §DESIGN-SYSTEM's first rule is
+ * Rows are ordered by severity first and *age of the condition* second. DESIGN-SYSTEM's first rule is
  * action-first: a lapsed roadworthiness certificate has to be above a service due in three weeks, and a
  * critical alert that has been open for eleven days must not fall below one raised two minutes ago —
  * "still not dealt with" is the fact the Owner acts on, and `last_seen_at` says it.
  *
  * The three exits live here rather than behind a detail page, and each asks for its reason inline. A
- * decision you have to navigate away to make is a decision you make without writing anything down
- * (§10.1).
+ * decision you have to navigate away to make is a decision you make without writing anything down —
+ * the record is lost.
  *
- * Mutes need a date, and the form refuses an empty one before the Action sees it: §10 forbids a
+ * Mutes need a date, and the form refuses an empty one before the Action sees it: forbids a
  * permanent mute, and a screen that let someone press "mute" with no end would either fail with a
  * database error or, worse, invent a default expiry nobody chose.
  */
@@ -54,7 +53,11 @@ new #[Title('Alerts')] class extends Component {
     #[Computed]
     public function alerts(): \Illuminate\Contracts\Pagination\LengthAwarePaginator
     {
+        // The "Decided by" column names a seat for every non-open row, so all three actor links are
+        // loaded with the page: `preventLazyLoading()` is on outside production, and a resolved or
+        // muted row would otherwise fail the render instead of naming who decided it.
         return Alert::query()
+            ->with(['acknowledgedBy', 'mutedBy', 'resolvedBy'])
             ->when($this->filter === 'live', fn ($q) => $q->live())
             ->when($this->filter === 'resolved', fn ($q) => $q->where('state', AlertState::Resolved->value))
             ->orderByRaw('case severity when \'critical\' then 0 when \'warning\' then 1 else 2 end')
@@ -131,8 +134,8 @@ new #[Title('Alerts')] class extends Component {
             'muteReason' => 'required|string|min:3|max:255',
             'muteUntil' => 'required|date',
         ], [
-            'muteReason.required' => __('A mute needs a reason. §10 says a mute without one is a resolve nobody wrote down.'),
-            'muteUntil.required' => __('A mute needs an end. A mute that never ends is a permanent silence, which §10 forbids.'),
+            'muteReason.required' => __('A mute needs a reason. A mute without one is a resolve nobody wrote down.'),
+            'muteUntil.required' => __('A mute needs an end. A mute that never ends is a permanent silence, which forbids.'),
         ]);
 
         $id = $alert->id;
@@ -186,7 +189,7 @@ new #[Title('Alerts')] class extends Component {
         $this->validate([
             'resolveReason' => 'required|string|min:3|max:255',
         ], [
-            'resolveReason.required' => __('Saying how it was dealt with is the point of resolving it (§10).'),
+            'resolveReason.required' => __('Saying how it was dealt with is the point of resolving it.'),
         ]);
 
         $id = $alert->id;
@@ -255,12 +258,12 @@ new #[Title('Alerts')] class extends Component {
 }; ?>
 
 <div class="grid gap-6">
-    <header class="grid gap-1">
+    <header class="fg-page-header grid gap-1.5">
         <div class="flex items-start justify-between gap-4">
             <div class="grid gap-1">
                 <x-ui.heading size="xl" level="1">{{ __('Alerts') }}</x-ui.heading>
                 <x-ui.text>
-                    {{ __('One register for everything that needs attention (§14.1). The bell, the email and this screen are copies of these rows, not three separate systems.') }}
+                    {{ __('One register for everything that needs attention. The bell, the email and this screen are copies of these rows, not three separate systems.') }}
                 </x-ui.text>
             </div>
 
@@ -286,7 +289,7 @@ new #[Title('Alerts')] class extends Component {
                     variant="ghost"
                     size="sm"
                     wire:click="setFilter('{{ $key }}')"
-                    :class="$filter === $key ? 'bg-accent-soft font-semibold text-accent' : ''"
+                    :class="$filter === $key ? 'bg-accent-soft font-semibold text-accent-ink' : ''"
                     :aria-pressed="$filter === $key"
                 >{{ $label }}</x-ui.button>
             @endforeach
@@ -319,11 +322,11 @@ new #[Title('Alerts')] class extends Component {
                                 @if (($alert->payload['check'] ?? null) !== null)
                                     · {{ $alert->payload['check'] }}
                                 @endif
-                                {{-- `notify_count` counts deliveries, not sightings — §14.1's cooldown
+                                {{-- `notify_count` counts deliveries, not sightings — cooldown
                                      question is "how many times did this go out", and the sighting clock
                                      is `last_seen_at`, two cells to the right. Zero is said out loud and
                                      in red rather than rounded up to one: an alert that reached nobody is
-                                     the defect §14.1 names, and the register is where it stops being
+                                     the defect names, and the register is where it stops being
                                      invisible. --}}
                                 ·
                                 @if ($alert->notify_count === 0)
@@ -400,7 +403,7 @@ new #[Title('Alerts')] class extends Component {
                         <tr>
                             <x-ui.table.td colspan="6" class="bg-fg-surface-sunk">
                                 <div class="grid gap-3">
-                                    <x-ui.text size="xs">{{ __('Muting is a decision to stop being told about this for a while. §10 makes both halves mandatory.') }}</x-ui.text>
+                                    <x-ui.text size="xs">{{ __('Muting is a decision to stop being told about this for a while. both halves mandatory.') }}</x-ui.text>
 
                                     <div class="grid gap-3 sm:grid-cols-2">
                                         <x-ui.input
@@ -439,7 +442,7 @@ new #[Title('Alerts')] class extends Component {
                         <tr>
                             <x-ui.table.td colspan="6" class="bg-fg-surface-sunk">
                                 <div class="grid gap-3">
-                                    <x-ui.text size="xs">{{ __('Saying how it was dealt with is the record. A recurrence is a new alert, not this row reopened (§10).') }}</x-ui.text>
+                                    <x-ui.text size="xs">{{ __('Saying how it was dealt with is the record. A recurrence is a new alert, not this row reopened.') }}</x-ui.text>
 
                                     <x-ui.input
                                         name="resolveReason"

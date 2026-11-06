@@ -16,7 +16,7 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.1 CUSTOMER — the party an invoice is addressed to, and whose agreed rates a job is priced at.
+ * CUSTOMER — the party an invoice is addressed to, and whose agreed rates a job is priced at.
  *
  * `payment_terms` is a business string (`cash` or `net_<days>`) rather than an enum, because terms
  * are negotiated per customer and an owner moving someone from 30 to 45 days must not need a code
@@ -24,7 +24,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
  * renders it.
  *
  * Nothing here is money: a customer has no credit limit yet (Phase 4 owns credit control) and the
- * rates live on `route_rates`. The one field §9.4 hides is the terms themselves, and that is the
+ * rates live on `route_rates`. The one field hides is the terms themselves, and that is the
  * screen's job behind {@see FieldGate::SeeCustomerTerms}.
  *
  * @property int $id

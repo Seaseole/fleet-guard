@@ -10,7 +10,7 @@ use BackedEnum;
 use Illuminate\Support\Str;
 
 /**
- * §10.1's first-party state machine: one transition table per aggregate, every move written to
+ * The first-party state machine: one transition table per aggregate, every move written to
  * `operational_events` before the column changes.
  *
  * The table lives on the model because that is the only place that cannot drift from the value
@@ -36,7 +36,7 @@ trait CanTransition
     abstract protected function transitions(): array;
 
     /**
-     * Destructive destinations for this aggregate. §10.1 names the categories (void, cancel,
+     * Destructive destinations for this aggregate. The design names the categories (void, cancel,
      * abort, reject, write_off, reopened) and the DB CHECK in `operational_events` enforces the
      * reason for the three it knows by name; this list is what stops the caller before it gets
      * that far, with a message that names the aggregate.

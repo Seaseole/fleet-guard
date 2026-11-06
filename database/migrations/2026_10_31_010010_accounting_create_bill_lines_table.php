@@ -10,26 +10,26 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.2 — one line of a supplier bill, and the leg of the fleet its cost belongs to.
+     * One line of a supplier bill, and the leg of the fleet its cost belongs to.
      *
-     * The line is the granularity where §6.1's masks survive: `5100 Fuel` requires truck **and**
+     * The line is the granularity where the masks survive: `5100 Fuel` requires truck **and**
      * trip, `5300 Maintenance` and `5310 Parts` require a truck, and a garage bill that named none
      * would quietly land the cost in overheads. So a line carries its own `truck_id`/`trip_id`, and
      * the Action refuses a line whose account demands a dimension the line does not name — the same
      * rule the ledger itself enforces at post time, caught here so the screen can say which line.
      *
      * `expense_account_code` is the account this line debits, **copied at write time** from the
-     * category mapping — the same decision `invoice_lines.revenue_account_code` records (§20.32):
+     * category mapping — the same decision `invoice_lines.revenue_account_code` records:
      * if the accountant re-codes the chart next year, posted rows keep saying what they actually
      * posted to.
      *
-     * `work_order_id` is a names-only reference (a plain char(26), not an FK): §3's edge runs
+     * `work_order_id` is a names-only reference (a plain char(26), not an FK): The edge runs
      * Accounting → Maintenance, and the line does not read or write the order — the ledger's own
      * `work_order_id` dimension is where the join belongs when the reports arrive.
      *
-     * VAT is per line, rounded once, and stored (§5.5: sum of rounded lines, never round-of-sum);
+     * VAT is per line, rounded once, and stored (sum of rounded lines, never round-of-sum);
      * a rateless line carries no tax at all, which the CHECK below makes a rule rather than a
-     * convention. A voided bill stamps `released_at` on its lines instead of deleting them (§10's
+     * convention. A voided bill stamps `released_at` on its lines instead of deleting them (the
      * documents keep their own record even when the money is unposted).
      */
     public function up(): void
@@ -47,7 +47,7 @@ return new class extends Migration
             $table->char('trip_id', 26)->nullable();
             $table->char('work_order_id', 26)->nullable();
 
-            // §5.1: net and VAT stored per line; the bill's gross is their sum, never its own input.
+            // Net and VAT stored per line; the bill's gross is their sum, never its own input.
             $table->unsignedBigInteger('net_amount');
             $table->unsignedBigInteger('net_base');
             $table->char('currency_code', 3);

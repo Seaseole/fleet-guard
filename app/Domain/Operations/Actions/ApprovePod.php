@@ -13,10 +13,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * §10.2's `arrived → delivered` decision, made by an office seat on the evidence the driver sent.
+ * The `arrived → delivered` decision, made by an office seat on the evidence the driver sent.
  *
  * This is the half of the kiosk that keeps a driver out of the money: the capture says "I handed it over",
- * the approval says "and the paperwork is good enough to bill on". Two different actors, and §10.2's own
+ * the approval says "and the paperwork is good enough to bill on". Two different actors, and the design's own
  * words — *a driver may never transition to `delivered`* — are enforced twice over: here by the permission,
  * and in {@see AdvanceTrip} by the `ActorKind::Kiosk` guard on any state that requires an office role.
  *
@@ -34,7 +34,7 @@ final class ApprovePod
     {
         return DB::transaction(function () use ($pod, $actorId): ProofOfDelivery {
             if (! Gate::allows('pod.approve')) {
-                throw new \InvalidArgumentException('Approving a proof of delivery needs the pod.approve ability (§9.3).');
+                throw new \InvalidArgumentException('Approving a proof of delivery needs the pod.approve ability.');
             }
 
             if ($pod->status === PodStatus::Approved) {
@@ -49,7 +49,7 @@ final class ApprovePod
             }
 
             if (($findings = $pod->approvalFindings()) !== []) {
-                throw new \InvalidArgumentException('This proof cannot be accepted yet: '.implode(', ', $findings).' (§10.2).');
+                throw new \InvalidArgumentException('This proof cannot be accepted yet: '.implode(', ', $findings).'.');
             }
 
             $trip = Trip::query()->findOrFail($pod->trip_id);

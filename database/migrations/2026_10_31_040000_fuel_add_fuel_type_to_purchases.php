@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3's FUEL_PURCHASE gains the fuel it bought.
+     * The FUEL_PURCHASE gains the fuel it bought.
      *
      * The type could not be read through the truck: a station slip names no truck, and a delivery
      * into the yard tank names no truck either, so the office screen had nowhere to state it and

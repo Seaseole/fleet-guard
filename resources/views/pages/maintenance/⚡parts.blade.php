@@ -25,21 +25,22 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /*
- * The parts catalogue and the shelf behind it (§3.2, §4.3): what the workshop buys, what it fits,
+ * The parts catalogue and the shelf behind it: what the workshop buys, what it fits,
  * and what is actually in stores. Phase 1 shipped the register; slice 3e adds the valued book — a
  * receipt, an issue to a job and a physical count each move the shelf and post where the movement
- * belongs (§6.8).
+ * belongs.
  *
  * A part names a truck only when it is specific to one — a body panel or an ECU. Everything else
  * reads "any truck", which is the honest default for filters and brake pads.
  *
- * Writing the catalogue is `parts.manage` (§9.3 — Owner, Workshop Manager, Stores Clerk), receiving
+ * Writing the catalogue is `parts.manage` (Owner, Workshop Manager, Stores Clerk), receiving
  * and adjusting stock is `parts.adjust` (Owner, Operations Manager, Stores Clerk), and counting is
- * `parts.count` (Owner, Workshop Manager, Stores Clerk). No §9.4 field gate covers a part's cost: it
+ * `parts.count` (Owner, Workshop Manager, Stores Clerk). No field gate covers a part's cost: it
  * is a purchasing fact the stores clerk is expected to know, unlike a customer's agreed rate or an
  * employee's salary.
  */
-new #[Title('Parts')] class extends Component {
+new #[Title('Parts')] class extends Component
+{
     use WithPagination;
 
     #[Url]
@@ -107,6 +108,13 @@ new #[Title('Parts')] class extends Component {
         return $this->search !== '' || $this->statusFilter !== '' || $this->categoryFilter !== '';
     }
 
+    public function openCreate(): void
+    {
+        $this->clearForm();
+
+        $this->dispatch('open-part-form');
+    }
+
     public function edit(int $id): void
     {
         $part = Part::query()->findOrFail($id);
@@ -124,6 +132,8 @@ new #[Title('Parts')] class extends Component {
         $this->reorderLevel = $part->reorder_level === null ? '' : (string) $part->reorder_level;
         $this->truckId = $part->truck_id === null ? '' : (string) $part->truck_id;
         $this->active = $part->active;
+
+        $this->dispatch('open-part-form');
     }
 
     public function clearForm(): void
@@ -186,6 +196,7 @@ new #[Title('Parts')] class extends Component {
         }
 
         $this->clearForm();
+        $this->dispatch('close-part-form');
         unset($this->parts);
 
         $this->dispatch('toast', message: __('Saved.'), kind: 'success');
@@ -325,7 +336,7 @@ new #[Title('Parts')] class extends Component {
         $this->dispatch('toast', message: $message, kind: 'success');
     }
 
-    /** "45.32" → 4532, without ever building a float (§20.4). */
+    /** "45.32" → 4532, without ever building a float. */
     private function scaledHundredths(string $input, string $label): int
     {
         $text = trim(str_replace([' ', ','], ['', '.'], $input));
@@ -390,7 +401,7 @@ new #[Title('Parts')] class extends Component {
 }; ?>
 
 <div class="grid gap-6">
-    <header class="grid gap-1">
+    <header class="fg-page-header grid gap-1.5">
         <x-ui.heading size="xl" level="1">{{ __('Parts') }}</x-ui.heading>
         <x-ui.text>
             {{ __('The workshop’s catalogue and the shelf behind it: what it buys, what it fits, what it costs and what is actually in stores. A work order takes its parts from here, and every receipt, issue and count moves the stock account with it.') }}
@@ -398,6 +409,16 @@ new #[Title('Parts')] class extends Component {
     </header>
 
     <x-ui.card :title="__('Parts catalogue')">
+        @can('parts.manage')
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <x-ui.text size="sm" color="muted">
+                    {{ __('A work order takes its parts from here, so the catalogue is what the workshop can actually bill against.') }}
+                </x-ui.text>
+
+                <x-ui.button size="sm" variant="outline" wire:click="openCreate">{{ __('Add a part') }}</x-ui.button>
+            </div>
+        @endcan
+
         <div class="mb-4 grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
             <x-ui.input wire:model.live.debounce.400ms="search" name="search" :label="__('Search')" :hint="__('SKU or name')" />
 
@@ -432,10 +453,10 @@ new #[Title('Parts')] class extends Component {
             <thead>
                 <tr>
                     <x-ui.table.th>{{ __('Part') }}</x-ui.table.th>
-                    <x-ui.table.th>{{ __('Category') }}</x-ui.table.th>
+                    <x-ui.table.th hideBelow="lg">{{ __('Category') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Fits') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('On hand') }}</x-ui.table.th>
-                    <x-ui.table.th numeric>{{ __('Unit cost') }}</x-ui.table.th>
+                    <x-ui.table.th numeric hideBelow="lg">{{ __('Unit cost') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('Stock value') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
@@ -448,7 +469,7 @@ new #[Title('Parts')] class extends Component {
                             <span class="font-medium text-fg-ink">{{ $part->name }}</span>
                             <div class="fg-identifier text-xs text-fg-ink-muted">{{ $part->sku }}</div>
                         </x-ui.table.td>
-                        <x-ui.table.td>
+                        <x-ui.table.td hideBelow="lg">
                             <x-ui.badge>{{ $part->category->label() }}</x-ui.badge>
                         </x-ui.table.td>
                         <x-ui.table.td>
@@ -469,7 +490,7 @@ new #[Title('Parts')] class extends Component {
                                 <span class="block text-xs text-fg-ink-muted">{{ __('reorder at :level', ['level' => $part->reorder_level]) }}</span>
                             @endif
                         </x-ui.table.td>
-                        <x-ui.table.td numeric nowrap>
+                        <x-ui.table.td numeric nowrap hideBelow="lg">
                             {{ $part->unit_cost_minor === 0 ? '—' : $part->unitCost()->format($this->currencyCode()) }}
                         </x-ui.table.td>
                         <x-ui.table.td numeric nowrap>
@@ -527,10 +548,12 @@ new #[Title('Parts')] class extends Component {
         @endif
     </x-ui.card>
 
+    {{-- The catalogue form opens over the register, beside the two stock dialogs it shares a row
+         with. Closing without saving throws the draft away. --}}
     @can('parts.manage')
-        <x-ui.card :title="$editingId === null ? __('Add a part') : __('Edit part')">
-            <form class="grid gap-4" wire:submit="save">
-                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <x-ui.dialog name="part-form" maxWidth="2xl" :title="$editingId === null ? __('Add a part') : __('Edit part')" x-on:dialog-closed="$wire.call('clearForm')">
+            <form class="grid gap-4 p-5" wire:submit="save">
+                <div class="grid gap-4 sm:grid-cols-2">
                     <x-ui.input wire:model="sku" name="sku" :label="__('SKU')" :hint="__('The stores reference, e.g. FLT-OIL-15W40.')" required />
                     <x-ui.input wire:model="name" name="name" :label="__('Name')" required />
 
@@ -583,12 +606,10 @@ new #[Title('Parts')] class extends Component {
                 <div class="flex items-center gap-3">
                     <x-ui.button type="submit">{{ $editingId === null ? __('Save') : __('Update') }}</x-ui.button>
 
-                    @if ($editingId !== null)
-                        <x-ui.button variant="ghost" type="button" wire:click="clearForm">{{ __('Cancel') }}</x-ui.button>
-                    @endif
+                    <x-ui.button variant="ghost" type="button" x-on:click="$dispatch('close-part-form')">{{ __('Cancel') }}</x-ui.button>
                 </div>
             </form>
-        </x-ui.card>
+        </x-ui.dialog>
     @endcan
 
     @if ($this->canAdjust())

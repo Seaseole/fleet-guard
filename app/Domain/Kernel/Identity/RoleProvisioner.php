@@ -10,7 +10,7 @@ use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
- * Writes the §9.3 matrix into spatie's tables for one company, idempotently.
+ * Writes the matrix into spatie's tables for one company, idempotently.
  *
  * Idempotent in the strict sense, not the "delete then recreate" sense: role rows are matched by
  * `(company_id, name, guard_name)` and their permissions **synced**, so re-running after a deploy
@@ -20,7 +20,7 @@ use Spatie\Permission\PermissionRegistrar;
  * like a seeder that un-hired everyone.
  *
  * It also refuses the package's global-role escape hatch: with teams on, `roles.company_id IS NULL`
- * means "applies to every company". §8 wants roles that are company data with an owner, so a null
+ * means "applies to every company". The design wants roles that are company data with an owner, so a null
  * row here is a bug this class reports instead of producing.
  */
 final class RoleProvisioner
@@ -62,7 +62,7 @@ final class RoleProvisioner
 
         if ($stale !== []) {
             // Not deleted: a permission that left the catalogue may still be referenced by an audit
-            // row (§9.5 keeps history truthful), and a role's grant list is about to be overwritten
+            // row (the design keeps history truthful), and a role's grant list is about to be overwritten
             // from the catalogue anyway. Reported, then left alone.
             logger()->warning('Permissions no longer in the catalogue', ['names' => array_values($stale)]);
         }
@@ -96,7 +96,7 @@ final class RoleProvisioner
             ->pluck('name');
 
         if ($orphans->isNotEmpty()) {
-            logger()->warning('Roles exist that are not in §9.2', ['company' => $companyId, 'roles' => $orphans->all()]);
+            logger()->warning('Roles exist that are not in ', ['company' => $companyId, 'roles' => $orphans->all()]);
         }
 
         return $created;

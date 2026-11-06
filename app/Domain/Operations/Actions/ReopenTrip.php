@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * §10.2's `closed → reopened` — Owner only, ⚑ re-authenticated, reason mandatory.
+ * The `closed → reopened` — Owner only, ⚑ re-authenticated, reason mandatory.
  *
  * The reason is not bureaucracy: a re-opened trip changes numbers a period has already reported, so
  * six months later someone has to be able to answer "why does the March P&L differ from the March
@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Gate;
  * the re-auth gate is a property of the permission rather than of this class.
  *
  * Un-freezing costs is the substance of the move; the ledger consequence — that the correction must
- * post as a **delta** (§10.2: a reversal plus a new entry, never an edit) — belongs to the posting
+ * post as a **delta** (a reversal plus a new entry, never an edit) — belongs to the posting
  * slice, and this Action is where its callers start.
  */
 final class ReopenTrip
@@ -28,7 +28,7 @@ final class ReopenTrip
     public function __invoke(Trip $trip, string $reason, ?int $actorId = null): Trip
     {
         if (! Gate::allows('reopen', $trip)) {
-            throw new \InvalidArgumentException('Only the Owner may re-open a closed trip (§10.2).');
+            throw new \InvalidArgumentException('Only the Owner may re-open a closed trip.');
         }
 
         return DB::transaction(function () use ($trip, $reason, $actorId): Trip {

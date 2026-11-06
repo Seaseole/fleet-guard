@@ -10,21 +10,21 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.4 BORDER_COST — one charge paid at one gate, and the link to the trip cost it posted.
+     * BORDER_COST — one charge paid at one gate, and the link to the trip cost it posted.
      *
      * The row is separate from `trip_costs` because a gate charges several times: duty, the clearing
      * agent, a road-user fee and scanning are four costs on one crossing, and `trip_costs`'s source
      * pair is unique per crossing. Each border cost posts its own trip cost (type `border`), and
      * `trip_cost_id` is the one-to-one edge between the operational record and the accounting one.
      *
-     * §5.2's FX block is copied from the posted trip cost rather than recomputed here, so the row and
+     * The FX block is copied from the posted trip cost rather than recomputed here, so the row and
      * the ledger cannot disagree about what the bank said.
      *
-     * Deferred to Phase 6, per §15.2: `recoverable_input_tax`, `tax_rate_id`,
+     * Deferred to Phase 6,: `recoverable_input_tax`, `tax_rate_id`,
      * `receipt_document_id` and `payable_to_agent_id`. Capturing the kind and the money is this
      * slice's job; the tax split and the agent's float belong to the slice that reconciles them.
      *
-     * The primary key is a ULID although §4.4's sketch writes `bigint`: the row is the `source_id`
+     * The primary key is a ULID although the sketch writes `bigint`: the row is the `source_id`
      * of its own trip cost, that column is `char(26)`, and an auto-increment id would not fit. The
      * other child tables that post through `(source_type, source_id)` make the same choice.
      */
@@ -38,7 +38,7 @@ return new class extends Migration
             $table->string('kind', 20);
             $table->string('description', 160)->nullable();
 
-            // §5.2, applied verbatim and copied from the trip cost this row posted.
+            //, Applied verbatim and copied from the trip cost this row posted.
             $table->char('currency_code', 3);
             $table->unsignedBigInteger('amount');
             $table->decimal('fx_rate', 19, 8);

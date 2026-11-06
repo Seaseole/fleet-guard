@@ -17,11 +17,11 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.3 FUEL_PURCHASE — one slip from one station, with §5.2's FX block frozen at write time.
+ * FUEL_PURCHASE — one slip from one station, with the FX block frozen at write time.
  *
- * The amount is exposed as {@see Money} so a ZAR slip cannot be printed with a Pula symbol (§5.1),
+ * The amount is exposed as {@see Money} so a ZAR slip cannot be printed with a Pula symbol,
  * and the per-litre side is kept as the two integer spec columns so the screen can show what the
- * pump said without re-deriving it. `posted_to_ledger` is §6.8's seam and is false until Phase 5's
+ * pump said without re-deriving it. `posted_to_ledger` is the seam and is false until Phase 5's
  * supplier bills exist; nothing in this build sets it true.
  *
  * @property string $id
@@ -51,7 +51,7 @@ final class FuelPurchase extends Model implements AuditableContract
 {
     use Auditable, BelongsToCompany;
 
-    /** ULID key (§2): a purchase is named by anything that has to reference it from outside. */
+    /** ULID key: a purchase is named by anything that has to reference it from outside. */
     protected $keyType = 'string';
 
     public $incrementing = false;
@@ -118,7 +118,7 @@ final class FuelPurchase extends Model implements AuditableContract
         return $this->belongsTo(BulkTank::class, 'bulk_tank_id');
     }
 
-    /** A delivery into stock rather than a slip the trucks draw from (§15.2 phase 3). */
+    /** A delivery into stock rather than a slip the trucks draw from. */
     public function isBulkDelivery(): bool
     {
         return $this->bulk_tank_id !== null;

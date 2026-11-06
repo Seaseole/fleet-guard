@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * The private disk's only way out (§14.4), in the order the guarantees are actually earned.
+ * The private disk's only way out, in the order the guarantees are actually earned.
  *
  *  1. the lifecycle refuses a **voided** document — the paper is denied, not merely hidden;
  *  2. the scan verdict refuses infected bytes, and unscanned bytes wherever a scanner exists;
@@ -100,7 +100,7 @@ final class DownloadDocument
                 'Content-Type' => $version->mime,
                 'Content-Length' => (string) $version->size_bytes,
                 'Content-Disposition' => 'attachment; filename="'.str_replace('"', '', $name).'"',
-                // §14.4 verbatim, and the two that matter most on shared dispatch machines:
+                // Verbatim, and the two that matter most on shared dispatch machines:
                 // `no-store` keeps a proxy from holding the file, and `nosniff` stops a browser
                 // deciding that a document it was served is really a script.
                 'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',

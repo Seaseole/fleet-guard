@@ -10,22 +10,22 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §17 Q4 — the VAT rate as a row rather than as prose.
+     * Q4 — the VAT rate as a row rather than as prose.
      *
      * Q4's answer was allowed to be "configurable `tax_rates`, default 12%", and the only honest way
      * to hold a rate a country can change is a table with a validity window: an invoice issued in
      * December at the old rate must print and post the old rate in March, so the window is carried
-     * per row instead of one row being edited in place. That is the same §10.4 habit the rate cards
+     * per row instead of one row being edited in place. That is the same habit the rate cards
      * already use, and the reason `starts_on`/`ends_on` are here rather than `rate` alone.
      *
      * `rate_x10000` stores a **percentage** with two decimals: 12.00% is 120 000 (12 × 10 000) and
      * 12.5% is 125 000, so no float is ever written. Note the two divisions a consumer owes this
      * column: `/ 10 000` gives the percentage back for display, but the *fraction of an amount* is
-     * `rate / (10 000 × 100)` — dividing only by 10 000 turns 12% into 1200%, which §20.32 records as
+     * `rate / (10 000 × 100)` — dividing only by 10 000 turns 12% into 1200%, which the design records as
      * the defect the invoice verifier caught. A rate is not money, but it is a number two people must
      * agree about to the cent, and `decimal(7,4)` would let one of them type 0.12.
      *
-     * `kind` is the design's zero-rating question, not a label: §17 Q4 asks how an export leg
+     * `kind` is the design's zero-rating question, not a label: Q4 asks how an export leg
      * (Botswana→Namibia/SA/Zambia) is treated, and the answer must be a line type the invoice can
      * carry before anyone files a return. `zero_rated` and `exempt` both force the rate to 0 by CHECK
      * and differ in what the VAT return does with the line — which is why they are two values and not

@@ -11,7 +11,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Allocates the next number for a scope, in the caller's transaction (ADR-0002, §7.2 amended).
+ * Allocates the next number for a scope, in the caller's transaction (ADR-0002, amended).
  *
  * Three steps, in order:
  *
@@ -20,14 +20,14 @@ use Illuminate\Support\Facades\DB;
  *  2. Increment transactionally, so a rollback releases the lock *and* un-burns the value.
  *  3. Render from the format and hand the string back for the document to carry.
  *
- * There is deliberately no INSERT here. §7.2 originally said "INSERT IGNORE the row first", but
+ * There is deliberately no INSERT here. Originally said "INSERT IGNORE the row first", but
  * measured on MySQL 9.1 that is a deadlock: an INSERT IGNORE that finds the row already there
  * takes a shared next-key lock, so step 1 becomes a shared-to-exclusive upgrade, and four
  * concurrent workers deadlocked on it. The rows are created ahead of time by
- * {@see NumberSequenceRegistry} instead, so this path takes exactly one lock. See §20.4.
+ * {@see NumberSequenceRegistry} instead, so this path takes exactly one lock..
  *
  * Callers must not do I/O while holding it (no mail, PDF render or queue dispatch inside the
- * transaction) — see the afterCommit rule in §7.4. Because a lock wait can still end in a
+ * transaction) — see the afterCommit rule in. Because a lock wait can still end in a
  * serialization failure under load, the enclosing Action should be wrapped in
  * `DB::transaction($fn, attempts: 3)` so the *whole* business transaction retries.
  */

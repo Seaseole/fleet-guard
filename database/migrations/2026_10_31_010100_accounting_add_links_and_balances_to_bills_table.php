@@ -10,25 +10,25 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §20.36 (Phase 5 slice 5b) — the two halves a bill was always going to grow.
+     * (Phase 5 slice 5b) — the two halves a bill was always going to grow.
      *
-     * **Links.** Phase 3's bulk deliveries (§20.26) and part receipts (§20.29) already posted their
+     * **Links.** Phase 3's bulk deliveries and part receipts already posted their
      * own `Cr 2110` at the movement; the supplier's paper for the same diesel or the same shelf must
      * **document** that obligation, not expense it a second time. A linked bill therefore carries no
      * lines and posts nothing of its own: `linked_source` + `linked_source_id` name the movement, and
      * the Action refuses a bill that asks for both shapes at once. Like the invoice's
-     * `live_chargeable_id` (§20.33), the uniqueness subject is a stored generated column that NULLs
+     * `live_chargeable_id`, the uniqueness subject is a stored generated column that NULLs
      * when the bill is voided — one live bill per obligation, and a voided paper frees the delivery to
      * be re-billed.
      *
      * **Balances.** `balance_amount`/`balance_base` are a **projection** of the payment rows, exactly
-     * as an invoice's balance is (§10.4): what the allocations decided is the truth, and the column is
+     * as an invoice's balance is: what the allocations decided is the truth, and the column is
      * carried so AP ageing and the payable total are a query rather than a walk over every payment.
-     * `partially_paid`/`paid` stay derived — the stored `status` keeps only §10.9's lifecycle; the
-     * CHECK is widened to §4.2's full written list so the schema states the machine the design draws,
+     * `partially_paid`/`paid` stay derived — the stored `status` keeps only the lifecycle; the
+     * CHECK is widened to the full written list so the schema states the machine the design draws,
      * and the Action refuses anything the door cannot maintain.
      *
-     * §5.1's currency rule reads as a file-scope heuristic in `lint-architecture` (D6), and this file
+     * The currency rule reads as a file-scope heuristic in `lint-architecture` (D6), and this file
      * adds no currency of its own: the balances are projections of `amount`/`base_amount`, whose
      * currency is the `currency_code`/`base_currency_code` pair the create migration declared. The
      * columns carry no new money in a new currency, which is why no `currency_code` column appears here.

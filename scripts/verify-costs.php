@@ -60,23 +60,23 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
- * Phase 2 slice 2e verification — trip costs, the ledger rollup and chargeables (DESIGN.md §6.6, §16).
+ * Phase 2 slice 2e verification — trip costs, the ledger rollup and chargeables.
  *
- * Not the test suite (`tests/` is local-only, §14.6). This is the runnable proof of the sentences the
+ * Not the test suite (`tests/` is local-only). This is the runnable proof of the sentences the
  * slice turns on:
  *
- * - §6.6 *"the trip carries its own direct costs"* — every cost type posts a balanced entry from its own
+ * - *"The trip carries its own direct costs"* — every cost type posts a balanced entry from its own
  *   account to the account the money left from, the bucket sum equals the ledger, and an advance posts
  *   to a receivable without joining any bucket;
- * - §5.2's FX invariant — a USD slip's base figure is the authoritative one, computed from the stated
+ * - The FX invariant — a USD slip's base figure is the authoritative one, computed from the stated
  *   rate and frozen with it;
- * - §6.6's derived projection — `trips:recost` notices a stored rollup that no longer describes the
+ * - The derived projection — `trips:recost` notices a stored rollup that no longer describes the
  *   lines, and `--fix` repairs it from them;
- * - §16's chargeable — an approved POD earns what the job was quoted (per trip, per tonne), once, and
+ * - The chargeable — an approved POD earns what the job was quoted (per trip, per tonne), once, and
  *   a per-km job earns nothing from a POD before Phase 4's billing.
  *
  * It writes to the development database on the live MySQL 9.1 instance (docs/DEV-DATABASE.md) inside the
- * `CST` fixture namespace, lifts the §6.3 barrier only to delete its own journal entries, and asserts that
+ * `CST` fixture namespace, lifts the barrier only to delete its own journal entries, and asserts that
  * everything it created is gone and the barrier is down again.
  *
  * Run: php scripts/verify-costs.php
@@ -90,7 +90,7 @@ config(['mail.default' => 'array', 'queue.default' => 'database']);
 
 CurrentCompany::force(1);
 
-/** Delete rows by an id list, refusing to run on an empty list (§20.14's integer/ULID comparison). */
+/** Delete rows by an id list, refusing to run on an empty list (the integer/ULID comparison). */
 function wipeIds(string $table, string $column, array $ids): int
 {
     if ($ids === []) {
@@ -128,7 +128,7 @@ function purgeJournalEntries(array $entryIds, string $why): void
 }
 
 /*
- * Pre-clean: a run that died halfway leaves costs, chargeables, PODs and — because §6.3 refuses the
+ * Pre-clean: a run that died halfway leaves costs, chargeables, PODs and — because the design refuses the
  * delete — journal entries the next run would count as fixtures. Everything this file writes is inside
  * the `CST` namespace so the sweep is exact.
  */
@@ -238,9 +238,12 @@ function asCompanyOne(): void
 }
 
 $runStartedAt = Carbon::now();
-$owner = User::query()->findOrFail(1);
+// The Owner seat is the account the deployment names, not row 1: on a development database row 1
+// may have been re-seated, and a harness that signs in the wrong seat fails at the first gated
+// write before it tests anything. `FLEET_OWNER_EMAIL` is the documented override.
+$owner = User::query()->where('email', config('fleet.identity.owner_email'))->firstOrFail();
 Auth::login($owner);
-CurrentCompany::force(1);
+CurrentCompany::force((int) $owner->company_id);
 
 $created = [
     'truck_ids' => [], 'trailer_ids' => [], 'employee_ids' => [], 'driver_ids' => [],
@@ -249,7 +252,7 @@ $created = [
 ];
 
 /* ------------------------------------------------------------------------- */
-echo "== §4.1/§6.6 the schema keeps the promises the docs make (live MySQL 9.1) ==\n";
+echo "== / the schema keeps the promises the docs make (live MySQL 9.1) ==\n";
 
 check(
     Schema::hasColumns('trips', [
@@ -257,7 +260,7 @@ check(
         'driver_cost_base', 'other_direct_cost_base', 'direct_cost_base', 'contribution_base',
         'ledger_posted_at',
     ]),
-    'trips carries the nine §6.6 rollup columns'
+    'trips carries the nine rollup columns'
 );
 
 $tripDdl = (string) ((array) DB::select('show create table trips')[0])['Create Table'];
@@ -373,7 +376,7 @@ $trip = (app(AdvanceTrip::class))($trip, TripStatus::Arrived, 1);
 check($trip->status === TripStatus::Arrived, 'the fixture trip is arrived ('.$trip->trip_no.')');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §6.6 recording costs: one balanced entry per cost, from the type's own account ==\n";
+echo "\n== recording costs: one balanced entry per cost, from the type's own account ==\n";
 
 $record = app(RecordTripCost::class);
 
@@ -437,7 +440,7 @@ $assertEntry = static function (TripCost $cost, TripCostType $type, int $expecte
     check($debit !== null && $debit->account_code === $type->accountCode(), 'the '.$type->value.' cost debits account '.$type->accountCode());
     check($credit !== null && $credit->account_code === $cost->paid_with->accountCode(), '...and credits the '.$cost->paid_with->value.' account '.$cost->paid_with->accountCode());
     check($debit !== null && (int) $debit->amount_base === $expectedBase, '...at the base figure the cost row carries');
-    check($debit !== null && $debit->trip_id === $trip->id, '...with the trip dimension §6.1 makes mandatory on every direct-cost account');
+    check($debit!== null && $debit->trip_id === $trip->id, '...with the trip dimension the design makes mandatory on every direct-cost account');
 
     if ($expectedForeign !== null) {
         check($debit !== null && (int) $debit->amount_foreign === $expectedForeign, '...and the foreign figure on the same line ('.$expectedForeign.' minor)');
@@ -458,7 +461,7 @@ $fuel = $record($trip, $dto(TripCostType::Fuel, Money::ofMajor('1000.00', 'USD')
 $created['cost_ids'][] = $fuel->id;
 
 check($fuel->currency_code === 'USD' && $fuel->amount === 100_000, 'the USD slip keeps its foreign figure (100 000 minor)');
-check($fuel->base_amount === 1_350_000, '...and the base figure is 100 000 × 13.50 = 1 350 000 minor (§5.2)');
+check($fuel->base_amount === 1_350_000, '...and the base figure is 100 000 × 13.50 = 1 350 000 minor');
 check($fuel->fx_rate_source === FxRateSource::Manual && (float) $fuel->fx_rate === 13.5, '...with the rate and its source frozen on the row');
 check($fuel->paid_with === TripCostPayment::Bank, 'the row says the money left the bank');
 $assertEntry($fuel, TripCostType::Fuel, 1_350_000, 100_000);
@@ -474,7 +477,7 @@ $assertEntry($border, TripCostType::Border, 45_000);
 
 $borderRetry = $record($trip, $dto(TripCostType::Border, Money::ofMajor('450.00', $baseCurrency), '1', TripCostPayment::SupplierCredit, 'Kazungula bridge toll', 'border_crossing', $borderSource));
 
-check($borderRetry->id === $border->id, 'a retried capture with the same source lands on the same cost row (§6.6 idempotency)');
+check($borderRetry->id === $border->id, 'a retried capture with the same source lands on the same cost row (idempotency)');
 check((int) DB::table('trip_costs')->where('source_type', 'border_crossing')->where('source_id', $borderSource)->count() === 1, '...and the table holds exactly one row for it');
 check((int) DB::table('gl_journal_entries')->where('source_type', 'trip_cost')->where('source_id', $border->id)->count() === 1, '...with one journal entry, not two');
 
@@ -501,7 +504,7 @@ check($advance->cost_type === TripCostType::Advance, 'the advance is recorded as
 check((int) DB::table('gl_journal_lines')->where('entry_id', $postingFor($advance)['entry']->id)->where('account_id', (int) $accounts['1160'])->count() === 1, '...posting to the driver-receivable account 1160, not to an expense');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §6.6 the rollup: buckets that equal the ledger, and no revenue invented ==\n";
+echo "\n== the rollup: buckets that equal the ledger, and no revenue invented ==\n";
 
 $fresh = Trip::query()->findOrFail($trip->id);
 
@@ -511,21 +514,21 @@ check($fresh->border_cost_base === 45_000, 'border bucket = the border cost, cou
 check($fresh->driver_cost_base === 150_000, 'driver bucket = labour + lodging');
 check($fresh->other_direct_cost_base === 35_000, 'other bucket = toll + other');
 check($fresh->direct_cost_base === 1_655_000, 'direct costs = the sum of the five buckets');
-check($fresh->revenue_base === 0, 'revenue is zero: a chargeable is not revenue until Phase 4 bills it (§20.17)');
+check($fresh->revenue_base === 0, 'revenue is zero: a chargeable is not revenue until Phase 4 bills it');
 check($fresh->contribution_base === -1_655_000, 'contribution = revenue − direct costs');
 check($fresh->ledger_posted_at !== null, 'the projection records that it has read the ledger');
 
 $projection = $fresh->direct_cost_base
     - ($fresh->fuel_cost_base + $fresh->maintenance_cost_base + $fresh->border_cost_base + $fresh->driver_cost_base + $fresh->other_direct_cost_base);
 
-check($projection === 0, 'the stored direct total equals its own five bucket columns (the §6.6 CHECK, read back)');
+check($projection === 0, 'the stored direct total equals its own five bucket columns (the CHECK, read back)');
 check(
     $fresh->direct_cost_base === (int) DB::table('trip_costs')->where('trip_id', $trip->id)->where('cost_type', '!=', 'advance')->sum('base_amount'),
     '...and it equals the expense rows only: the 2 000.00 advance never joined a bucket'
 );
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §6.6 refusals: the Action says why before the ledger has to ==\n";
+echo "\n== refusals: the Action says why before the ledger has to ==\n";
 
 refuses('a zero cost is refused', fn () => $record($trip, $dto(TripCostType::Fuel, Money::ofMinor(0, $baseCurrency))), InvalidArgumentException::class, 'positive');
 refuses('a negative cost is refused', fn () => $record($trip, $dto(TripCostType::Fuel, Money::ofMinor(-100, $baseCurrency))), InvalidArgumentException::class, 'positive');
@@ -565,7 +568,7 @@ $frozenTrip->forceFill([
 ])->save();
 
 refuses(
-    'a closed, frozen trip refuses new costs (§10.2)',
+    'a closed, frozen trip refuses new costs',
     fn () => $record($frozenTrip->fresh(), $dto(TripCostType::Toll, Money::ofMajor('10.00', $baseCurrency))),
     InvalidArgumentException::class,
     'costs are final'
@@ -586,7 +589,7 @@ refuses(
     'costs are final'
 );
 
-/* A dispatcher may quote and dispatch, but §9.3 gives no seat without `expenses.create` the pen. */
+/* A dispatcher may quote and dispatch, but the design gives no seat without `expenses.create` the pen. */
 /** @var User $dispatcher */
 $dispatcher = User::query()->firstOrNew(['email' => 'verify-cst-dispatcher@fleetguard.local']);
 $dispatcher->name = 'Verify CST Dispatcher';
@@ -597,7 +600,7 @@ $dispatcher->save();
 app(ChangeUserRole::class)($dispatcher->fresh(), RoleKey::Dispatcher);
 $dispatcher = $dispatcher->fresh();
 
-check(! Gate::forUser($dispatcher)->allows('expenses.create'), 'a dispatcher does not hold expenses.create (§9.3)');
+check(! Gate::forUser($dispatcher)->allows('expenses.create'), 'a dispatcher does not hold expenses.create');
 check(Gate::forUser($dispatcher)->allows('invoices.view'), '...but may see the billing state of a delivery');
 
 Auth::login($dispatcher);
@@ -611,7 +614,7 @@ Auth::login($owner);
 asCompanyOne();
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §6.6 trips:recost reads the lines, notices drift, and repairs it ==\n";
+echo "\n== trips:recost reads the lines, notices drift, and repairs it ==\n";
 
 $recost = static fn (array $options): array => [Artisan::call('trips:recost', $options), Artisan::output()];
 
@@ -639,7 +642,7 @@ check($repaired->revenue_base === 0 && $repaired->contribution_base === -1_655_0
 check($exit === 1 && str_contains($output, 'No trip matches'), 'a filter that matches nothing is an error, not a silent pass');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §16 approving a proof earns the job's price, once ==\n";
+echo "\n== approving a proof earns the job's price, once ==\n";
 
 $trip = (app(AdvanceTrip::class))($trip->refresh(), TripStatus::PodPending, 1);
 
@@ -668,7 +671,7 @@ check($trip->refresh()->status === TripStatus::Delivered, '...and the trip moves
 
 $chargeable = Chargeable::query()->where('source_uuid', 'pod:'.$pod->id)->first();
 
-check($chargeable !== null, 'the approval wrote a chargeable (§16)');
+check($chargeable!== null, 'the approval wrote a chargeable');
 check($chargeable !== null && $chargeable->amount === $job->quoted_amount && $chargeable->base_amount === $job->base_amount, '...for exactly the price the job was quoted (120 000 minor)');
 check($chargeable !== null && $chargeable->basis === ChargeableBasis::PerTrip, '...on the job\'s basis');
 check($chargeable !== null && $chargeable->status === ChargeableStatus::Ready, '...ready to bill, which is where Phase 4 picks it up');
@@ -687,7 +690,7 @@ refuses(
 );
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §16 the basis decides the amount: per tonne multiplies, per km builds nothing ==\n";
+echo "\n== the basis decides the amount: per tonne multiplies, per km builds nothing ==\n";
 
 $tonnageJob = (app(CreateJob::class))(new JobDto(
     customerId: $customer->id,
@@ -718,7 +721,7 @@ $created['pod_ids'][] = $tonnagePod->id;
 $tonnageCharge = (app(BuildChargeablesFromPod::class))($tonnagePod);
 
 check($tonnageCharge !== null, 'a per-tonne delivery earns a chargeable');
-check($tonnageCharge?->amount === 964_250, '...at 350.00 × 27.55 tonnes = 964 250 minor, rounded HALF_UP (§5.5)');
+check($tonnageCharge?->amount === 964_250, '...at 350.00 × 27.55 tonnes = 964 250 minor, rounded HALF_UP');
 check($tonnageCharge?->base_amount === 964_250, '...and the base figure matches because the quote is in the base currency');
 check($tonnageCharge?->basis === ChargeableBasis::PerTonne, '...recorded on the per-tonne basis');
 $created['chargeable_ids'][] = $tonnageCharge?->id ?? '';
@@ -752,11 +755,11 @@ $kmPod = ProofOfDelivery::forceCreate([
 ]);
 $created['pod_ids'][] = $kmPod->id;
 
-check((app(BuildChargeablesFromPod::class))($kmPod) === null, 'a per-km job earns nothing from a POD — a proof carries tonnage, not distance (§16)');
+check((app(BuildChargeablesFromPod::class))($kmPod) === null, 'a per-km job earns nothing from a POD — a proof carries tonnage, not distance');
 check((int) DB::table('chargeables')->where('trip_id', $kmTrip->id)->count() === 0, '...and no chargeable row was invented for it');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §8 tenancy: the new registers are scoped, not filtered by habit ==\n";
+echo "\n== tenancy: the new registers are scoped, not filtered by habit ==\n";
 
 $stamp = Carbon::now()->toDateTimeString();
 
@@ -782,7 +785,7 @@ DB::table('companies')->where('id', 2)->delete();
 asCompanyOne();
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §6.3 the ledger still verifies with these postings on it ==\n";
+echo "\n== the ledger still verifies with these postings on it ==\n";
 
 $ledgerExit = Artisan::call('ledger:verify', ['--quiet-ok' => true]);
 $ledgerOutput = Artisan::output();
@@ -807,13 +810,13 @@ $runDocIds = array_values(array_unique(array_merge(
 )));
 
 /**
- * The fixture never sold a delivery, so every entry it wrote leaves with the fixture — through the §6.3
+ * The fixture never sold a delivery, so every entry it wrote leaves with the fixture — through the
  * hatch, with a reason and a lower-again assertion, exactly as verify-ledger does it.
  */
 $runEntryIds = costJournalEntries($runCostIds);
 purgeJournalEntries($runEntryIds, 'verify-costs: remove this run\'s trip-cost entries');
 
-check(! LedgerBarrier::isLifted(), 'the §6.3 barrier is down again after the cleanup');
+check(! LedgerBarrier::isLifted(), 'the barrier is down again after the cleanup');
 
 wipeIds('chargeables', 'trip_id', $runTripIds);
 wipeIds('proof_of_deliveries', 'trip_id', $runTripIds);

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Kernel\Identity;
 
 /**
- * The five named field gates of §9.4.
+ * The five named field gates of.
  *
  * A gate is not a permission: the permission says which capability a role holds, and the gate is
  * the single name a screen asks before it renders a column. Keeping them separate is what makes
@@ -24,7 +24,7 @@ enum FieldGate: string
     case SeeBankDetail = 'seeBankDetail';
     case SeeCustomerTerms = 'seeCustomerTerms';
 
-    /** The capability that opens this gate (§9.3's "hidden" cells are exactly the gates a role lacks). */
+    /** The capability that opens this gate (the "hidden" cells are exactly the gates a role lacks). */
     public function permission(): string
     {
         return match ($this) {
@@ -49,7 +49,7 @@ enum FieldGate: string
     }
 
     /**
-     * The masked form shown when the gate is closed. §9.4 hides the field rather than the row, so
+     * The masked form shown when the gate is closed. Hides the field rather than the row, so
      * a Dispatcher still sees that a trip made money — only not how much.
      */
     public function placeholder(): string

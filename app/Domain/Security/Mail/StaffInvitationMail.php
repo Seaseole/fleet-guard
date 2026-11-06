@@ -13,11 +13,11 @@ use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * The invitation email (§9.1). Queued with `afterCommit` by {@see InviteUser()}
+ * The invitation email. Queued with `afterCommit` by {@see InviteUser()}
  * so a rolled-back invite can never have been delivered.
  *
  * The token is carried in the payload of this object only. It is not on the model, so it cannot be
- * picked up by an audit diff (§9.5), a queue retry that re-reads the row, or a `dd()` of the
+ * picked up by an audit diff, a queue retry that re-reads the row, or a `dd()` of the
  * invitation — the row stores its hash and the link is rebuilt from here.
  */
 final class StaffInvitationMail extends Mailable

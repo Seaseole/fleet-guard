@@ -51,7 +51,7 @@ use Illuminate\Support\Str;
 
 /**
  * Phase 2 slice 2g verification — GPS ingest, the simulator and the trip map's reads
- * (DESIGN.md §4.4, §14.3, §16 R6, §9.3).
+ * (DESIGN.md R6).
  *
  * The sentences this run proves:
  *
@@ -63,11 +63,11 @@ use Illuminate\Support\Str;
  *   the map;
  * - a fix is filed under the trip the truck is actually on, and a payload that names somebody else's
  *   trip does not get believed;
- * - `gps_positions` is §2's high-volume shape: a bigint key, not a ULID;
+ * - `gps_positions` is the high-volume shape: a bigint key, not a ULID;
  * - the simulator drives the same Action, advances a truck along its corridor, and refuses to invent
  *   coordinates for a place it does not know;
- * - `gps.view` is the Dispatcher's and the Workshop's, not the stores clerk's (§9.3), and the registers
- *   are company-scoped (§8).
+ * - `gps.view` is the Dispatcher's and the Workshop's, not the stores clerk's, and the registers
+ *   are company-scoped.
  *
  * It writes to the development database on the live MySQL 9.1 instance (docs/DEV-DATABASE.md) inside the
  * `XGP` fixture namespace, and asserts that everything it created is gone at the end.
@@ -83,7 +83,7 @@ config(['mail.default' => 'array', 'queue.default' => 'database']);
 
 CurrentCompany::force(1);
 
-/** Delete rows by an id list, refusing to run on an empty list (§20.14's integer/ULID comparison). */
+/** Delete rows by an id list, refusing to run on an empty list (the integer/ULID comparison). */
 function wipeIds(string $table, string $column, array $ids): int
 {
     if ($ids === []) {
@@ -217,9 +217,12 @@ function xgpMessage(string $id, int $truckId, ?string $tripId, float $lat, float
 // this clock, and the audit sweep at the end can miss the row written in that first second — one run
 // passes, the next fails, and neither says anything about the code.
 $runStartedAt = Carbon::now()->startOfSecond();
-$owner = User::query()->findOrFail(1);
+// The Owner seat is the account the deployment names, not row 1: on a development database row 1
+// may have been re-seated, and a harness that signs in the wrong seat fails at the first gated
+// write before it tests anything. `FLEET_OWNER_EMAIL` is the documented override.
+$owner = User::query()->where('email', config('fleet.identity.owner_email'))->firstOrFail();
 Auth::login($owner);
-CurrentCompany::force(1);
+CurrentCompany::force((int) $owner->company_id);
 
 $created = [
     'truck_ids' => [], 'employee_ids' => [], 'driver_ids' => [],
@@ -227,7 +230,7 @@ $created = [
 ];
 
 /* ------------------------------------------------------------------------- */
-echo "== §4.4/§14.3 the schema keeps the promises the docs make (live MySQL 9.1) ==\n";
+echo "== / the schema keeps the promises the docs make (live MySQL 9.1) ==\n";
 
 $positionDdl = (string) ((array) DB::select('show create table gps_positions')[0])['Create Table'];
 
@@ -245,21 +248,21 @@ foreach ([
     check(str_contains($positionDdl, $name), "gps_positions carries {$name}");
 }
 
-// §2's rule for high-volume append-only rows: a bigint key, not a ULID. A 26-character key on the
+// The rule for high-volume append-only rows: a bigint key, not a ULID. A 26-character key on the
 // biggest table in the schema would buy nothing, because nothing outside ingest fetches a fix by id.
-check(str_contains($positionDdl, 'AUTO_INCREMENT'), 'gps_positions is §2\'s bigint auto-increment table, not a ULID aggregate');
-check(Schema::hasColumns('gps_positions', ['provider', 'provider_message_id', 'truck_id', 'trip_id', 'fixed_at', 'lat_10_7', 'lng_10_7', 'speed_kph', 'heading_deg', 'odometer_km', 'accuracy_m', 'raw_json', 'ingested_at']), '...and it carries every column §4.4 sketches');
+check(str_contains($positionDdl, 'AUTO_INCREMENT'), 'gps_positions is the bigint auto-increment table, not a ULID aggregate');
+check(Schema::hasColumns('gps_positions', ['provider', 'provider_message_id', 'truck_id', 'trip_id', 'fixed_at', 'lat_10_7', 'lng_10_7', 'speed_kph', 'heading_deg', 'odometer_km', 'accuracy_m', 'raw_json', 'ingested_at']), '...and it carries every column sketches');
 
 $projectionDdl = (string) ((array) DB::select('show create table latest_positions')[0])['Create Table'];
-check(str_contains($projectionDdl, 'latest_positions_truck_unique'), 'the projection is one row per truck (§14.3)');
+check(str_contains($projectionDdl, 'latest_positions_truck_unique'), 'the projection is one row per truck');
 check(str_contains($projectionDdl, 'latest_positions_position_fk'), '...and it cites the fix it shows, so a prune cannot leave a dangling claim');
 
 $accountDdl = (string) ((array) DB::select('show create table gps_provider_accounts')[0])['Create Table'];
 check(str_contains($accountDdl, 'gps_provider_accounts_company_adapter_unique'), 'one feed per adapter per company');
-check(str_contains($accountDdl, 'gps_provider_accounts_key_version_paired'), 'a stored credential carries the key version that made it (§9.5)');
+check(str_contains($accountDdl, 'gps_provider_accounts_key_version_paired'), 'a stored credential carries the key version that made it');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §16 R6 the adapter seam: one contract, resolved by name, refused when unknown ==\n";
+echo "\n== R6 the adapter seam: one contract, resolved by name, refused when unknown ==\n";
 
 $registry = app(Registry::class);
 
@@ -325,7 +328,7 @@ $secondTruck = (app(CreateTruck::class))(new TruckDto(
 ));
 $created['truck_ids'][] = $secondTruck->id;
 
-// A third truck, because §10.2 will not dispatch a truck that is already on the road — the corridor
+// A third truck, because will not dispatch a truck that is already on the road — the corridor
 // the simulator cannot place needs its own vehicle rather than a second journey on the same one.
 $thirdTruck = (app(CreateTruck::class))(new TruckDto(
     registrationNo: 'B 46 XGP',
@@ -351,7 +354,7 @@ $driver = (app(CreateDriver::class))(new DriverDto(
 ));
 $created['driver_ids'][] = $driver->id;
 
-// A second crew, because §10.2 refuses to put one driver on two trips the same day — which is the
+// A second crew, because the design refuses to put one driver on two trips the same day — which is the
 // dispatch gate working, and the reason the second truck needs its own driver rather than a reuse.
 $secondEmployee = (app(CreateEmployee::class))(new EmployeeDto(employeeNo: 'EMP-XGP002', name: 'XGP Second Driver', hiredOn: '2023-11-11'));
 $created['employee_ids'][] = $secondEmployee->id;
@@ -368,7 +371,7 @@ $secondDriver = (app(CreateDriver::class))(new DriverDto(
 $created['driver_ids'][] = $secondDriver->id;
 
 // ...and the corridor the simulator cannot place needs a third crew: an open assignment holds the
-// driver until the trip comes home (§10.1's timeline is append-only), so nobody may be reused here.
+// driver until the trip comes home (the timeline is append-only), so nobody may be reused here.
 $thirdEmployee = (app(CreateEmployee::class))(new EmployeeDto(employeeNo: 'EMP-XGP003', name: 'XGP Third Driver', hiredOn: '2022-06-06'));
 $created['employee_ids'][] = $thirdEmployee->id;
 
@@ -449,11 +452,11 @@ foreach ($onRoad as $motion) {
     }
 }
 
-check($ours !== null && $ours->truckLabel === $truck->label() && $ours->origin === 'Gaborone', '...and the DTO carries the truck label and the corridor, not the models (§13 D5)');
+check($ours!== null && $ours->truckLabel === $truck->label() && $ours->origin === 'Gaborone', '...and the DTO carries the truck label and the corridor, not the models (D5)');
 check($ours !== null && $ours->distanceKm === 750.0 && $ours->odometerStartKm === 150_000, '...with the corridor distance and the opening reading the simulator walks against');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §14.3 ingest: one batch, one door, the payload kept beside the columns ==\n";
+echo "\n== ingest: one batch, one door, the payload kept beside the columns ==\n";
 
 $ingest = app(IngestPositions::class);
 
@@ -470,7 +473,7 @@ check($report->received === 3 && $report->stored === 3 && $report->duplicates ==
 
 $stored = GpsPosition::query()->where('provider_message_id', 'XGP-0001')->first();
 check($stored !== null, 'the fix is readable through the model');
-check((float) $stored->lat_10_7 === -24.6282 && (float) $stored->lng_10_7 === 25.9231, '...with §4.4\'s seven-decimal coordinate, not a rounded one');
+check((float) $stored->lat_10_7 === -24.6282 && (float) $stored->lng_10_7 === 25.9231, '...with the seven-decimal coordinate, not a rounded one');
 check($stored->speed_kph === 82 && $stored->heading_deg === 271 && $stored->odometer_km === 150_010, '...and the speed, bearing and odometer the device sent');
 check($stored->provider === 'simulator', '...filed under the adapter that parsed it');
 check(is_array($stored->raw_json) && ($stored->raw_json['id'] ?? null) === 'XGP-0001', '...with the provider\'s own message kept verbatim for the argument about a wrong fix');
@@ -480,24 +483,29 @@ check($stored->trip_id === $trip->id, 'the fix is filed under the trip it named'
 check((int) DB::table('gps_positions')->where('truck_id', $truck->id)->count() === 2, 'both fixes for the truck are in the history table');
 
 $projection = LatestPosition::query()->where('truck_id', $truck->id)->first();
-check($projection !== null, 'the projection moved: one row per truck (§14.3)');
+check($projection!== null, 'the projection moved: one row per truck');
 check((float) $projection->lat_10_7 === -24.1 && (float) $projection->lng_10_7 === 25.4, '...showing the newest fix, not the first one that arrived');
 check($projection->position_id !== null && (int) $projection->position_id === (int) DB::table('gps_positions')->where('provider_message_id', 'XGP-0002')->value('id'), '...and citing the row it is showing');
 check($projection->trip_id === $trip->id, '...with the trip the truck is on');
-check((int) DB::table('latest_positions')->count() === 2, 'two trucks reporting, two projection rows, never one per fix');
+// Counted by this run's trucks, not by table: a development database may already carry a live
+// projection for a truck on the road, and a harness that demands an empty world is measuring the
+// database's history rather than the code under test.
+$runTruckIdsSoFar = [$truck->id, $secondTruck->id];
+
+check((int) DB::table('latest_positions')->whereIn('truck_id', $runTruckIdsSoFar)->count() === 2, 'two trucks reporting, two projection rows, never one per fix');
 
 $synced = $account->fresh();
 check($synced->last_sync_at !== null, 'the feed records when it was last heard from — the difference between "nothing is moving" and "the gateway stopped calling"');
 
-check(CurrentCompany::pin() === 1, 'ingest pinned the account\'s company and put the caller\'s pin back (§8, §20.4)');
+check(CurrentCompany::pin() === 1, 'ingest pinned the account\'s company and put the caller\'s pin back');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §14.3 the retry guard: a webhook that fires twice stores once ==\n";
+echo "\n== the retry guard: a webhook that fires twice stores once ==\n";
 
 $retry = $ingest($account, $firstBatch);
 
 check($retry->received === 3 && $retry->stored === 0 && $retry->duplicates === 3, 'the same batch again is three duplicates and nothing stored ('.$retry->summary().')');
-check((int) DB::table('gps_positions')->count() === 3, '...and the history table did not grow');
+check((int) DB::table('gps_positions')->whereIn('truck_id', $runTruckIdsSoFar)->count() === 3, '...and the history table did not grow');
 check((float) LatestPosition::query()->where('truck_id', $truck->id)->value('lat_10_7') === -24.1, '...nor did the projection move');
 
 $insideOneRequest = $ingest($account, ['messages' => [
@@ -509,7 +517,7 @@ check($insideOneRequest->received === 2 && $insideOneRequest->stored === 1 && $i
 check((int) DB::table('gps_positions')->where('provider_message_id', 'XGP-DUP')->count() === 1, '...and the table holds the one row');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §14.3 a bad message costs the message, not the batch ==\n";
+echo "\n== a bad message costs the message, not the batch ==\n";
 
 $mixed = $ingest($account, ['messages' => [
     xgpMessage('XGP-BAD-LAT', $truck->id, $trip->id, 91.0, 25.9),
@@ -545,7 +553,7 @@ foreach ($shapeRefusals as $what => $payload) {
 }
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §14.3 the projection only moves forwards ==\n";
+echo "\n== the projection only moves forwards ==\n";
 
 $before = LatestPosition::query()->where('truck_id', $truck->id)->first();
 
@@ -563,7 +571,7 @@ check((float) $after->lat_10_7 === (float) $before->lat_10_7 && (int) $after->od
 check($after->position_id === $before->position_id, 'the projection still cites the newest fix it had');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §14.3 a batch is statements, not rows ==\n";
+echo "\n== a batch is statements, not rows ==\n";
 
 $big = [];
 
@@ -588,7 +596,7 @@ DB::listen(function ($query) use (&$statements): void {
 $bulk = $ingest($account, ['messages' => $big]);
 
 check($bulk->received === 600 && $bulk->stored === 600, '600 fixes in one webhook batch, all stored ('.$bulk->summary().')');
-check($statements > 0 && $statements <= 4, "the batch went in as {$statements} INSERT statement(s), not 600 (§14.3)");
+check($statements > 0 && $statements <= 4, "the batch went in as {$statements} INSERT statement(s), not 600");
 check((int) DB::table('latest_positions')->where('truck_id', $secondTruck->id)->value('odometer_km') === 150_799, '...and the projection ended on the newest fix of the batch');
 
 $bulkReplay = $ingest($account, ['messages' => $big]);
@@ -620,7 +628,7 @@ $wrongRow = DB::table('gps_positions')->where('provider_message_id', 'XGP-WRONGT
 check($wrongRow !== null && $wrongRow->trip_id === $secondTrip->id, '...and a device left configured with another truck\'s trip does not paint a track on a journey it never ran');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §16 R6 the simulator drives the same door, and does not invent coordinates ==\n";
+echo "\n== R6 the simulator drives the same door, and does not invent coordinates ==\n";
 
 $exit = Artisan::call('gps:simulate', ['trip' => $trip->trip_no, '--pings' => 3]);
 $output = str_replace("\n", ' ', Artisan::output());
@@ -649,7 +657,7 @@ check($nearerOrigin, 'the simulated track starts at the corridor\'s own origin, 
 check((float) $firstSim->lat_10_7 >= $gaborone[0] && (float) $firstSim->lat_10_7 <= $windhoek[0], '...and every fix stays between the two endpoints the route names');
 check((float) $lastSim->lat_10_7 > (float) $firstSim->lat_10_7 && (float) $lastSim->lng_10_7 < (float) $firstSim->lng_10_7, 'the truck moved north-west towards Windhoek on each ping');
 check((int) $lastSim->odometer_km > (int) $firstSim->odometer_km, 'the odometer on the fixes advances with the distance');
-check((int) $lastSim->odometer_km >= (int) $trip->odometer_start_km, '...and never below the trip\'s opening reading (§4.3)');
+check((int) $lastSim->odometer_km >= (int) $trip->odometer_start_km, '...and never below the trip\'s opening reading');
 check((int) $firstSim->heading_deg >= 0 && (int) $firstSim->heading_deg <= 359, 'the bearing is a real compass heading ('.$firstSim->heading_deg.'°)');
 check((int) $lastSim->odometer_km <= (int) $trip->odometer_start_km + 750, '...and never past the corridor\'s own distance');
 
@@ -723,8 +731,12 @@ echo "\n== the map's two reads: one row per truck, and one trip's track ==\n";
 
 $map = app(LiveMap::class);
 $vehicles = $map->vehicles();
+$mine = static fn (array $mapped): array => array_values(array_filter(
+    $mapped,
+    static fn (LiveVehicle $vehicle): bool => in_array($vehicle->truckId, $created['truck_ids'], true),
+));
 
-check(count($vehicles) === 3, 'the map reads three trucks — the projection, not the '.DB::table('gps_positions')->count().' fixes behind it');
+check(count($mine($vehicles)) === 3, 'the map reads three trucks — the projection, not the '.DB::table('gps_positions')->count().' fixes behind it');
 
 $tracked = null;
 
@@ -755,11 +767,11 @@ $staleFix = $ingest($account, ['messages' => [
 // measured against the newest fix the projection holds, which is the honest reading of "last heard from".
 check($staleFix->stored === 1, 'an old fix is stored in the history');
 
-$staleVehicles = array_filter($map->vehicles(), static fn (LiveVehicle $vehicle): bool => $vehicle->isStale());
+$staleVehicles = array_filter($mine($map->vehicles()), static fn (LiveVehicle $vehicle): bool => $vehicle->isStale());
 check(count($staleVehicles) === 0, '...and it does not make the truck look stale on the map, because the projection still holds its newer fix');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §9.3 the map is the Dispatcher's and the Workshop's, not the stores clerk's ==\n";
+echo "\n== the map is the Dispatcher's and the Workshop's, not the stores clerk's ==\n";
 
 $makeSeat = static function (RoleKey $role, string $email) use ($owner): User {
     $user = User::query()->firstOrNew(['email' => $email]);
@@ -777,18 +789,18 @@ $dispatcher = $makeSeat(RoleKey::Dispatcher, 'verify-xgp-dispatcher@fleetguard.l
 $stores = $makeSeat(RoleKey::StoresClerk, 'verify-xgp-stores@fleetguard.local');
 $workshop = $makeSeat(RoleKey::WorkshopManager, 'verify-xgp-workshop@fleetguard.local');
 
-check(Gate::forUser($dispatcher)->allows('gps.view'), 'a dispatcher may see the live map (§9.3)');
+check(Gate::forUser($dispatcher)->allows('gps.view'), 'a dispatcher may see the live map');
 check(Gate::forUser($workshop)->allows('gps.view'), '...and so may the workshop');
 check(! Gate::forUser($stores)->allows('gps.view'), 'the stores clerk holds no gps.view, so the route refuses the seat');
 
 Auth::login($dispatcher);
-$seen = $map->vehicles();
+$seen = $mine($map->vehicles());
 check(count($seen) === 3, 'a dispatcher reads the same three trucks the owner does — the screen has no margin, no cost and no crew on it');
 Auth::login($owner);
 CurrentCompany::force(1);
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §8 tenancy: the GPS registers are scoped, not filtered by habit ==\n";
+echo "\n== tenancy: the GPS registers are scoped, not filtered by habit ==\n";
 
 $stamp = Carbon::now()->toDateTimeString();
 
@@ -809,13 +821,13 @@ check(app(LiveMap::class)->vehicles() === [], 'so its map is empty rather than s
 
 CurrentCompany::force(1);
 check((int) GpsPosition::query()->count() >= 600, 'company 1 still reads its own history: '.GpsPosition::query()->count().' fixes');
-check(count(app(LiveMap::class)->vehicles()) === 3, '...and its own three trucks');
+check(count($mine(app(LiveMap::class)->vehicles())) === 3, '...and its own three trucks');
 
 DB::table('companies')->where('id', 2)->delete();
 CurrentCompany::force(1);
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §16 R6 nothing the ledger owns moved, because GPS is not a business fact ==\n";
+echo "\n== R6 nothing the ledger owns moved, because GPS is not a business fact ==\n";
 
 check((int) DB::table('gl_journal_entries')->where('source_type', 'gps_position')->count() === 0, 'no fix posted a journal entry');
 
@@ -866,8 +878,8 @@ DB::table('users')->whereIn('id', $probeIds ?: [0])->delete();
 $alignCounters('after cleanup');
 
 $leftovers = [
-    'gps_positions' => (int) DB::table('gps_positions')->count(),
-    'latest_positions' => (int) DB::table('latest_positions')->count(),
+    'gps_positions' => (int) DB::table('gps_positions')->whereIn('truck_id', $runTruckIds ?: [0])->count(),
+    'latest_positions' => (int) DB::table('latest_positions')->whereIn('truck_id', $runTruckIds ?: [0])->count(),
     'gps_provider_accounts' => (int) DB::table('gps_provider_accounts')->count(),
     'trips' => (int) DB::table('trips')->whereIn('id', $runTripIds ?: ['0'])->count(),
     'freight_jobs' => (int) DB::table('freight_jobs')->whereIn('id', $created['job_ids'] ?: ['0'])->count(),

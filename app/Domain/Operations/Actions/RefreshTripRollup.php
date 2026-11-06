@@ -8,10 +8,10 @@ use App\Domain\Operations\Models\Trip;
 use App\Domain\Operations\Support\TripCostRollup;
 
 /**
- * Rewrites one trip's projection from the ledger, by id (§6.6, §13 D5).
+ * Rewrites one trip's projection from the ledger, by id (D5).
  *
  * The rollup is Invoicing's business only in one respect: issuing an invoice is the first thing that puts
- * **revenue** on a trip, and §20.17 left `trips.revenue_base` honestly at zero until that happened. A
+ * **revenue** on a trip, and left `trips.revenue_base` honestly at zero until that happened. A
  * module that may not import `Trip` still needs the projection to move when its posting lands, so the
  * refresh is an Action with a string id rather than a service Invoicing reaches into.
  *

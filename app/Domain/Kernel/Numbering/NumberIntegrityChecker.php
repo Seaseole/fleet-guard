@@ -7,7 +7,7 @@ namespace App\Domain\Kernel\Numbering;
 use Illuminate\Support\Facades\DB;
 
 /**
- * `documents:number-integrity` (§7.4, last rule). Gap-free cannot be fully *prevented* — a human
+ * `documents:number-integrity` (last rule). Gap-free cannot be fully *prevented* — a human
  * with a SQL client can delete a row or edit a counter — so it is detected nightly instead.
  *
  * Per sequence row: the counter is positive and its format still renders.
@@ -119,7 +119,7 @@ final class NumberIntegrityChecker
                 'duplicate numbers: '.implode(', ', array_map(static fn (mixed $v): string => (string) $v, $duplicates)));
         }
 
-        // §7.4: a document that has left draft without a number means allocation happened at the
+        // A document that has left draft without a number means allocation happened at the
         // wrong moment — at creation instead of at issue, or not at all.
         $statusColumn = $store['status_column'] ?? null;
         $draftStatus = $store['draft_status'] ?? null;
@@ -133,7 +133,7 @@ final class NumberIntegrityChecker
 
             if ($unnumbered > 0) {
                 $findings[] = new Finding($company, $scope, '*', Finding::Drift,
-                    "{$unnumbered} non-draft rows have no number — numbering must happen at issue (§7.4)");
+                    "{$unnumbered} non-draft rows have no number — numbering must happen at issue");
             }
         }
 

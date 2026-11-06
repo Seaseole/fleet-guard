@@ -14,13 +14,13 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §10.5 CREDIT_NOTE — the separate document that corrects an invoice without touching it.
+ * CREDIT_NOTE — the separate document that corrects an invoice without touching it.
  *
  * The invoice stays `issued`; this note moves its derived settlement state instead. That separation is why
  * the correction has its own gap-free number: a note that silently un-issued an invoice would leave a
  * fiscal number pointing at nothing.
  *
- * `balance_amount` is what is left to apply. §10.5's rule is stated as data: an `issued` note must have a
+ * `balance_amount` is what is left to apply. The rule is stated as data: an `issued` note must have a
  * balance, so a fully applied note is `applied` — that is the CHECK in the migration, and it is why this
  * row is written with its balance and its status in one insert.
  *

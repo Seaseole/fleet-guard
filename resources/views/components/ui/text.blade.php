@@ -5,13 +5,13 @@
         null => 'text-fg-ink-secondary',
         'muted' => 'text-fg-ink-muted',
         'ink' => 'text-fg-ink',
-        'accent' => 'text-accent',
+        'accent' => 'text-accent-ink',
         'success' => 'text-success',
         'warning' => 'text-warning',
         'danger' => 'text-danger',
     ];
 
-    $sizes = ['xs' => 'text-xs', 'sm' => 'text-sm', 'base' => 'text-[0.875rem]'];
+    $sizes = ['xs' => 'text-xs', 'sm' => 'text-sm', 'base' => 'text-sm'];
 @endphp
 
 <{{ $as }} {{ $attributes->class([$sizes[$size] ?? $sizes['sm'], $colors[$color] ?? $colors[null]]) }}>

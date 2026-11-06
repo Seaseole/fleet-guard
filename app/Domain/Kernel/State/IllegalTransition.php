@@ -31,7 +31,7 @@ final class IllegalTransition extends RuntimeException
 
     public static function reasonRequired(string $aggregate, string $to): self
     {
-        return new self("Moving {$aggregate} to '{$to}' is destructive (§10.1), so it needs a reason that will appear in the operational trail.");
+        return new self("Moving {$aggregate} to '{$to}' is destructive, so it needs a reason that will appear in the operational trail.");
     }
 
     public static function unsaved(string $aggregate): self

@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Domain\Operations;
 
 /**
- * §4.1 PROOF_OF_DELIVERY's own machine — separate from the trip's §10.2 states on purpose.
+ * PROOF_OF_DELIVERY's own machine — separate from the trip's the design states on purpose.
  *
  * The trip says where the truck is; the POD says whether the paperwork for one delivery is in and
- * accepted. Merging them is the failure §10.2 names: a driver's submit is a fact from the road, while
+ * accepted. Merging them is the failure the design names: a driver's submit is a fact from the road, while
  * `delivered` is an office decision, and one column that carried both would let the kiosk complete a
  * delivery by itself.
  */

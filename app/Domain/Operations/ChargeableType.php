@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Operations;
 
 /**
- * §4.1 CHARGEABLE's `type` — what the customer is being charged for, before it is an invoice line.
+ * CHARGEABLE's `type` — what the customer is being charged for, before it is an invoice line.
  *
  * Only `freight` is derived from a POD in this phase. The rest are captured by hand when the work
  * that earns them ships (detention is a waiting-time fact, customs a border one), which is why the

@@ -19,12 +19,12 @@ use Carbon\CarbonInterface;
 use Illuminate\Support\LazyCollection;
 
 /**
- * §14.1's `service_due` source — the nightly voice of {@see ServiceSchedule::stateOn()}.
+ * The `service_due` source — the nightly voice of {@see ServiceSchedule::stateOn()}.
  *
  * The due state is derived (`ok | due_soon | overdue | blocked`), so this source asks the schedule the
  * question once a night and turns the answer into a candidate. It writes nothing to the schedule: a
  * job that stored "overdue" would be a snapshot of last night printed as the present, which is the
- * defect §10.8's "`expired` is not a transition" sentence exists to prevent.
+ * defect the "`expired` is not a transition" sentence exists to prevent.
  *
  * **One alert per schedule per due point.** The cooldown bucket is the due point itself
  * (`km:123450`, `date:2026-11-14`), not the warning band: a truck three weeks from a service is
@@ -32,7 +32,7 @@ use Illuminate\Support\LazyCollection;
  * When the service is done the due point moves, which is a new instance and a new alert — the same
  * argument {@see DocumentExpirySource} makes for a renewal date.
  *
- * **The `service` threshold family is a calendar ladder, and a counter has no calendar.** §14.1's
+ * **The `service` threshold family is a calendar ladder, and a counter has no calendar.** The
  * thresholds are "N days before", and for a `date` schedule that is exactly what the days remaining
  * are. A km or engine-hours schedule is due at a figure, not a date, so it uses the tightest
  * configured rung: the schedule's own window (config `fleet.maintenance.due_soon_*`) decides *when* a
@@ -40,7 +40,7 @@ use Illuminate\Support\LazyCollection;
  * the reminder, because the rung has to exist for a candidate to be delivered at all.
  *
  * `blocked` and `condition` schedules are skipped: a truck that is sold or out of service cannot have
- * its service done, and a condition-based rule has no due point to be due at. §14.1's register is only
+ * its service done, and a condition-based rule has no due point to be due at. The register is only
  * worth reading if it does not chase work that cannot happen.
  */
 final class ServiceDueSource implements ReminderSource
@@ -51,7 +51,7 @@ final class ServiceDueSource implements ReminderSource
     }
 
     /**
-     * §14.1's ladder, one family shared by the three counter/date kinds, addressed to the two seats
+     * The ladder, one family shared by the three counter/date kinds, addressed to the two seats
      * that can actually book a workshop slot.
      *
      * @return list<Threshold>

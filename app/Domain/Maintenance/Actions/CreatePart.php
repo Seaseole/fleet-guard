@@ -11,7 +11,7 @@ use App\Domain\Maintenance\Models\Part;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Adds a line to the parts catalogue (§4.3, D1).
+ * Adds a line to the parts catalogue (D1).
  *
  * The currency must be one the books know and the specific-truck id must resolve inside this
  * company's scope — the FK alone would accept another tenant's truck id, and a 404 is the honest

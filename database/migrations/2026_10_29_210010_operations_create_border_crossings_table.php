@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.1 / §4.4 BORDER_CROSSING — one gate event on one trip, with §10.9's machine.
+     * / BORDER_CROSSING — one gate event on one trip, with the machine.
      *
      * The machine reaches `costs_captured` here; `agent_reconciled` and `closed` are Phase 6, because
      * they require an agent float to reconcile against and this build has no `border_costs` table
@@ -18,7 +18,7 @@ return new class extends Migration
      * later migration that opens the last two edges does not also have to rewrite a constraint.
      *
      * `weighbridge_ticket_id` is stored without a foreign key because WEIGHBRIDGE_TICKET arrives in
-     * Phase 6. §6.2's dimension hazard applies: a column that cannot reference a table nobody has
+     * Phase 6. The dimension hazard applies: a column that cannot reference a table nobody has
      * built is a deferral, and the Phase 6 migration adds the key.
      *
      * `(trip_id, border_post_id, direction)` is unique: a retried plan returns the row it already
@@ -36,7 +36,7 @@ return new class extends Migration
             $table->string('direction', 5);
             $table->string('status', 20)->default('planned');
 
-            // §10.1's three state columns, as every first-party aggregate carries them: the trait
+            // The three state columns, as every first-party aggregate carries them: the trait
             // writes the event before changing these, and `previous_state` is what lets the trail be
             // reconstructed without parsing `operational_events` in reverse.
             $table->string('previous_state', 32)->nullable();
@@ -64,7 +64,7 @@ return new class extends Migration
         DB::statement('alter table `border_crossings` add constraint `border_crossings_status_allowed` check (status in (\'planned\', \'entered\', \'exited\', \'costs_captured\', \'agent_reconciled\', \'closed\'))');
         DB::statement('alter table `border_crossings` add constraint `border_crossings_country_upper` check (country_code = upper(country_code))');
 
-        // §10.9's machine in data form: an exit cannot precede an entry, and a state past `entered`
+        // The machine in data form: an exit cannot precede an entry, and a state past `entered`
         // cannot be reached on a row that never recorded when the truck went through.
         DB::statement('alter table `border_crossings` add constraint `border_crossings_exit_follows_entry` check (`exited_at` is null or (`entered_at` is not null and `exited_at` >= `entered_at`))');
         DB::statement('alter table `border_crossings` add constraint `border_crossings_state_has_times` check (status in (\'planned\', \'entered\') or (`entered_at` is not null and `exited_at` is not null))');

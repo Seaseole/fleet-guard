@@ -14,13 +14,13 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §6.8 — money that left the till toward a supplier, and the §20.33 rule copied from the receipt side:
+ * Money that left the till toward a supplier, and the rule copied from the receipt side:
  * **the payment is made, then it is applied.** `RecordSupplierPayment` posts `Dr 2110 / Cr the method's
  * cash account` for the whole amount and leaves the residue on `unapplied_amount`; the application rows
  * are what decide whether a bill is paid.
  *
  * There is no `draft`: a bank fact has no draft state, which is why the `PAY-` reference is allocated at
- * creation (§20.35's numbering decision applied one document further).
+ * creation (the numbering decision applied one document further).
  *
  * @property string $id
  * @property int $company_id

@@ -16,7 +16,7 @@ use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 
 /**
- * §10.6's customer statement: the invoices issued in a window, the receipts banked in it, and everything
+ * The customer statement: the invoices issued in a window, the receipts banked in it, and everything
  * still outstanding at the end.
  *
  * Three figures are deliberately kept apart, because conflating them is how statements start arguments:

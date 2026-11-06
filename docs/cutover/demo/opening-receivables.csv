@@ -1,0 +1,5 @@
+customer_code,reference,amount,due_on,issued_on,description,currency_code,fx_rate
+OPENCUT-1,LEG-2026-014,12500.00,2026-06-30,2026-05-31,Gaborone to Nakambala — haulage still unpaid,,
+OPENCUT-1,LEG-2026-021,4800.00,2026-09-15,2026-08-16,Detention at the border post,,
+OPENCUT-2,LEG-2026-009,900000.00,2026-10-20,2026-09-19,Windhoek consolidation — billed in Rand,ZAR,0.54100000
+OPENCUT-3,LEG-2026-044,715.50,2026-11-28,,Accessories charged at the depot,,

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\People;
 
 /**
- * A driver's four states (§4.3, §10.1).
+ * A driver's four states.
  *
  * `standby` is not a synonym for `active`: a standby driver is on the books and licensed but not
  * currently rostered, and dispatch may still use one. `suspended` and `left` stop dispatch, and the
@@ -28,7 +28,7 @@ enum DriverStatus: string
         };
     }
 
-    /** The `ui/badge` tone for the register (DESIGN-SYSTEM.md §1.5). */
+    /** The `ui/badge` tone for the register. */
     public function tone(): string
     {
         return match ($this) {

@@ -27,15 +27,15 @@ use InvalidArgumentException;
 /**
  * Record one direct cost against a trip, and post it, and move the projection — in one transaction.
  *
- * The three writes are one act on purpose (§6.6): a cost row without its journal entry is a screen
+ * The three writes are one act on purpose: a cost row without its journal entry is a screen
  * that disagrees with the ledger, and an entry whose trip projection was not refreshed is a
  * dashboard that answers yesterday's question. The transaction boundary is the sentence "the money
  * is recorded", and it either holds all of it or none.
  *
- * Two refusals carry most of the design. A **frozen** trip (`closed`) is final: §10.2 freezes costs
+ * Two refusals carry most of the design. A **frozen** trip (`closed`) is final: Freezes costs
  * so a settled month cannot be edited from a trip screen, and the only way to correct one is to
  * re-open the trip or post a reversing entry. A cost whose account needs a driver on a trip with
- * none named is refused before the row is written, because §6.1's dimension rule would refuse it
+ * none named is refused before the row is written, because the dimension rule would refuse it
  * at the ledger anyway — better to say why on the form than as a posting error.
  */
 final class RecordTripCost
@@ -49,7 +49,7 @@ final class RecordTripCost
     public function __invoke(Trip $trip, TripCostDto $dto, ?int $actorId = null, ?KioskAuthority $kiosk = null): TripCost
     {
         if ($kiosk === null && ! Gate::allows('expenses.create')) {
-            throw new InvalidArgumentException('Recording a trip cost is an expense, and this seat may not raise one (§9.3).');
+            throw new InvalidArgumentException('Recording a trip cost is an expense, and this seat may not raise one.');
         }
 
         if ($kiosk !== null && ! $kiosk->actsOn($trip->id)) {
@@ -58,7 +58,7 @@ final class RecordTripCost
 
         if ($trip->costs_frozen || in_array($trip->status, [TripStatus::Cancelled, TripStatus::Aborted], true)) {
             throw new InvalidArgumentException(sprintf(
-                'Trip %s is %s and its costs are final. Re-open the trip, or correct the ledger with a reversing entry (§10.2).',
+                'Trip %s is %s and its costs are final. Re-open the trip, or correct the ledger with a reversing entry.',
                 $trip->trip_no,
                 $trip->status->label(),
             ));
@@ -115,7 +115,7 @@ final class RecordTripCost
 
         if ($debit === null || $credit === null) {
             throw new InvalidArgumentException(sprintf(
-                'Account %s is not in this company\'s chart, so the cost cannot be posted. Seed the chart first (§6.2).',
+                'Account %s is not in this company\'s chart, so the cost cannot be posted. Seed the chart first.',
                 $debit === null ? $dto->type->accountCode() : $dto->paidWith->accountCode(),
             ));
         }
@@ -185,7 +185,7 @@ final class RecordTripCost
     {
         if ($type->requiresDriver() && $trip->driver_id === null) {
             throw new InvalidArgumentException(sprintf(
-                'A %s cost posts against the driver and %s has none named. Name the driver on the trip first (§6.1).',
+                'A %s cost posts against the driver and %s has none named. Name the driver on the trip first.',
                 mb_strtolower($type->label()),
                 $trip->trip_no,
             ));

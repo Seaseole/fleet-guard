@@ -13,7 +13,7 @@ use InvalidArgumentException;
  * The validated input behind the rate-card Actions (D1).
  *
  * The amount arrives as **minor units** in the card's currency, converted by the screen through
- * {@see Money::ofMajor()} — the same boundary §5.1 draws for every other typed amount. It is not
+ * {@see Money::ofMajor()} — the same boundary draws for every other typed amount. It is not
  * the company base currency: a cross-border lane is routinely agreed in ZAR or USD, and converting
  * the agreed figure into Pula would lose the number the customer actually signed.
  */

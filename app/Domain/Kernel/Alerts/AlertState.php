@@ -7,16 +7,16 @@ namespace App\Domain\Kernel\Alerts;
 use App\Domain\Kernel\Documents\Lifecycle;
 
 /**
- * §10's alert machine: `open → acknowledged → resolved`, plus `muted` with an expiry.
+ * The alert machine: `open → acknowledged → resolved`, plus `muted` with an expiry.
  *
- * The transition table is a method rather than a column because §10.1's rule is that an illegal move
+ * The transition table is a method rather than a column because the rule is that an illegal move
  * is refused in code and the legal one is recorded as an event. `Kernel/State` still holds no classes
- * — §13 drew it, and slice 7 found nothing in it — so this enum carries its own table exactly the way
+ * — drew it, and slice 7 found nothing in it — so this enum carries its own table exactly the way
  * {@see Lifecycle} does, rather than reaching for an abstraction that
  * does not exist yet.
  *
  * `muted → open` is in the table even though no screen offers it: the sweep that finds a mute whose
- * `muted_until` has passed reopens the alert, and that is §10's "so muting cannot silently become
+ * `muted_until` has passed reopens the alert, and that is the "so muting cannot silently become
  * permanent" turned into a mechanism. Without the transition in the table, the honest thing to do at
  * 02:00 would be to refuse and leave a permanently muted alert on the register.
  */
@@ -56,7 +56,7 @@ enum AlertState: string
      * Whether moving *into* this state has to say why.
      *
      * Acknowledging says "I have seen this", which is not a claim about the world. Muting and
-     * resolving both say the alert can be ignored or is finished, and §10.1's rule — a nullable
+     * resolving both say the alert can be ignored or is finished, and the rule — a nullable
      * reason is how you lose the plot six months later — applies to both. The DB CHECKs
      * `alerts_muted_explained` and `alerts_resolved_explained` enforce the same pair.
      */
@@ -87,7 +87,7 @@ enum AlertState: string
         };
     }
 
-    /** The `ui/badge` tone for this state; the caller still supplies the icon (DESIGN-SYSTEM.md §1.5). */
+    /** The `ui/badge` tone for this state; the caller still supplies the icon. */
     public function tone(): string
     {
         return match ($this) {

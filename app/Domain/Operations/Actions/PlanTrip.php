@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * Names the equipment, the crew and the date — §10.2's `draft → planned`.
+ * Names the equipment, the crew and the date — the `draft → planned`.
  *
  * This is the first state that makes a promise, so it is the first state that can be refused for a
  * reason a person can fix: the truck or driver must exist in *this* company (a guessed id from
@@ -25,7 +25,7 @@ use InvalidArgumentException;
  *
  * Neither the availability nor the papers question is asked here. A truck in the workshop on Monday
  * may legitimately be planned for Friday, and a licence that lapses next month is a fact the planner
- * should see on the board rather than be blocked by. §10.2 puts both tests on `planned → assigned`,
+ * should see on the board rather than be blocked by. The design puts both tests on `planned → assigned`,
  * where the commitment is actually made — that is {@see DispatchTrip}'s job and the reason the two
  * Actions are not one.
  */
@@ -51,7 +51,7 @@ final class PlanTrip
                     : 'It has already left, so its crew cannot be changed from here.';
 
                 throw new InvalidArgumentException(sprintf(
-                    'Trip %s is %s. %s (§10.2)',
+                    'Trip %s is %s. %s',
                     $locked->trip_no,
                     $locked->status->label(),
                     $remedy,

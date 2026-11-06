@@ -20,7 +20,7 @@ use Illuminate\Database\Seeder;
  *
  * `OwnerSeeder` is deliberately absent: it needs credentials, and a seed command that silently
  * creates an administrative account with a default password is the kind of thing that reaches
- * production on a Friday. It runs from `fleet:setup-owner` (§9.1).
+ * production on a Friday. It runs from `fleet:setup-owner`.
  */
 final class DatabaseSeeder extends Seeder
 {
@@ -31,7 +31,7 @@ final class DatabaseSeeder extends Seeder
             CurrenciesSeeder::class,
             RolesSeeder::class,
             ChartOfAccountsSeeder::class,
-            // §17 Q4's default rate, so an invoice can point a line at a tax rate the day Phase 4's
+            // Q4's default rate, so an invoice can point a line at a tax rate the day Phase 4's
             // first draft opens. A seed rather than a hard-coded 12% because the rate is a fact about
             // the country, editable by the accountant without a deploy.
             TaxRateSeeder::class,

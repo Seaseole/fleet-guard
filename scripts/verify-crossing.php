@@ -61,20 +61,20 @@ use Illuminate\Support\Str;
 
 /**
  * Phase 2 slice 2f verification — border gates, crossings and the charges captured at them
- * (DESIGN.md §4.4, §5.2, §10.9, §6.6).
+ *.
  *
  * It proves the sentences the slice turns on:
  *
  * - a gate is master data, registered once per country, with a corridor country and real coordinates;
- * - a crossing is a trip fact with §10.9's machine: `planned → entered → exited → costs_captured`,
+ * - a crossing is a trip fact with the machine: `planned → entered → exited → costs_captured`,
  *   each edge guarded, each move on the trail, and the two Phase 6 states out of this build's reach;
- * - every charge at a gate posts its own trip cost (type `border`, account 5400) and copies §5.2's
+ * - every charge at a gate posts its own trip cost (type `border`, account 5400) and copies the
  *   eight columns from that posting, so the gate's screen and the ledger cannot disagree;
- * - the §6.6 rollup's border bucket equals the charges that were posted;
+ * - the rollup's border bucket equals the charges that were posted;
  * - the register is company-scoped and the dispatcher's `crossborder.view` is not `crossborder.manage`.
  *
  * It writes to the development database on the live MySQL 9.1 instance (docs/DEV-DATABASE.md) inside the
- * `XBD` fixture namespace, lifts the §6.3 barrier only to delete its own journal entries, and asserts that
+ * `XBD` fixture namespace, lifts the barrier only to delete its own journal entries, and asserts that
  * everything it created is gone and the barrier is down again.
  *
  * Run: php scripts/verify-crossing.php
@@ -88,7 +88,7 @@ config(['mail.default' => 'array', 'queue.default' => 'database']);
 
 CurrentCompany::force(1);
 
-/** Delete rows by an id list, refusing to run on an empty list (§20.14's integer/ULID comparison). */
+/** Delete rows by an id list, refusing to run on an empty list (the integer/ULID comparison). */
 function wipeIds(string $table, string $column, array $ids): int
 {
     if ($ids === []) {
@@ -126,7 +126,7 @@ function purgeJournalEntries(array $entryIds, string $why): void
 }
 
 /*
- * Pre-clean: a run that died halfway leaves crossings, charges, trips and — because §6.3 refuses the
+ * Pre-clean: a run that died halfway leaves crossings, charges, trips and — because the design refuses the
  * delete — journal entries the next run would count as fixtures. Everything this file writes is inside
  * the `XBD` namespace, so the sweep is exact. Crossings before trips, charges before crossings.
  */
@@ -234,9 +234,12 @@ function asCompanyOne(): void
 }
 
 $runStartedAt = Carbon::now();
-$owner = User::query()->findOrFail(1);
+// The Owner seat is the account the deployment names, not row 1: on a development database row 1
+// may have been re-seated, and a harness that signs in the wrong seat fails at the first gated
+// write before it tests anything. `FLEET_OWNER_EMAIL` is the documented override.
+$owner = User::query()->where('email', config('fleet.identity.owner_email'))->firstOrFail();
 Auth::login($owner);
-CurrentCompany::force(1);
+CurrentCompany::force((int) $owner->company_id);
 
 $created = [
     'truck_ids' => [], 'employee_ids' => [], 'driver_ids' => [],
@@ -245,7 +248,7 @@ $created = [
 ];
 
 /* ------------------------------------------------------------------------- */
-echo "== §4.4/§10.9 the schema keeps the promises the docs make (live MySQL 9.1) ==\n";
+echo "== / the schema keeps the promises the docs make (live MySQL 9.1) ==\n";
 
 $postDdl = (string) ((array) DB::select('show create table border_posts')[0])['Create Table'];
 check(str_contains($postDdl, 'border_posts_name_unique'), 'a gate is unique per company, name and country');
@@ -279,10 +282,10 @@ foreach ([
     check(str_contains($borderCostDdl, $name), "border_costs carries {$name}");
 }
 
-check(Schema::hasColumns('border_costs', ['currency_code', 'amount', 'fx_rate', 'fx_rate_source', 'fx_rate_date', 'fx_rate_ref', 'base_currency_code', 'base_amount']), 'border_costs carries §5.2\'s eight columns');
+check(Schema::hasColumns('border_costs', ['currency_code', 'amount', 'fx_rate', 'fx_rate_source', 'fx_rate_date', 'fx_rate_ref', 'base_currency_code', 'base_amount']), 'border_costs carries the eight columns');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §4.4 registering a gate: master data, refused before it can split ==\n";
+echo "\n== registering a gate: master data, refused before it can split ==\n";
 
 $createPost = app(CreateBorderPost::class);
 
@@ -382,7 +385,7 @@ $trip = (app(CreateTrip::class))($job, 1);
 $created['trip_ids'][] = $trip->id;
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.9 planning a crossing: born planned, country copied, retried once ==\n";
+echo "\n== planning a crossing: born planned, country copied, retried once ==\n";
 
 $plan = app(PlanBorderCrossing::class);
 
@@ -437,7 +440,7 @@ refuses(
 );
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.9 entering and exiting: guarded edges, stamped facts, one trail per move ==\n";
+echo "\n== entering and exiting: guarded edges, stamped facts, one trail per move ==\n";
 
 $enter = app(MarkCrossingEntered::class);
 $exit = app(MarkCrossingExited::class);
@@ -492,7 +495,7 @@ refuses(
 );
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §4.4/§5.2/§6.6 capturing a charge: one trip cost per charge, eight columns copied ==\n";
+echo "\n== // capturing a charge: one trip cost per charge, eight columns copied ==\n";
 
 $capture = app(CaptureBorderCost::class);
 
@@ -523,7 +526,7 @@ check($duty->trip_cost_id !== null, '...and links the trip cost it posted');
 $dutyTripCost = TripCost::query()->findOrFail($duty->trip_cost_id);
 $created['cost_ids'][] = $dutyTripCost->id;
 
-check($dutyTripCost->cost_type === TripCostType::Border, 'the posted trip cost is of type border, so §6.6 files it in the border bucket');
+check($dutyTripCost->cost_type === TripCostType::Border, 'the posted trip cost is of type border, so files it in the border bucket');
 check($dutyTripCost->source_type === 'border_cost' && $dutyTripCost->source_id === $duty->id, '...and its source pair names the border cost, so a retry cannot post twice');
 
 $dutyEntry = DB::table('gl_journal_entries')->where('source_type', 'trip_cost')->where('source_id', $dutyTripCost->id)->first();
@@ -538,7 +541,7 @@ $lines = $dutyEntry === null ? [] : DB::table('gl_journal_lines as l')
 
 check(isset($lines['debit']) && $lines['debit']->account_code === '5400', '...debitng 5400 Border and customs');
 check(isset($lines['credit']) && $lines['credit']->account_code === '1120', '...and crediting 1120, the bank the money left');
-check(isset($lines['debit']) && $lines['debit']->trip_id === $trip->id, '...with the trip dimension §6.1 requires');
+check(isset($lines['debit']) && $lines['debit']->trip_id === $trip->id, '...with the trip dimension the design requires');
 
 $usd = $capture($exited, $chargeDto(BorderCostKind::Scanning, Money::ofMajor('100.00', 'USD'), '13.50', TripCostPayment::PettyCash, 'Scanner fee'), 1);
 $created['border_cost_ids'][] = $usd->id;
@@ -546,7 +549,7 @@ $usdTripCost = TripCost::query()->findOrFail($usd->trip_cost_id);
 $created['cost_ids'][] = $usdTripCost->id;
 
 check($usd->amount === 10_000 && $usd->currency_code === 'USD', 'a foreign charge keeps its stated figure (100.00 USD)');
-check($usd->base_amount === 135_000, '...and the base figure is 10 000 × 13.50 = 135 000 minor (§5.2)');
+check($usd->base_amount === 135_000, '...and the base figure is 10 000 × 13.50 = 135 000 minor');
 
 $copiedColumns = ['currency_code', 'amount', 'fx_rate', 'fx_rate_source', 'fx_rate_date', 'base_currency_code', 'base_amount'];
 $copied = true;
@@ -561,12 +564,12 @@ foreach ($copiedColumns as $column) {
     }
 }
 
-check($copied, 'every copied §5.2 column on the border cost equals the posted trip cost it names');
+check($copied, 'every copied column on the border cost equals the posted trip cost it names');
 
 check($usd->fx_rate_source === FxRateSource::Manual && (float) $usd->fx_rate === 13.5, '...including the rate and its source, frozen rather than re-derived');
 
 $fresh = Trip::query()->findOrFail($trip->id);
-check($fresh->border_cost_base === 180_000, 'the §6.6 border bucket equals both charges (45 000 + 135 000)');
+check($fresh->border_cost_base === 180_000, 'the border bucket equals both charges (45 000 + 135 000)');
 check($fresh->direct_cost_base === 180_000, '...and so do the trip\'s direct costs, because a border cost is a direct cost');
 check((int) DB::table('border_costs')->where('border_crossing_id', $entry->id)->count() === 2, 'one crossing may carry several charges — the gate charges more than once');
 
@@ -578,7 +581,7 @@ refuses(
 );
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.9 finishing the costs: a claim, not a derivation, and not on a guess ==\n";
+echo "\n== finishing the costs: a claim, not a derivation, and not on a guess ==\n";
 
 $finish = app(FinishBorderCosts::class);
 
@@ -606,14 +609,14 @@ refuses(
 );
 
 refuses(
-    'this build cannot reach agent_reconciled — §15.2 keeps Phase 6 shut',
+    'this build cannot reach agent_reconciled — the design keeps Phase 6 shut',
     fn () => $finished->moveTo(BorderCrossingStatus::AgentReconciled, null, [], ActorKind::User, 1),
     IllegalTransition::class,
     'agent_reconciled'
 );
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.2 completion: a gate the crossing record has not cleared stops the trip ==\n";
+echo "\n== completion: a gate the crossing record has not cleared stops the trip ==\n";
 
 $complete = app(CompleteTrip::class);
 
@@ -658,7 +661,7 @@ refuses(
 );
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §9.3 the dispatcher reads the register and does not move it ==\n";
+echo "\n== the dispatcher reads the register and does not move it ==\n";
 
 /** @var User $dispatcher */
 $dispatcher = User::query()->firstOrNew(['email' => 'verify-xbd-dispatcher@fleetguard.local']);
@@ -670,7 +673,7 @@ $dispatcher->save();
 app(ChangeUserRole::class)($dispatcher->fresh(), RoleKey::Dispatcher);
 $dispatcher = $dispatcher->fresh();
 
-check(Gate::forUser($dispatcher)->allows('crossborder.view'), 'a dispatcher may see crossings (§9.3)');
+check(Gate::forUser($dispatcher)->allows('crossborder.view'), 'a dispatcher may see crossings');
 check(! Gate::forUser($dispatcher)->allows('crossborder.manage'), '...but not capture or move them');
 
 Auth::login($dispatcher);
@@ -684,7 +687,7 @@ Auth::login($owner);
 asCompanyOne();
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §8 tenancy: the border registers are scoped, not filtered by habit ==\n";
+echo "\n== tenancy: the border registers are scoped, not filtered by habit ==\n";
 
 $stamp = Carbon::now()->toDateTimeString();
 
@@ -708,7 +711,7 @@ DB::table('companies')->where('id', 2)->delete();
 asCompanyOne();
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §6.3 the ledger still verifies with these postings on it ==\n";
+echo "\n== the ledger still verifies with these postings on it ==\n";
 
 $ledgerExit = Artisan::call('ledger:verify', ['--quiet-ok' => true]);
 $ledgerOutput = Artisan::output();
@@ -734,7 +737,7 @@ $runCostIds = array_values(array_unique(array_merge(
 $runEntryIds = costJournalEntries($runCostIds);
 purgeJournalEntries($runEntryIds, 'verify-crossing: remove this run\'s trip-cost entries');
 
-check(! LedgerBarrier::isLifted(), 'the §6.3 barrier is down again after the cleanup');
+check(! LedgerBarrier::isLifted(), 'the barrier is down again after the cleanup');
 
 wipeIds('border_costs', 'border_crossing_id', $runCrossingIds);
 wipeIds('border_crossings', 'trip_id', $runTripIds);

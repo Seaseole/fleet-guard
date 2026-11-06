@@ -12,14 +12,14 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Releases the vehicle a trip was holding, by **trip id** (§10.2's `cancelled`, `aborted`, `on_hold`).
+ * Releases the vehicle a trip was holding, by **trip id** (the `cancelled`, `aborted`, `on_hold`).
  *
- * Operations knows a trip, not an assignment row, and §3.1 D5 says it may not import
+ * Operations knows a trip, not an assignment row, and D5 says it may not import
  * `VehicleAssignment` to find one. The trip reference Phase 2 wrote onto the assignment is exactly the
  * key this needs, so the lookup and the release both stay here.
  *
  * Zero open assignments is not an error: a trip cancelled before it was ever dispatched reserved
- * nothing, and §10.2's hold-and-release cycle may already have been run by hand. The Action therefore
+ * nothing, and the hold-and-release cycle may already have been run by hand. The Action therefore
  * returns how many rows it closed, which is what a screen prints and what `verify-operations.php`
  * asserts.
  */

@@ -29,12 +29,12 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
- * §10.5 / §6.8's `CreditNoteIssued`: the invoice was wrong, and this is the document that says so.
+ * / 'S `CreditNoteIssued`: the invoice was wrong, and this is the document that says so.
  *
  * The note is built **line by line** from the invoice's own lines, because a credit has to take revenue back
  * from the account and the leg it was credited to — a lump credit would land in `4900` and leave the freight
- * leg reading money it no longer earned (§6.1). VAT mirrors each line's stored rate, never today's, so a note
- * raised in March against a December invoice carries December's percentage (§5.5).
+ * leg reading money it no longer earned. VAT mirrors each line's stored rate, never today's, so a note
+ * raised in March against a December invoice carries December's percentage.
  *
  * Three refusals make the door safe:
  *
@@ -56,7 +56,7 @@ final class IssueCreditNote
     private const RECEIVABLE_ACCOUNT = '1150';
 
     /**
-     * §10.5's closed vocabulary. A free-text reason would make the register ungroupable, and the migration's
+     * The closed vocabulary. A free-text reason would make the register ungroupable, and the migration's
      * CHECK would refuse it anyway.
      *
      * @var list<string>
@@ -80,12 +80,12 @@ final class IssueCreditNote
     public function __invoke(Invoice $invoice, CreditNoteDto $dto, ?int $actorId = null): CreditNote
     {
         if (! Gate::allows('credit_notes.manage')) {
-            throw new InvalidArgumentException('Raising a credit note needs the credit_notes.manage ability (§9.3).');
+            throw new InvalidArgumentException('Raising a credit note needs the credit_notes.manage ability.');
         }
 
         if (! in_array($dto->reason, self::REASONS, true)) {
             throw new InvalidArgumentException(sprintf(
-                '"%s" is not one of §10.5\'s credit reasons (%s), so the note would not be groupable in the register.',
+                '"%s" is not one of the credit reasons (%s), so the note would not be groupable in the register.',
                 $dto->reason,
                 implode(', ', self::REASONS),
             ));
@@ -102,9 +102,23 @@ final class IssueCreditNote
             if ($locked->status !== InvoiceLifecycle::Issued) {
                 throw new InvalidArgumentException(sprintf(
                     'Invoice %s is %s. Only an issued invoice is corrected by a credit note — a void one is already '
-                    .'unposted, and a draft was never revenue (§10.5).',
+                    .'unposted, and a draft was never revenue.',
                     $locked->reference(),
                     mb_strtolower($locked->status->label()),
+                ));
+            }
+
+            $baseCurrency = CurrentCompany::model()->base_currency_code;
+
+            // A credit note and its ledger lines are base-currency only (see the identity block
+            // rule), so the document-currency figures a foreign invoice carries would be filed as
+            // if they were already converted.
+            if ($locked->currency_code !== $baseCurrency) {
+                throw new InvalidArgumentException(sprintf(
+                    'Invoice %s is billed in %s and a credit note here is posted in this book\'s %s only, so the correction would move the wrong amount. Void the invoice and re-issue it in the currency the customer was billed in.',
+                    $locked->reference(),
+                    $locked->currency_code,
+                    $baseCurrency,
                 ));
             }
 
@@ -126,7 +140,7 @@ final class IssueCreditNote
                 if (in_array($invoiceLineId, $alreadyCredited, true)) {
                     throw new InvalidArgumentException(sprintf(
                         'The line "%s" has already been credited. A second credit of one billed line would drive its '
-                        .'revenue negative (§10.5).',
+                        .'revenue negative.',
                         $line->description,
                     ));
                 }
@@ -159,7 +173,7 @@ final class IssueCreditNote
             if ($gross > $locked->balance_amount) {
                 throw new InvalidArgumentException(sprintf(
                     'The credit is %d and invoice %s still owes %d. A credit larger than the balance is a refund, '
-                    .'which is a cash decision (§15 phase 5), not a correction.',
+                    .'which is a cash decision, not a correction.',
                     $gross,
                     $locked->reference(),
                     $locked->balance_amount,
@@ -171,11 +185,10 @@ final class IssueCreditNote
             $outputVat = $accounts[self::OUTPUT_VAT_ACCOUNT] ?? null;
 
             if ($receivable === null || $outputVat === null) {
-                throw new InvalidArgumentException('Accounts 1150 and 2125 must both be in the chart for a credit note to post (§6.8).');
+                throw new InvalidArgumentException('Accounts 1150 and 2125 must both be in the chart for a credit note to post.');
             }
 
-            $baseCurrency = CurrentCompany::model()->base_currency_code;
-            $issuedOn = Carbon::now()->startOfDay();
+            $issuedOn = Carbon::now(CurrentCompany::timezone())->startOfDay();
             $number = $this->numbers->allocate('credit_note', $issuedOn, $actorId);
 
             $note = CreditNote::create([
@@ -205,7 +218,7 @@ final class IssueCreditNote
 
             $ledgerLines = [];
 
-            foreach (array_values($rows) as $index => $row) {
+            foreach ($rows as $index => $row) {
                 /** @var InvoiceLine $line */
                 $line = $row['line'];
                 /** @var TaxRate|null $rate */
@@ -236,7 +249,7 @@ final class IssueCreditNote
 
                 if ($account === null) {
                     throw new InvalidArgumentException(sprintf(
-                        'Account %s is not in the chart, so the credited revenue cannot be reversed (§6.8).',
+                        'Account %s is not in the chart, so the credited revenue cannot be reversed.',
                         $line->revenue_account_code,
                     ));
                 }

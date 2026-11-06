@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * `entered → exited` (§10.9): the truck is through, and the charges become claimable.
+ * `entered → exited`: the truck is through, and the charges become claimable.
  *
  * The exit cannot precede the entry — the CHECK on the table says so, and this Action says it in a
  * sentence first, because "the truck left at 09:00 and arrived at 07:00" is a data-entry mistake the
@@ -23,7 +23,7 @@ use InvalidArgumentException;
  * would be a vocabulary the border does not use.
  *
  * Nothing is posted from this edge. The costs post as they are captured, one journal entry each
- * (§6.6); `FinishBorderCosts` is what ends the crossing, and Phase 6's reconciliation reads the
+ *; `FinishBorderCosts` is what ends the crossing, and Phase 6's reconciliation reads the
  * `exited` moment to date the agent's float.
  */
 final class MarkCrossingExited
@@ -35,7 +35,7 @@ final class MarkCrossingExited
         ?CarbonInterface $at = null,
     ): BorderCrossing {
         if (! Gate::allows('crossborder.manage')) {
-            throw new InvalidArgumentException('Recording a gate exit is cross-border management (§9.3).');
+            throw new InvalidArgumentException('Recording a gate exit is cross-border management.');
         }
 
         if ($crossing->status !== BorderCrossingStatus::Entered) {

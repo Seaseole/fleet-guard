@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.1 JOB — the commercial promise the whole operational model starts from.
+     * JOB — the commercial promise the whole operational model starts from.
      *
      * The table is `freight_jobs`, not `jobs`: Laravel's database queue driver hardcodes a table
      * called `jobs` (`config/queue.php` connections.database, used since Phase 0), and the first
@@ -20,16 +20,16 @@ return new class extends Migration
      * the queue's worker table and the commercial register cannot be confused by a human reading SQL.
      *
      * A job is what the customer asked for (corridor, price, dates); a trip is the vehicle-and-driver
-     * execution of it (§4.1's first structural rule). Multi-leg work is several trips against the same
+     * execution of it (the first structural rule). Multi-leg work is several trips against the same
      * job, so there is no self-reference here and no `trip_id`.
      *
-     * Money keeps the three columns §4.1 gives a job — `quoted_amount`, `currency_code`, `base_amount`
-     * — and deliberately **not** the eight-column FX block of §5.2, whose verbatim table list names
+     * Money keeps the three columns the design gives a job — `quoted_amount`, `currency_code`, `base_amount`
+     * — and deliberately **not** the eight-column FX block of, whose verbatim table list names
      * invoices, bills, payments, trip_costs and the ledger but not jobs. A quote is an offer, not a
      * posting: the rate that converts it lives in `exchange_rates` for the date the quote was struck,
      * and the authoritative FX block is carried by the invoice that Phase 4 raises from it.
      *
-     * `status` holds only the states a person can set (§10.3). `all_trips_completed`, `ready_to_invoice`,
+     * `status` holds only the states a person can set. `all_trips_completed`, `ready_to_invoice`,
      * `invoiced` and `settled` are aggregates over the job's trips and invoices, so they are computed
      * ({@see JobProgress}) and no column can lie about them.
      */
@@ -65,7 +65,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['company_id', 'job_no'], 'freight_jobs_company_job_no_unique');
-            // §8's fail-closed rule, expressed in the engine: `trips` points at this table with a
+            // The fail-closed rule, expressed in the engine: `trips` points at this table with a
             // composite key, so a trip can only ever belong to the same company as its job. A bare
             // FK on `job_id` accepts a cross-tenant pair — the verification caught exactly that — and
             // an application filter is not a substitute for the row that names the money.
@@ -75,7 +75,7 @@ return new class extends Migration
             $table->index(['company_id', 'required_load_on'], 'freight_jobs_company_required_load_index');
         });
 
-        // §10.3's storable half of the machine. The four derived badges are absent by construction, so
+        // The storable half of the machine. The four derived badges are absent by construction, so
         // a hand-set `invoiced` is a schema error rather than an application convention.
         DB::statement('alter table `freight_jobs` add constraint `freight_jobs_status_allowed` check (status in (\'enquiry\', \'quoted\', \'accepted\', \'in_execution\', \'suspended\', \'declined\', \'cancelled\', \'closed\'))');
         DB::statement('alter table `freight_jobs` add constraint `freight_jobs_previous_state_allowed` check (previous_state is null or previous_state in (\'enquiry\', \'quoted\', \'accepted\', \'in_execution\', \'suspended\', \'declined\', \'cancelled\', \'closed\'))');
@@ -87,7 +87,7 @@ return new class extends Migration
         DB::statement('alter table `freight_jobs` add constraint `freight_jobs_quote_is_a_pair` check ((quoted_amount > 0 and currency_code is not null) or (quoted_amount = 0 and currency_code is null))');
         DB::statement('alter table `freight_jobs` add constraint `freight_jobs_base_agrees_with_quote` check ((base_amount > 0 and quoted_amount > 0) or (base_amount = 0 and quoted_amount = 0))');
 
-        // §4.1's delivery promise cannot precede the pickup promise.
+        // The delivery promise cannot precede the pickup promise.
         DB::statement('alter table `freight_jobs` add constraint `freight_jobs_dates_ordered` check (required_load_on is null or required_delivery_on is null or required_delivery_on >= required_load_on)');
     }
 

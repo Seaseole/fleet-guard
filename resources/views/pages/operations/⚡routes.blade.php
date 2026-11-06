@@ -29,22 +29,23 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /*
- * The route register and its rate cards (§3.2, §4.1).
+ * The route register and its rate cards.
  *
  * One screen for both, because a corridor with no price on it is a plan rather than an offering:
  * the register says where the fleet drives, the panel under it says what the fleet sells that lane
  * for, and a route row with no card says so out loud instead of looking finished.
  *
- * Reading is `routes.view`; writing a corridor or a price is `routes.manage` (§9.3 — Owner and
+ * Reading is `routes.view`; writing a corridor or a price is `routes.manage` (Owner and
  * Operations Manager). The **amount** on a card is additionally behind the `seeCustomerTerms` field
- * gate (§9.4: "customer credit terms and agreed rates"), so a Dispatcher can see that GBE-WDH is
+ * gate ("customer credit terms and agreed rates"), so a Dispatcher can see that GBE-WDH is
  * priced per tonne without learning what the company charges — the same seat that plans the trip.
  *
  * A rate is never overwritten to change history: a new price opens a new window and the old one is
  * closed with an end date. The in-place edit that exists here is for correcting a mis-keyed card
  * before Phase 2 can bill against it; the Action grows the stricter rule when trips arrive.
  */
-new #[Title('Routes')] class extends Component {
+new #[Title('Routes')] class extends Component
+{
     use WithPagination;
 
     #[Url]
@@ -135,6 +136,15 @@ new #[Title('Routes')] class extends Component {
         unset($this->selectedRoute, $this->rates);
     }
 
+    public function openCreate(): void
+    {
+        abort_unless(Gate::allows('routes.manage'), 403);
+
+        $this->clearRouteForm();
+
+        $this->dispatch('open-route-form');
+    }
+
     public function editRoute(int $id): void
     {
         $route = Route::query()->findOrFail($id);
@@ -152,6 +162,8 @@ new #[Title('Routes')] class extends Component {
         $this->distanceKm = (string) $route->distance_km;
         $this->notes = (string) $route->notes;
         $this->routeActive = $route->active;
+
+        $this->dispatch('open-route-form');
     }
 
     public function clearRouteForm(): void
@@ -215,6 +227,7 @@ new #[Title('Routes')] class extends Component {
 
         unset($this->routes, $this->selectedRoute, $this->rates);
 
+        $this->dispatch('close-route-form');
         $this->dispatch('toast', message: __('Route saved.'), kind: 'success');
     }
 
@@ -224,7 +237,7 @@ new #[Title('Routes')] class extends Component {
 
         abort_unless(Gate::allows('update', $rate), 403);
 
-        // §9.4 hides the amount, and a form that loaded it would publish exactly the number the
+        // Hides the amount, and a form that loaded it would publish exactly the number the
         // gate withholds — the Livewire snapshot is client-readable, like any other property.
         abort_unless($this->canSeeTerms(), 403);
 
@@ -237,6 +250,8 @@ new #[Title('Routes')] class extends Component {
         $this->rateCurrency = $rate->currency_code;
         $this->rateValidFrom = $rate->valid_from->toDateString();
         $this->rateValidTo = $rate->valid_to?->toDateString() ?? '';
+
+        $this->dispatch('open-rate-form');
     }
 
     public function clearRateForm(): void
@@ -250,6 +265,23 @@ new #[Title('Routes')] class extends Component {
         $this->rateValidFrom = $this->today()->toDateString();
 
         $this->resetValidation();
+    }
+
+    public function openRateForm(): void
+    {
+        abort_unless(Gate::allows('routes.manage'), 403);
+
+        // The panel only renders for a chosen corridor, so a price with nowhere to hang is a refusal,
+        // not a blank dialog.
+        if ($this->selectedRouteId === null) {
+            $this->addError('rateForm', __('Pick a corridor first — a rate card prices one lane.'));
+
+            return;
+        }
+
+        $this->clearRateForm();
+
+        $this->dispatch('open-rate-form');
     }
 
     public function saveRate(CreateRouteRate $create, UpdateRouteRate $update): void
@@ -308,6 +340,7 @@ new #[Title('Routes')] class extends Component {
         }
 
         $this->clearRateForm();
+        $this->dispatch('close-rate-form');
         unset($this->rates, $this->selectedRoute, $this->routes);
 
         $this->dispatch('toast', message: __('Rate saved.'), kind: 'success');
@@ -408,7 +441,7 @@ new #[Title('Routes')] class extends Component {
 }; ?>
 
 <div class="grid gap-6">
-    <header class="grid gap-1">
+    <header class="fg-page-header grid gap-1.5">
         <x-ui.heading size="xl" level="1">{{ __('Routes') }}</x-ui.heading>
         <x-ui.text>
             {{ __('The corridors the fleet runs and what each one sells for. A route names its endpoints and distance; a rate card records what one customer agreed to pay on one basis, over a window of dates.') }}
@@ -416,6 +449,16 @@ new #[Title('Routes')] class extends Component {
     </header>
 
     <x-ui.card :title="__('Route register')">
+        @can('routes.manage')
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <x-ui.text size="sm" color="muted">
+                    {{ __('A job names a corridor and a rate card prices it, so a lane with no card is a job nobody can quote.') }}
+                </x-ui.text>
+
+                <x-ui.button size="sm" variant="outline" wire:click="openCreate">{{ __('Add a corridor') }}</x-ui.button>
+            </div>
+        @endcan
+
         <div class="mb-4 grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]">
             <x-ui.input wire:model.live.debounce.400ms="search" name="search" :label="__('Search')" :hint="__('Code, origin or destination')" />
 
@@ -533,7 +576,15 @@ new #[Title('Routes')] class extends Component {
                     {{ __('Agreed prices for this corridor. A new price closes the old window and opens a new one, so a trip can always be traced to the card that priced it.') }}
                 </x-ui.text>
 
-                <x-ui.button variant="ghost" size="sm" wire:click="closeRates">{{ __('Close') }}</x-ui.button>
+                <div class="flex flex-wrap items-center gap-2">
+                    @can('routes.manage')
+                        @if ($this->canSeeTerms())
+                            <x-ui.button size="sm" variant="outline" wire:click="openRateForm">{{ __('Add a rate card') }}</x-ui.button>
+                        @endif
+                    @endcan
+
+                    <x-ui.button variant="ghost" size="sm" wire:click="closeRates">{{ __('Close') }}</x-ui.button>
+                </div>
             </div>
 
             <x-ui.table :caption="__('Rate cards')">
@@ -559,7 +610,7 @@ new #[Title('Routes')] class extends Component {
                             </x-ui.table.td>
                             <x-ui.table.td>{{ $rate->rate_type->label() }}</x-ui.table.td>
                             <x-ui.table.td numeric nowrap>
-                                <x-ui.gated gate="seeCustomerTerms" :label="__('the agreed rate')">
+                                <x-ui.gated :can="auth()->user()->can('seeCustomerTerms')" :label="__('the agreed rate')">
                                     {{ $rate->amount()->format($this->companyCurrency()) }}
                                     <span class="text-xs text-fg-ink-muted">{{ $rate->rate_type->unit() }}</span>
                                 </x-ui.gated>
@@ -587,7 +638,7 @@ new #[Title('Routes')] class extends Component {
                                 <x-ui.empty-state
                                     icon="banknotes"
                                     :title="__('No price on this corridor yet')"
-                                    :description="__('A route with no card cannot be quoted. Add the first customer price below.')"
+                                    :description="__('A route with no card cannot be quoted. Add the first customer price.')"
                                 />
                             </td>
                         </tr>
@@ -596,85 +647,22 @@ new #[Title('Routes')] class extends Component {
             </x-ui.table>
 
             @can('routes.manage')
-                @if ($this->canSeeTerms())
-                <form class="mt-6 grid gap-4 border-t border-fg-line pt-6" wire:submit="saveRate">
-                    <x-ui.heading size="xs" level="3">{{ $rateEditingId === null ? __('Add a rate card') : __('Edit rate card') }}</x-ui.heading>
-
-                    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                        <div class="grid gap-1.5">
-                            <label for="rate-customer" class="text-xs font-medium text-fg-ink-secondary">{{ __('Customer') }}</label>
-
-                            <x-ui.select name="rateCustomerId" id="rate-customer" wire:model="rateCustomerId">
-                                <option value="">{{ __('Choose a customer') }}</option>
-
-                                @foreach ($this->customersForRates as $customer)
-                                    <option value="{{ $customer->id }}">{{ $customer->label() }}</option>
-                                @endforeach
-                            </x-ui.select>
-
-                        </div>
-
-                        <div class="grid gap-1.5">
-                            <label for="rate-basis" class="text-xs font-medium text-fg-ink-secondary">{{ __('Basis') }}</label>
-
-                            <x-ui.select name="rateType" id="rate-basis" wire:model="rateType">
-                                @foreach ($this->rateTypes() as $option)
-                                    <option value="{{ $option->value }}">{{ $option->label() }}</option>
-                                @endforeach
-                            </x-ui.select>
-
-                        </div>
-
-                        <div class="grid gap-1.5">
-                            <label for="rate-currency" class="text-xs font-medium text-fg-ink-secondary">{{ __('Currency') }}</label>
-
-                            <x-ui.select name="rateCurrency" id="rate-currency" wire:model="rateCurrency">
-                                @foreach ($this->currencies() as $currency)
-                                    <option value="{{ $currency->code }}">{{ $currency->code }} — {{ $currency->name }}</option>
-                                @endforeach
-                            </x-ui.select>
-
-                        </div>
-
-                        <x-ui.input
-                            wire:model="rateAmount"
-                            name="rateAmount"
-                            numeric
-                            :label="__('Amount')"
-                            :hint="__('In the currency chosen; the agreed figure, not converted to pula.')"
-                        />
-
-                        <x-ui.input wire:model="rateValidFrom" name="rateValidFrom" type="date" :label="__('Valid from')" required />
-                        <x-ui.input wire:model="rateValidTo" name="rateValidTo" type="date" :label="__('Valid to (optional)')" :hint="__('Leave open until a replacement price closes it.')" />
-                    </div>
-
-                    @error('rateForm')
-                        <p class="text-xs text-danger" role="alert">{{ $message }}</p>
-                    @enderror
-
-                    <div class="flex items-center gap-3">
-                        {{-- Outline: the rate card is a price attached to a corridor, so the filled action of
-                             this page stays with the route form below it (§5, one per view). --}}
-                        <x-ui.button variant="outline" type="submit">{{ $rateEditingId === null ? __('Save rate') : __('Update rate') }}</x-ui.button>
-
-                        @if ($rateEditingId !== null)
-                            <x-ui.button variant="ghost" type="button" wire:click="clearRateForm">{{ __('Cancel') }}</x-ui.button>
-                        @endif
-                    </div>
-                </form>
-                @else
+                @unless ($this->canSeeTerms())
                     <x-ui.alert class="mt-6" :title="__('Prices are hidden for your role')">
                         {{ __('You can read this corridor and its cards, but filing a price also needs the customer-terms capability — the amount is the customer’s commercial detail. Ask the Owner or Operations Manager to add or correct a card.') }}
                     </x-ui.alert>
-                @endif
+                @endunless
             @endcan
         </x-ui.card>
     @endif
 
+    {{-- The corridor form as a dialog over the register, and the rate card as a dialog over the
+         panel that opened it. Both hold a draft only while open: closing discards it, so the next
+         corridor or price starts clean rather than carrying the last row's values. --}}
     @can('routes.manage')
-        <x-ui.card :title="$routeEditingId === null ? __('Add a corridor') : __('Edit corridor')">
-            <form class="grid gap-4" wire:submit="saveRoute">
-                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <x-ui.dialog name="route-form" maxWidth="2xl" :title="$routeEditingId === null ? __('Add a corridor') : __('Edit corridor')" x-on:dialog-closed="$wire.call('clearRouteForm')">
+            <form class="grid gap-4 p-5" wire:submit="saveRoute">
+                <div class="grid gap-4 sm:grid-cols-2">
                     <x-ui.input wire:model="code" name="code" :label="__('Code')" :hint="__('What dispatch says out loud, e.g. GBE-WDH.')" required />
                     <x-ui.input wire:model="origin" name="origin" :label="__('Origin')" required />
                     <x-ui.input wire:model="destination" name="destination" :label="__('Destination')" required />
@@ -732,11 +720,77 @@ new #[Title('Routes')] class extends Component {
                 <div class="flex items-center gap-3">
                     <x-ui.button type="submit">{{ $routeEditingId === null ? __('Save route') : __('Update route') }}</x-ui.button>
 
-                    @if ($routeEditingId !== null)
-                        <x-ui.button variant="ghost" type="button" wire:click="clearRouteForm">{{ __('Cancel') }}</x-ui.button>
-                    @endif
+                    <x-ui.button variant="ghost" type="button" x-on:click="$dispatch('close-route-form')">{{ __('Cancel') }}</x-ui.button>
                 </div>
             </form>
-        </x-ui.card>
+        </x-ui.dialog>
+
+        @if ($this->selectedRoute !== null && $this->canSeeTerms())
+            <x-ui.dialog name="rate-form" maxWidth="2xl" :title="$rateEditingId === null ? __('Add a rate card') : __('Edit rate card')" x-on:dialog-closed="$wire.call('clearRateForm')">
+                <form class="grid gap-4 p-5" wire:submit="saveRate">
+                    <x-ui.text size="sm" color="muted">
+                        {{ __('Pricing :route.', ['route' => $this->selectedRoute->label()]) }}
+                    </x-ui.text>
+
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <div class="grid gap-1.5">
+                            <label for="rate-customer" class="text-xs font-medium text-fg-ink-secondary">{{ __('Customer') }}</label>
+
+                            <x-ui.select name="rateCustomerId" id="rate-customer" wire:model="rateCustomerId">
+                                <option value="">{{ __('Choose a customer') }}</option>
+
+                                @foreach ($this->customersForRates as $customer)
+                                    <option value="{{ $customer->id }}">{{ $customer->label() }}</option>
+                                @endforeach
+                            </x-ui.select>
+
+                        </div>
+
+                        <div class="grid gap-1.5">
+                            <label for="rate-basis" class="text-xs font-medium text-fg-ink-secondary">{{ __('Basis') }}</label>
+
+                            <x-ui.select name="rateType" id="rate-basis" wire:model="rateType">
+                                @foreach ($this->rateTypes() as $option)
+                                    <option value="{{ $option->value }}">{{ $option->label() }}</option>
+                                @endforeach
+                            </x-ui.select>
+
+                        </div>
+
+                        <div class="grid gap-1.5">
+                            <label for="rate-currency" class="text-xs font-medium text-fg-ink-secondary">{{ __('Currency') }}</label>
+
+                            <x-ui.select name="rateCurrency" id="rate-currency" wire:model="rateCurrency">
+                                @foreach ($this->currencies() as $currency)
+                                    <option value="{{ $currency->code }}">{{ $currency->code }} — {{ $currency->name }}</option>
+                                @endforeach
+                            </x-ui.select>
+
+                        </div>
+
+                        <x-ui.input
+                            wire:model="rateAmount"
+                            name="rateAmount"
+                            numeric
+                            :label="__('Amount')"
+                            :hint="__('In the currency chosen; the agreed figure, not converted to pula.')"
+                        />
+
+                        <x-ui.input wire:model="rateValidFrom" name="rateValidFrom" type="date" :label="__('Valid from')" required />
+                        <x-ui.input wire:model="rateValidTo" name="rateValidTo" type="date" :label="__('Valid to (optional)')" :hint="__('Leave open until a replacement price closes it.')" />
+                    </div>
+
+                    @error('rateForm')
+                        <p class="text-xs text-danger" role="alert">{{ $message }}</p>
+                    @enderror
+
+                    <div class="flex items-center gap-3">
+                        <x-ui.button type="submit">{{ $rateEditingId === null ? __('Save rate') : __('Update rate') }}</x-ui.button>
+
+                        <x-ui.button variant="ghost" type="button" x-on:click="$dispatch('close-rate-form')">{{ __('Cancel') }}</x-ui.button>
+                    </div>
+                </form>
+            </x-ui.dialog>
+        @endif
     @endcan
 </div>

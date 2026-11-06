@@ -1,5 +1,5 @@
 {{--
-    The textarea field. DESIGN-SYSTEM.md §5 declares input, textarea and select one contract —
+    The textarea field. DESIGN-SYSTEM.md the design declares input, textarea and select one contract —
     `label`/`name`/`hint`/`error`, the `for`-`id` pairing derived from `name`, and the error
     replacing the hint in the same `aria-describedby` slot — but only input and select were built,
     which is why the kiosk's exceptions field hand-rolled its own with no `aria-invalid` and no
@@ -36,7 +36,7 @@
         @if($message) aria-invalid="true" @endif
         @if($describedBy !== '') aria-describedby="{{ $describedBy }}" @endif
         {{ $attributes->except(['id', 'name', 'rows', 'aria-describedby'])->class([
-            'w-full rounded-fg-md border bg-fg-surface px-3 py-2 text-sm text-fg-ink shadow-fg-1 placeholder:text-fg-ink-muted transition duration-(--t-fast) ease-(--ease-standard) disabled:cursor-not-allowed disabled:opacity-60',
+            'w-full rounded-fg-md border bg-fg-surface px-3 py-2 text-sm touch:text-base text-fg-ink shadow-fg-1 placeholder:text-fg-ink-muted transition duration-(--t-fast) ease-(--ease-standard) disabled:cursor-not-allowed disabled:opacity-60',
             'border-danger' => $message,
             'border-input hover:border-fg-ink-muted' => ! $message,
         ]) }}

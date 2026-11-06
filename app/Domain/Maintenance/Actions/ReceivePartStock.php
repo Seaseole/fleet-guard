@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * A purchase arriving on the stores shelf (§15.2 phase 3, slice 3e).
+ * A purchase arriving on the stores shelf (phase 3, slice 3e).
  *
  * The shelf is an asset the moment the parts are put away, so the receipt posts
  * `Dr 1190 Parts stock / Cr 2110 Supplier payable` in the same transaction that records the movement.
@@ -28,7 +28,7 @@ use InvalidArgumentException;
  * the bill, it only stops the stock account from being a number nobody funded.
  *
  * The receipt is valued in the company's base currency. A part bought in ZAR needs the invoice's rate
- * and belongs on the supplier bill, which carries it (§5.2); accepting a foreign figure here would
+ * and belongs on the supplier bill, which carries it; accepting a foreign figure here would
  * have to invent a rate, and an invented rate is a ledger entry that disagrees with the document.
  *
  * The row is locked while the receipt is applied: two people receiving the same delivery at once
@@ -50,7 +50,7 @@ final class ReceivePartStock
         ?int $actorId = null,
     ): StockMovement {
         if (! Gate::allows('parts.adjust')) {
-            throw new InvalidArgumentException('Receiving stock adjusts the stores book, which this seat may not do (§9.3).');
+            throw new InvalidArgumentException('Receiving stock adjusts the stores book, which this seat may not do.');
         }
 
         if ($quantityX100 <= 0) {
@@ -61,7 +61,7 @@ final class ReceivePartStock
 
         if ($unitCost->currencyCode !== $base) {
             throw new InvalidArgumentException(sprintf(
-                'Stock is valued in %s. A part bought in %s arrives with the supplier bill, which carries its §5.2 rate (Phase 5).',
+                'Stock is valued in %s. A part bought in %s arrives with the supplier bill, which carries its rate (Phase 5).',
                 $base,
                 $unitCost->currencyCode,
             ));
@@ -107,8 +107,8 @@ final class ReceivePartStock
         ?int $actorId,
     ): void {
         $accounts = $this->chart->byCode();
-        $stock = $accounts['1190'] ?? throw new InvalidArgumentException('Account 1190 Parts stock is not in this company\'s chart. Seed the chart first (§6.2).');
-        $payable = $accounts['2110'] ?? throw new InvalidArgumentException('Account 2110 Accounts payable is not in this company\'s chart. Seed the chart first (§6.2).');
+        $stock = $accounts['1190']?? throw new InvalidArgumentException('Account 1190 Parts stock is not in this company\'s chart. Seed the chart first.');
+        $payable = $accounts['2110']?? throw new InvalidArgumentException('Account 2110 Accounts payable is not in this company\'s chart. Seed the chart first.');
 
         $amount = Money::ofMinor($value, $base);
 

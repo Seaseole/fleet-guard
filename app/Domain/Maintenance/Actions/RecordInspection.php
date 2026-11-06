@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * Writes one inspection to the register (§4.3 INSPECTION).
+ * Writes one inspection to the register (INSPECTION).
  *
  * The DTO has already answered the questions the JSON cannot (every item answered, the verdict agrees
  * with the answers); this Action proves the row's relationships: the truck, the trip, the work order
@@ -31,7 +31,7 @@ final class RecordInspection
     public function __invoke(InspectionDto $dto): Inspection
     {
         if (! Gate::allows('inspections.record')) {
-            throw new InvalidArgumentException('Recording an inspection is a workshop act (§9.3).');
+            throw new InvalidArgumentException('Recording an inspection is a workshop act.');
         }
 
         return DB::transaction(function () use ($dto): Inspection {

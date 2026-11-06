@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * §10.6's `completed → inspected`: the safety-critical work has had its second pair of eyes.
+ * The `completed → inspected`: the safety-critical work has had its second pair of eyes.
  *
  * A person rather than an automatic step, because the check being evidencable is the point — "the
  * brakes were signed off before the truck left" is a sentence someone has to be able to say. The
@@ -23,7 +23,7 @@ final class InspectWorkOrder
     public function __invoke(WorkOrder $workOrder, ?int $actorId = null): WorkOrder
     {
         if (! Gate::allows('work_orders.create')) {
-            throw new InvalidArgumentException('Inspecting a job is a workshop act (§9.3).');
+            throw new InvalidArgumentException('Inspecting a job is a workshop act.');
         }
 
         return DB::transaction(function () use ($workOrder, $actorId): WorkOrder {
@@ -32,7 +32,7 @@ final class InspectWorkOrder
 
             if ($locked->status !== WorkOrderStatus::Completed) {
                 throw new InvalidArgumentException(sprintf(
-                    '%s is %s. Inspection follows the release of the vehicle (§10.6).',
+                    '%s is %s. Inspection follows the release of the vehicle.',
                     $locked->wo_no,
                     strtolower($locked->status->label()),
                 ));

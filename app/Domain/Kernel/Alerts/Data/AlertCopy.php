@@ -19,7 +19,7 @@ use App\Domain\Kernel\Alerts\Models\Alert;
  * So the delivery carries words and ids, exactly like {@see ReminderCandidate}. It is also the better
  * answer for the reader: a mail that re-reads the alert on delivery would say whatever the register says
  * *now*, and a copy that says "this said the licence was 14 days out when we sent it" is the honest
- * artefact — §14.1's notifications are deliveries of an alert, not live views of one.
+ * artefact — the notifications are deliveries of an alert, not live views of one.
  */
 final readonly class AlertCopy
 {

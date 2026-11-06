@@ -6,7 +6,7 @@ declare(strict_types=1);
  * Phase 2 slice 2d — the kiosk and the office's half of the proof, through the real HTTP/Livewire stack.
  *
  * `verify-kiosk.php` proves the gate: hashes, refusals, the state machine, tenancy. What it cannot prove is
- * the thing §9.6 is actually about — that the string a dispatcher copies off the trip screen **opens the
+ * the thing the design is actually about — that the string a dispatcher copies off the trip screen **opens the
  * driver's page**, with the fields the driver will be asked for on it, and that what comes back is what the
  * office sees when it decides. A capture Action that is correct in a script and a link that 404s on a
  * phone is a delivery nobody can evidence.
@@ -17,7 +17,7 @@ declare(strict_types=1);
  * no POD form, and each narrow link landing on the other door is told so instead of being handed a form
  * it cannot save.
  *
- * Not a test suite: `tests/` stays out of the repository (§14.6). Fixtures live in the `RKO` namespace on
+ * Not a test suite: `tests/` stays out of the repository. Fixtures live in the `RKO` namespace on
  * the development database; everything created is removed and then asserted removed, including the two
  * operational counters, which `documents:number-integrity` compares against the surviving rows.
  *
@@ -139,7 +139,7 @@ final class KioskRenderSweep extends TestCase
         $driverA = $crewA[2];
         $driverB = $crewB[2];
 
-        echo "== §9.6 the link is the door, and it opens without a login ==\n";
+        echo "== the link is the door, and it opens without a login ==\n";
 
         $issue = app(IssueTripAccessToken::class);
         $direct = $issue($tripA, (int) $driverA->id, ['pod'], (int) $owner->id);
@@ -191,7 +191,7 @@ final class KioskRenderSweep extends TestCase
             $this->kioskGet('/kiosk/'.$this->ownerCompany.'/'.$directSecret)->assertNotFound();
         });
 
-        echo "\n== §9.6 the panel issues the link, and prints it once ==\n";
+        echo "\n== the panel issues the link, and prints it once ==\n";
 
         /** @var array{url: string, pin: string, expires_at: string|null} $reveal */
         $reveal = [];
@@ -266,7 +266,7 @@ final class KioskRenderSweep extends TestCase
             }
         });
 
-        echo "\n== §15.2 3g the fuel link opens the fuel screen, and only that screen ==\n";
+        echo "\n== 3g the fuel link opens the fuel screen, and only that screen ==\n";
 
         $this->attempt('a fuel link opens the driver\'s fuel screen with the pump\'s fields', function () use ($fuelLink, $tripC): void {
             $html = (string) $this->kioskGet('/kiosk/'.$this->ownerCompany.'/'.$fuelLink['secret'].'/fuel')->assertOk()->getContent();
@@ -384,7 +384,7 @@ final class KioskRenderSweep extends TestCase
             }
         });
 
-        echo "\n== §10.2 the office decides on what came back ==\n";
+        echo "\n== the office decides on what came back ==\n";
 
         $tokenA = TripAccessToken::query()
             ->where('trip_id', $tripA->id)
@@ -486,7 +486,7 @@ final class KioskRenderSweep extends TestCase
             }
 
             if ($tripB->fresh()->status !== TripStatus::PodPending) {
-                throw new Exception('rejection moved the trip; §10.2 says the delivery stays unproven, not unmade');
+                throw new Exception('rejection moved the trip; The design says the delivery stays unproven, not unmade');
             }
 
             if (! str_contains($html, 'rejected') || ! str_contains($html, 'one pallet wet')) {

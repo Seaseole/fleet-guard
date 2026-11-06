@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * `exited → costs_captured` (§10.9): the clerk says the gate is done being charged.
+ * `exited → costs_captured`: the clerk says the gate is done being charged.
  *
  * The edge is a person's claim, not a derived fact, which is why it exists at all: a crossing whose
  * costs are still arriving must stay open, and a crossing where nothing was paid needs the same
@@ -28,7 +28,7 @@ final class FinishBorderCosts
     public function __invoke(BorderCrossing $crossing, ?int $actorId = null): BorderCrossing
     {
         if (! Gate::allows('crossborder.manage')) {
-            throw new InvalidArgumentException('Finishing a crossing\'s costs is cross-border management (§9.3).');
+            throw new InvalidArgumentException('Finishing a crossing\'s costs is cross-border management.');
         }
 
         if ($crossing->status !== BorderCrossingStatus::Exited) {

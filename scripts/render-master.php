@@ -6,11 +6,11 @@ declare(strict_types=1);
  * Phase 1's master-data screens, rendered and driven through the real HTTP/Livewire stack.
  *
  * `verify-master.php` proves the domain and the schema; this file proves the part no gate can see
- * (§20.8's three defects were all invisible to `Gate::forUser()` and `Route::has()`): the component
+ * (the three defects were all invisible to `Gate::forUser()` and `Route::has()`): the component
  * compiles, the masked value is what the HTML prints, the dispatcher's field gates blank the
  * amounts, and a refused assignment surfaces as an error beside the button rather than a 500.
  *
- * Not a test suite: tests/ stays out of the repository (§14.6). It writes to the development
+ * Not a test suite: tests/ stays out of the repository. It writes to the development
  * database inside the `RD-` / `EMP-RD*` fixture namespace and removes everything it created.
  *
  * Run: php scripts/render-master.php
@@ -19,10 +19,13 @@ declare(strict_types=1);
 require __DIR__.'/../vendor/autoload.php';
 
 use App\Domain\Fleet\Actions\CreateTruck;
+use App\Domain\Fleet\Actions\RecordOdometerReading;
+use App\Domain\Fleet\Data\OdometerReadingDto;
 use App\Domain\Fleet\Data\TruckDto;
 use App\Domain\Fleet\Models\Truck;
 use App\Domain\Kernel\Identity\EnsureMultiFactorAuthentication;
 use App\Domain\Kernel\Identity\RoleKey;
+use App\Domain\Kernel\Settings\CompanySettings;
 use App\Domain\Kernel\Tenancy\CurrentCompany;
 use App\Domain\People\Actions\CreateDriver;
 use App\Domain\People\Actions\CreateEmployee;
@@ -125,14 +128,37 @@ final class MasterRenderSweep extends TestCase
             allowanceRateBase: 30_000,
         ));
 
-        echo "\nThe registers render for the roles §9.3 says may see them\n";
+        // The third band the register can answer, placed against the company's own warning window
+        // rather than a number this file likes: a fixture that is only "expiring soon" while the knob
+        // sits at its default proves the seed, not the screen.
+        $window = max(1, (int) app(CompanySettings::class)->get('documents.expiry_warning_days'));
+        $soonDays = min(14, $window);
+
+        $windowEmployee = (app(CreateEmployee::class))(new EmployeeDto(
+            employeeNo: 'EMP-RD003',
+            name: 'Render Window Driver',
+            hiredOn: '2025-01-15',
+        ));
+        $this->employeeIds[] = $windowEmployee->id;
+
+        // One row for the two remaining paper questions at once: a licence inside the window, and a
+        // permit with no date on file at all — the state the `missing` band exists to find.
+        (app(CreateDriver::class))(new DriverDto(
+            employeeId: $windowEmployee->id,
+            licenceNo: 'DL-RD0003',
+            licenceCode: 'EC',
+            licenceExpiresOn: Carbon::now()->addDays($soonDays)->toDateString(),
+            allowanceRateBase: 30_000,
+        ));
+
+        echo "\nThe registers render for the roles the design says may see them\n";
         $this->pageContains($owner, '/fleet', 'B 988 RD', 'the fleet register lists the fixture truck');
         $this->pageContains($dispatcher, '/fleet', 'B 988 RD', 'a dispatcher may open the fleet register');
         $this->pageContains($owner, "/fleet/trucks/{$truck->id}", 'B 988 RD', 'the vehicle detail page renders its timeline');
         $this->pageContains($owner, '/people', 'Render Fixture Driver', 'the people register lists the fixture driver');
         $this->pageContains($clerk, '/parts', 'Filters', 'the stores clerk may open the parts register');
 
-        echo "\n§9.5 what the HTML prints is never the secret\n";
+        echo "\n what the HTML prints is never the secret\n";
         $this->attempt('the people register leaks no plaintext, and the drivers tab prints the mask', function () use ($owner, $validDriver): void {
             $html = (string) Livewire::actingAs($owner)
                 ->test('pages::people.index')
@@ -154,7 +180,98 @@ final class MasterRenderSweep extends TestCase
             }
         });
 
-        echo "\n§9.5 the field gates blank what the role may not read\n";
+        echo "\n the drivers tab reads the papers the way dispatch and the alert ladder read them\n";
+
+        $this->attempt('a lapsed licence prints its state, and the row takes the worse of its two papers', function () use ($owner): void {
+            $row = $this->rowFor($this->driversHtml($owner, ''), 'Render Lapsed Driver');
+
+            if ($row === null) {
+                throw new Exception('the lapsed driver is missing from the unfiltered drivers page');
+            }
+
+            if (! str_contains($row, 'border-l-2 border-danger')) {
+                throw new Exception('the row whose licence lapsed did not take the danger edge');
+            }
+
+            if (! str_contains($row, 'Expired') || ! str_contains($row, 'days ago')) {
+                throw new Exception('the lapsed licence printed no state word or no distance: '.$row);
+            }
+        });
+
+        $this->attempt('a paper inside the company’s window prints the warning band with its days, and a date nobody recorded says so', function () use ($owner, $soonDays): void {
+            $row = $this->rowFor($this->driversHtml($owner, ''), 'Render Window Driver');
+
+            if ($row === null) {
+                throw new Exception('the window driver is missing from the unfiltered drivers page');
+            }
+
+            if (! str_contains($row, 'border-l-2 border-warning')) {
+                throw new Exception('the row inside the window did not take the warning edge: '.$row);
+            }
+
+            if (! str_contains($row, 'Expiring soon') || ! str_contains($row, 'in '.$soonDays.' days')) {
+                throw new Exception('the window printed neither its state nor its distance: '.$row);
+            }
+
+            if (! str_contains($row, 'none on file')) {
+                throw new Exception('the missing permit rendered as if it had a date');
+            }
+        });
+
+        $this->attempt('a current paper prints the date alone — no badge, because a window nobody is inside has nothing to say', function () use ($owner): void {
+            $row = $this->rowFor($this->driversHtml($owner, ''), 'Render Fixture Driver');
+
+            if ($row === null) {
+                throw new Exception('the current driver is missing from the unfiltered drivers page');
+            }
+
+            if (str_contains($row, 'Expiring soon') || str_contains($row, 'Expired')) {
+                throw new Exception('a six-month paper was printed as a problem — check the company’s warning window');
+            }
+
+            if (! str_contains($row, 'border-l-2 border-transparent')) {
+                throw new Exception('a cleared driver’s row still carries a coloured edge');
+            }
+        });
+
+        $this->attempt('the Papers filter returns the band it names, and counts the rows it will leave', function () use ($owner): void {
+            // The option labels are read from the unfiltered page and the totals from the filtered one, so
+            // this is the screen's own claim — "Expiring soon (3)" meaning three rows appear — tested as
+            // markup rather than as a method call nobody renders.
+            $base = $this->driversHtml($owner, '');
+
+            $bands = [
+                'soon' => ['label' => 'Expiring soon', 'present' => 'Render Window Driver', 'absent' => 'Render Fixture Driver'],
+                'expired' => ['label' => 'Already lapsed', 'present' => 'Render Lapsed Driver', 'absent' => 'Render Fixture Driver'],
+                'missing' => ['label' => 'No date on file', 'present' => 'Render Window Driver', 'absent' => 'Render Fixture Driver'],
+            ];
+
+            foreach ($bands as $band => $expect) {
+                if (preg_match('/'.preg_quote($expect['label'], '/').' \((\d+)\)/', $base, $counted) !== 1) {
+                    throw new Exception('the '.$expect['label'].' option printed no count');
+                }
+
+                $html = $this->driversHtml($owner, $band);
+
+                if (! $this->hasRow($html, $expect['present'])) {
+                    throw new Exception($band.' lost '.$expect['present']);
+                }
+
+                if ($this->hasRow($html, $expect['absent'])) {
+                    throw new Exception($band.' kept '.$expect['absent'].' — a driver with two current papers is in no problem band');
+                }
+
+                if (preg_match('/of (\d+) drivers\./', $html, $total) !== 1) {
+                    throw new Exception('the filtered page printed no total for '.$band);
+                }
+
+                if ((int) $counted[1] !== (int) $total[1]) {
+                    throw new Exception($expect['label'].' promises '.$counted[1].' and returns '.$total[1]);
+                }
+            }
+        });
+
+        echo "\n the field gates blank what the role may not read\n";
         $this->attempt('a dispatcher sees no purchase amount on the fleet register', function () use ($dispatcher): void {
             $html = $this->actingAs($dispatcher, 'web')->get('/fleet')->getContent();
 
@@ -189,12 +306,18 @@ final class MasterRenderSweep extends TestCase
             }
         });
 
-        $this->attempt('the readings table says how far the truck went between measurements (§20.37)', function () use ($owner, $truck): void {
-            Livewire::actingAs($owner)
-                ->test('pages::fleet.vehicle', ['truck' => $truck])
-                ->set('odometerKm', '41900')
-                ->call('recordOdometer')
-                ->assertHasNoErrors();
+        $this->attempt('the readings table says how far the truck went between measurements', function () use ($owner, $truck): void {
+            // Written through the door rather than the form above: the column is what this checks, and a
+            // broken form somewhere else in the run must not be able to make it look broken.
+            $record = app(RecordOdometerReading::class);
+
+            foreach ([41_250, 41_900] as $index => $km) {
+                $record(new OdometerReadingDto(
+                    truckId: (int) $truck->id,
+                    odometerKm: $km,
+                    readOn: Carbon::now()->subDays(10 - $index)->toDateString(),
+                ));
+            }
 
             $html = Livewire::actingAs($owner)
                 ->test('pages::fleet.vehicle', ['truck' => $truck])
@@ -204,11 +327,50 @@ final class MasterRenderSweep extends TestCase
                 throw new Exception('the readings table has no Travelled column');
             }
 
-            // 41,900 less the 41,250 before it. The suspect 30,000 row reports no distance at all:
-            // a figure invented out of a measurement the truck contradicts would sit in the same row
-            // as a real one.
+            // 41,900 less the 41,250 before it — the leg, not the total from the truck's first number.
             if (! str_contains($html, '650 km')) {
                 throw new Exception('the reading after 41,250 km did not report 650 km travelled');
+            }
+        });
+
+        $this->attempt('the assignment card puts the band on the option and the reason beside the name', function () use ($owner, $truck, $lapsedDriver): void {
+            $option = $this->driverOption($this->assignmentCard($owner, $truck), $lapsedDriver->id);
+
+            if (! str_contains($option, 'text-danger')) {
+                throw new Exception('a lapsed licence did not put danger on the option: '.$option);
+            }
+
+            if (! str_contains($option, 'licence Expired')) {
+                throw new Exception('the option carries a colour and no reason: '.$option);
+            }
+
+            // The same driver read against a day three months on: the permit that covers today has lapsed
+            // by then. The card answers for the handover day, which is why the tone is derived here at all.
+            $later = $this->driverOption($this->assignmentCard($owner, $truck, Carbon::now('Africa/Gaborone')->addDays(90)->format('Y-m-d\TH:i')), $lapsedDriver->id);
+
+            if (! str_contains($later, 'PRDP permit Expired')) {
+                throw new Exception('the permit that lapses before that day was not named on the option: '.$later);
+            }
+        });
+
+        $this->attempt('the chosen driver\'s papers stay on the page after the list closes', function () use ($owner, $truck, $lapsedDriver, $validDriver): void {
+            $picked = $this->assignmentCard($owner, $truck, '', (string) $lapsedDriver->id);
+
+            if (! str_contains($picked, 'role="status"') || ! str_contains($picked, 'days ago')) {
+                throw new Exception('choosing a lapsed driver printed no standing line under the select'
+                    .(str_contains($picked, 'id="assignment-driver"') ? '' : ' — the card printed no driver select at all'));
+            }
+
+            if (! str_contains($picked, 'bg-danger-soft')) {
+                throw new Exception('the standing line printed no danger badge');
+            }
+
+            // Silence is the other half of the feature: a driver whose papers cover the day is not a
+            // problem, and a green badge on every row is what makes the two tones unreadable.
+            $clean = $this->assignmentCard($owner, $truck, '', (string) $validDriver->id);
+
+            if (str_contains($clean, 'role="status"')) {
+                throw new Exception('a driver whose papers cover the handover day was still printed as a problem');
             }
         });
 
@@ -324,7 +486,7 @@ final class MasterRenderSweep extends TestCase
             $this->pageContains($dispatcher, '/customers', 'Render Fixture Customer', 'a dispatcher may still read the customer register');
         });
 
-        echo "\n§4.3 the document register links a paper to a subject\n";
+        echo "\n the document register links a paper to a subject\n";
         $this->pageContains($owner, "/documents?subject_type=truck&subject_id={$truck->id}", 'Documents', 'the truck-filtered register renders without error');
         $this->pageContains($owner, "/documents?subject_type=driver&subject_id={$validDriver->id}", 'Documents', '...and the driver-filtered one');
 
@@ -386,6 +548,92 @@ final class MasterRenderSweep extends TestCase
         $fresh = $user->fresh();
 
         return $fresh;
+    }
+
+    /**
+     * The drivers table's rows, as markup.
+     *
+     * The body and nothing else: the employee select in the editor under the table also prints names, so
+     * a check that read the whole document could be answered by a form field instead of by a row.
+     */
+    private function driverRows(string $html): string
+    {
+        $start = strpos($html, 'wire:key="driver-');
+
+        if ($start === false) {
+            return '';
+        }
+
+        $end = strpos($html, '</tbody>', $start);
+
+        return $end === false ? substr($html, $start) : substr($html, $start, $end - $start);
+    }
+
+    /** Whether the rendered drivers table has a row for this driver at all. */
+    private function hasRow(string $html, string $name): bool
+    {
+        return str_contains($this->driverRows($html), $name);
+    }
+
+    /** The row that names this driver, or null when the rendered table has no row for them. */
+    private function rowFor(string $html, string $name): ?string
+    {
+        $rows = $this->driverRows($html);
+        $at = strpos($rows, $name);
+
+        if ($at === false) {
+            return null;
+        }
+
+        $start = strrpos(substr($rows, 0, $at), '<tr');
+        $end = strpos($rows, '</tr>', $at);
+
+        if ($start === false || $end === false) {
+            throw new Exception('the rendered rows are not separable at '.$name);
+        }
+
+        return substr($rows, $start, $end - $start);
+    }
+
+    /** The drivers tab as rendered, with the Papers filter set to this band — '' for the whole register. */
+    private function driversHtml(User $user, string $band): string
+    {
+        return (string) Livewire::actingAs($user)
+            ->test('pages::people.index')
+            ->set('tab', 'drivers')
+            ->set('papersFilter', $band)
+            ->html();
+    }
+
+    /** The assignment card as rendered, with the handover day and the chosen driver set. */
+    private function assignmentCard(User $user, Truck $truck, string $fromAt = '', string $driverId = ''): string
+    {
+        $card = Livewire::actingAs($user)->test('pages::fleet.vehicle', ['truck' => $truck]);
+
+        if ($fromAt !== '') {
+            $card->set('fromAt', $fromAt);
+        }
+
+        if ($driverId !== '') {
+            $card->set('driverId', $driverId);
+        }
+
+        return (string) $card->html();
+    }
+
+    /** The markup one driver's option carries — name, dates, tone and reason between the open and the close. */
+    private function driverOption(string $html, int $driverId): string
+    {
+        $start = strpos($html, 'value="'.$driverId.'" class=');
+
+        if ($start === false) {
+            throw new Exception('the driver select printed no option for driver '.$driverId
+                .(str_contains($html, 'id="assignment-driver"') ? ' — the select rendered, the option did not' : ' — the assignment card printed no driver select at all'));
+        }
+
+        $end = strpos($html, '</option>', $start);
+
+        return substr($html, $start, ($end === false ? strlen($html) : $end) - $start);
     }
 
     private function pageContains(User $user, string $path, string $needle, string $label): void

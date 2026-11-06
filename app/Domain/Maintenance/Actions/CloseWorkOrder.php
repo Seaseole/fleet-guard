@@ -12,13 +12,13 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * §10.6's `inspected → closed`: the costs are frozen and the capitalise-vs-expense call is made.
+ * The `inspected → closed`: the costs are frozen and the capitalise-vs-expense call is made.
  *
- * Closing is the accounting act the design gives to the seat holding `work_orders.close` (§9.3 — the
- * Owner, Operations Manager or Workshop Manager; §10.6 names the Accountant, a deviation recorded in
- * DESIGN §20.28). The order must be inspected first, so "closed" means somebody also checked the work.
+ * Closing is the accounting act the design gives to the seat holding `work_orders.close` (the
+ * Owner, Operations Manager or Workshop Manager; The design names the Accountant, a deviation recorded in
+ * DESIGN ). The order must be inspected first, so "closed" means somebody also checked the work.
  *
- * **Nothing posts here (§10.6).** Parts post when stock leaves, labour on the timesheet, external work
+ * **Nothing posts here.** Parts post when stock leaves, labour on the timesheet, external work
  * on the supplier bill; `closed` only makes the row read-only. What the close does record is the
  * decision: a `capital_candidate` line is the workshop's opinion, and the person closing is the one
  * who says how much of the spend is an asset. The amount defaults to the flagged lines but may be
@@ -33,7 +33,7 @@ final class CloseWorkOrder
         ?int $actorId = null,
     ): WorkOrder {
         if (! Gate::allows('work_orders.close')) {
-            throw new InvalidArgumentException('Closing a work order freezes its costs; that is the accounting seat’s call (§9.3).');
+            throw new InvalidArgumentException('Closing a work order freezes its costs; that is the accounting seat’s call.');
         }
 
         return DB::transaction(function () use ($workOrder, $capitalise, $capitalisedAmountMinor, $actorId): WorkOrder {
@@ -42,7 +42,7 @@ final class CloseWorkOrder
 
             if ($locked->status !== WorkOrderStatus::Inspected) {
                 throw new InvalidArgumentException(sprintf(
-                    '%s is %s. Closing follows inspection — the order is not frozen before somebody has seen the work (§10.6).',
+                    '%s is %s. Closing follows inspection — the order is not frozen before somebody has seen the work.',
                     $locked->wo_no,
                     strtolower($locked->status->label()),
                 ));

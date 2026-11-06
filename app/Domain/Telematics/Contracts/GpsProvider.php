@@ -7,15 +7,15 @@ namespace App\Domain\Telematics\Contracts;
 use App\Domain\Telematics\Data\PositionDto;
 
 /**
- * §16 R6's provider seam: one contract, one simulator, real adapters as hardware arrives.
+ * R6's provider seam: one contract, one simulator, real adapters as hardware arrives.
  *
- * An adapter's whole job is **parsing**: turn a provider's payload into §4.4's fixed column set and
+ * An adapter's whole job is **parsing**: turn a provider's payload into the fixed column set and
  * its own message id. It does not write, does not resolve tenancy and does not decide what a trip is;
  * `IngestPositions` owns the batch, the dedupe and the projection, so every provider gets the same
  * guarantees and a Phase 7 adapter cannot accidentally invent a second ingest path.
  *
  * `parse()` returns a list because providers batch: a device that went out of signal posts a backlog
- * of fixes in one request, and §14.3 asks for one multi-row insert per webhook batch.
+ * of fixes in one request, and the design asks for one multi-row insert per webhook batch.
  */
 interface GpsProvider
 {

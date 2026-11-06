@@ -14,7 +14,7 @@ use App\Domain\Operations\Support\RouteRateWindow;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Files a price for a customer on a corridor (§4.1, D1).
+ * Files a price for a customer on a corridor (D1).
  *
  * Four checks in order, each with its own failure: the route exists in this company, the customer
  * exists in this company, the currency is one the books know, and no live card already covers the

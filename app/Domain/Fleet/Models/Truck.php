@@ -17,14 +17,14 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.3 TRUCK — the tractor unit, its papers' home and the odometer everything else is measured
+ * TRUCK — the tractor unit, its papers' home and the odometer everything else is measured
  * against.
  *
  * Money is integer minor units in the company base currency (`purchase_amount_base`); physical
  * quantities (capacity, engine hours, consumption) are decimals because they are not money. This is
  * the same split D6 draws, and the reason `capacity_tonnes_10_2` does not carry a currency.
  *
- * `status` moves through §10.1's table; the sale and the out-of-service decision require a reason.
+ * `status` moves through the table; the sale and the out-of-service decision require a reason.
  * Selling also clears `active` in the Action, so "sold" never appears in a dispatch picker just
  * because someone forgot a second checkbox.
  *
@@ -112,7 +112,7 @@ final class Truck extends Model implements AuditableContract
     }
 
     /**
-     * §10.1's table. `sold` is terminal; a reconditioned truck is a new decision against the same
+     * The table. `sold` is terminal; a reconditioned truck is a new decision against the same
      * row only through an explicit process this phase does not offer, not by editing the status.
      *
      * @return array<string, list<string>>

@@ -9,10 +9,10 @@ use App\Domain\Fleet\Models\Truck;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Edits a truck's master details (§4.3, D1).
+ * Edits a truck's master details (D1).
  *
  * `odometer_km` is not editable here on purpose: it is a projection of readings, and an edit form
- * that could type over it would be the silent correction §4.3's `plausibility` column exists to
+ * that could type over it would be the silent correction the `plausibility` column exists to
  * prevent. Mileage arrives through {@see RecordOdometerReading}; status through
  * {@see ChangeTruckStatus}.
  */

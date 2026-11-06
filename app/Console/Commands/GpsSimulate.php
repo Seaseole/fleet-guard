@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
- * §16 R6's simulator: the only way to see the map before hardware arrives, and the thing that proves
+ * R6's simulator: the only way to see the map before hardware arrives, and the thing that proves
  * the ingest path end to end.
  *
  * It walks a truck along its corridor, one ping per run, and sends what it generates through the same
@@ -43,7 +43,7 @@ class GpsSimulate extends Command
 
     protected $description = 'Generate simulated GPS fixes for trips on the road and ingest them';
 
-    /** Seconds between two pings from one device (§14.3's volume figure assumes 30 s). */
+    /** Seconds between two pings from one device (the volume figure assumes 30 s). */
     private const INTERVAL = 30;
 
     public function handle(TripsInMotion $trips, EnsureSimulatorAccount $ensure, IngestPositions $ingest): int
@@ -65,7 +65,7 @@ class GpsSimulate extends Command
 
                 if ($trip === null) {
                     $this->error(sprintf(
-                        'No trip "%s" is on the road in company %d. Only a departed, in-transit or at-border trip is tracked (§10.2).',
+                        'No trip "%s" is on the road in company %d. Only a departed, in-transit or at-border trip is tracked.',
                         $filter,
                         $company,
                     ));
@@ -233,7 +233,7 @@ class GpsSimulate extends Command
      *
      * Read from the last fix's odometer when there is one, so each run continues where the previous
      * stopped. With no fix yet it is estimated from the departure clock at the simulated speed — an
-     * estimate is honest here because nothing downstream reads it: §16 R6 keeps every business number
+     * estimate is honest here because nothing downstream reads it: R6 keeps every business number
      * on the odometer and the trip facts.
      */
     private function progress(TripInMotion $trip, float $distance): float
@@ -257,7 +257,7 @@ class GpsSimulate extends Command
 
         $speed = (int) config('fleet.telematics.simulator.speed_kph', 80);
 
-        return $this->clamp($trip->departedAt->floatDiffInHours(CarbonImmutable::now()) * $speed / $distance);
+        return $this->clamp($trip->departedAt->diffInHours(CarbonImmutable::now()) * $speed / $distance);
     }
 
     private function clamp(float $fraction): float

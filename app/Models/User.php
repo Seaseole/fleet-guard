@@ -75,7 +75,7 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     }
 
     /**
-     * The topbar bell's count (§DESIGN-SYSTEM §7: "things needing action", not "unread messages").
+     * The topbar bell's count ("things needing action", not "unread messages").
      *
      * It is an accessor rather than a column because the answer is per person *and* per register state:
      * `alerts` has no user on it, and `notifications` has no idea whether the thing it delivered is

@@ -15,9 +15,9 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.3 EMPLOYEE — the person on the books, without the statutory payroll that Phase 5 owns.
+ * EMPLOYEE — the person on the books, without the statutory payroll that Phase 5 owns.
  *
- * The national ID uses the §9.5 trio. Phase 1 has no field gate that reveals it (§9.4 names five,
+ * The national ID uses the trio. Phase 1 has no field gate that reveals it (the design names five,
  * and national identity is not one), so the mask is the only form any screen shows: the ciphertext
  * is stored so that when a gate is justified the plaintext is already encrypted rather than in a
  * spreadsheet, and no code path decrypts it today.
@@ -42,7 +42,7 @@ final class Employee extends Model implements AuditableContract
 {
     use Auditable, BelongsToCompany, HasMaskedSecret;
 
-    /** The §9.5 column prefix: `national_id_encrypted` + `national_id_masked`. */
+    /** The column prefix: `national_id_encrypted` + `national_id_masked`. */
     public const NATIONAL_ID = 'national_id';
 
     /** @var list<string> */

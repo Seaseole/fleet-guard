@@ -37,7 +37,7 @@
         @if($message) aria-invalid="true" @endif
         @if($describedBy !== '') aria-describedby="{{ $describedBy }}" @endif
         {{ $attributes->except(['id', 'name', 'aria-describedby'])->class([
-            'fg-identifier h-12 w-full rounded-fg-md border bg-fg-surface px-3 text-center text-lg tracking-[0.5em] text-fg-ink shadow-fg-1 transition duration-(--t-fast)',
+            'fg-identifier h-12 w-full rounded-fg-md border bg-fg-surface px-3 text-center text-lg tracking-otp text-fg-ink shadow-fg-1 transition duration-(--t-fast)',
             'border-danger' => $message,
             'border-input' => ! $message,
         ]) }}

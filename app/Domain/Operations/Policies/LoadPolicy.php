@@ -8,13 +8,13 @@ use App\Domain\Operations\Models\Load;
 use App\Models\User;
 
 /**
- * Who may put freight on a trip and take it off (§9.3's "Load, booking and dispatch" row).
+ * Who may put freight on a trip and take it off (the "Load, booking and dispatch" row).
  *
  * The capability is `trips.plan`, the same one that names a truck: booking the load and booking the
  * vehicle are the same act of planning, and splitting them into two permissions would let a seat fill
  * a trailer it cannot dispatch.
  *
- * A load that has already travelled is not editable. §10.1's answer to a wrong record is a correcting
+ * A load that has already travelled is not editable. The answer to a wrong record is a correcting
  * entry, not a rewrite, and the tonnage of a delivered load is the number a customer was billed
  * against — so after departure the row is frozen and the fix is a credit note's business (Phase 4).
  */

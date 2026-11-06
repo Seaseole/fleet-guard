@@ -10,10 +10,10 @@
     "license": "MIT",
     "require": {
         "php": "^8.3",
+        "akira/laravel-qrcode": "^1.1",
         "brick/money": "^0.15.2",
         "dompdf/dompdf": "^3.1",
         "egough/laravel-settings": "^1.4",
-        "exeque/laravel-qr": "^0.9.0",
         "laravel/chisel": "^0.1.0",
         "laravel/fortify": "^1.37.2",
         "laravel/framework": "^13.17",
@@ -22,8 +22,10 @@
         "livewire/blaze": "^1.0",
         "livewire/livewire": "^4.1",
         "owen-it/laravel-auditing": "^14.0",
+        "pharaonic/livewire-select2": "^4.0",
         "spatie/laravel-pdf": "^2.14",
-        "spatie/laravel-permission": "^8.3"
+        "spatie/laravel-permission": "^8.3",
+        "spatie/simple-excel": "^3.11"
     },
     "require-dev": {
         "fakerphp/faker": "^1.24",
@@ -76,6 +78,16 @@
         "lint:ui": [
             "@php scripts/lint-ui.php"
         ],
+        "lint:views": [
+            "@php scripts/lint-views.php"
+        ],
+        "lint:cols": [
+            "@php scripts/lint-table-cols.php"
+        ],
+        "audit:static": [
+            "@php artisan security:audit --static --no-alert",
+            "@php artisan performance:audit --static --no-alert"
+        ],
         "ci:check": [
             "Composer\\Config::disableProcessTimeout",
             "@php artisan config:clear --ansi",
@@ -83,7 +95,10 @@
             "@types:check",
             "@lint:architecture",
             "@lint:section-refs",
-            "@lint:ui"
+            "@lint:ui",
+            "@lint:views",
+            "@lint:cols",
+            "@audit:static"
         ],
         "types:check": [
             "phpstan analyse"
@@ -95,6 +110,9 @@
             "@lint:architecture",
             "@lint:section-refs",
             "@lint:ui",
+            "@lint:views",
+            "@lint:cols",
+            "@audit:static",
             "@php artisan test"
         ],
         "post-autoload-dump": [

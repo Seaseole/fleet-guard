@@ -10,19 +10,19 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * §4.3 TRUCK — the asset the whole operational model is keyed on.
+     * TRUCK — the asset the whole operational model is keyed on.
      *
-     * Two deliberate departures from the §4.3 sketch, both recorded in the phase log:
+     * Two deliberate departures from the sketch, both recorded in the phase log:
      *
      * - `capacity_tonnes_10_2` is a decimal, matching the trailer and every other physical quantity
      *   (`engine_hours_10_2`, fuel baselines). The sketch's `bigint carrying_capacity_tonnes` would
      *   have needed an unwritten "x100" convention for a value nobody thinks of as money, and D6's
      *   integer rule exists for money.
      * - There is no `loan_id` or `insurance_document_id` column. Loans arrive in Phase 5 and would
-     *   be a dangling key today; insurance attaches as a §4.4 document whose subject is this row,
+     *   be a dangling key today; insurance attaches as a document whose subject is this row,
      *   which also gives the register the expiry and the scan in one place.
      *
-     * `status` is §10.1's state column with `previous_state`/`state_changed_at` beside it. The sale
+     * `status` is the state column with `previous_state`/`state_changed_at` beside it. The sale
      * is a state move (`→ sold`) that also clears `active`; the Action does both, so a sold truck
      * cannot keep appearing in the dispatch picker.
      */

@@ -14,10 +14,10 @@ use DateTimeInterface;
 use Illuminate\Support\Carbon;
 
 /**
- * §10.4's third axis, asked of every open invoice at once: the receivables ageing report.
+ * The third axis, asked of every open invoice at once: the receivables ageing report.
  *
  * The bucket is computed from `due_on` against the company's today — never read from a column, because a
- * stored bucket is wrong every midnight (§10.4). Only `issued` invoices with a balance are in the report:
+ * stored bucket is wrong every midnight. Only `issued` invoices with a balance are in the report:
  * a void document is not owed, and a settled one is history. Credit notes need no special case because
  * they have already moved the balance they corrected.
  *

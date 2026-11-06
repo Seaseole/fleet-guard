@@ -10,12 +10,12 @@ use Spatie\Permission\Contracts\PermissionsTeamResolver;
 
 /**
  * The single place that answers "which company's roles are in force right now" — by asking the
- * tenancy context and nothing else (DESIGN.md §8, §9.2).
+ * tenancy context and nothing else.
  *
  * `Spatie\Permission\DefaultTeamResolver` keeps its own mutable team id, which would make the
  * tenant a second piece of ambient state beside `CurrentCompany`. Two knobs that have to be set
  * together, and that are set by different code paths, is exactly how the queue-worker leak in
- * §20.4 happened; this class removes the second knob instead of synchronising it.
+ * Happened; this class removes the second knob instead of synchronising it.
  *
  * Failing closed is the point: with no context — a guest request, a job that never pinned its
  * company, a CLI command run without `--company` — the answer is null, the pivot filter matches

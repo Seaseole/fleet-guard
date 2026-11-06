@@ -19,7 +19,7 @@ use App\Domain\Maintenance\PartCategory;
 use InvalidArgumentException;
 
 /**
- * §15.2 Phase 1 — the parts catalogue.
+ * Phase 1 — the parts catalogue.
  *
  * A part's cost is in its own currency (the company's base currency when the file leaves the column
  * blank), because a store that buys from a South African factor quotes in ZAR. The optional truck is

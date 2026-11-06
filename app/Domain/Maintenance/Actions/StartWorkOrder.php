@@ -14,14 +14,14 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * §10.6's `approved|planned → in_progress`: the vehicle is in the bay.
+ * The `approved|planned → in_progress`: the vehicle is in the bay.
  *
  * Two things happen and they belong together: the order starts, and the truck stops being available
  * to dispatch. Leaving the second to a person is how a truck gets booked onto a trip while its brakes
  * are out — the fleet register reads `in_workshop` from the moment the work starts, and the dispatch
- * picker follows it (§10.2).
+ * picker follows it.
  *
- * The approval rule is re-asserted here rather than trusted to the state: §10.6's control is about
+ * The approval rule is re-asserted here rather than trusted to the state: The control is about
  * spend, and an order whose estimate crossed the limit after its last decision is `awaiting_approval`
  * by the machine's own logic — but an Action that only read the status would wave through the first
  * caller that moved it back along the wrong edge.
@@ -33,7 +33,7 @@ final class StartWorkOrder
     public function __invoke(WorkOrder $workOrder, ?int $actorId = null): WorkOrder
     {
         if (! Gate::allows('work_orders.create')) {
-            throw new InvalidArgumentException('Putting a vehicle in the workshop is a workshop act (§9.3).');
+            throw new InvalidArgumentException('Putting a vehicle in the workshop is a workshop act.');
         }
 
         return DB::transaction(function () use ($workOrder, $actorId): WorkOrder {
@@ -42,7 +42,7 @@ final class StartWorkOrder
 
             if ($locked->status !== WorkOrderStatus::Approved && $locked->status !== WorkOrderStatus::Planned) {
                 throw new InvalidArgumentException(sprintf(
-                    '%s is %s. Work starts from `approved` or `planned` (§10.6).',
+                    '%s is %s. Work starts from `approved` or `planned`.',
                     $locked->wo_no,
                     strtolower($locked->status->label()),
                 ));
@@ -50,7 +50,7 @@ final class StartWorkOrder
 
             if ($locked->neededApproval() && $locked->approved_by === null) {
                 throw new InvalidArgumentException(sprintf(
-                    '%s is estimated above the approval limit and nobody holding `work_orders.approve` has said yes — the workshop cannot spend it (§10.6).',
+                    '%s is estimated above the approval limit and nobody holding `work_orders.approve` has said yes — the workshop cannot spend it.',
                     $locked->wo_no,
                 ));
             }

@@ -39,7 +39,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /*
- * §15.2's concurrency proof for the dispatch path: `lockForUpdate` is only worth having if the lock is
+ * The concurrency proof for the dispatch path: `lockForUpdate` is only worth having if the lock is
  * (a) actually emitted, (b) actually waited on, and (c) actually decides the answer.
  *
  * The other harnesses cannot see this. `verify-operations.php` runs one actor at a time, so every
@@ -48,7 +48,7 @@ use Illuminate\Support\Facades\DB;
  * asks what the dispatch Action does while it waits.
  *
  * Fixtures are prefixed `LCK` and are deleted in `finally`, with the counters aligned afterwards, for the
- * same reason §20.8 gives for `verify-operations.php`: a probe that dies mid-run must not leave a truck
+ * same reason the design gives for `verify-operations.php`: a probe that dies mid-run must not leave a truck
  * holding an open window.
  *
  * Run: php scripts/verify-dispatch-lock.php
@@ -81,7 +81,7 @@ function check(bool $condition, string $what, string $why = ''): void
     $condition ? ok($what) : failed($what, $why);
 }
 
-/** §20.8's habit: whatever happened to the fixture truck, the probe connection and the counters are put back. */
+/** The habit: whatever happened to the fixture truck, the probe connection and the counters are put back. */
 function cleanUp(): void
 {
     $truckIds = DB::table('trucks')->where('registration_no', 'like', '%LCK')->pluck('id')->all();
@@ -122,8 +122,12 @@ function cleanUp(): void
     DB::statement('set session innodb_lock_wait_timeout = 50');
 }
 
-Auth::login(User::query()->findOrFail(1));
-CurrentCompany::force(1);
+// The Owner seat is the account the deployment names, not row 1: on a development database row 1
+// may have been re-seated, and a harness that signs in the wrong seat fails at the first gated
+// write before it tests anything. `FLEET_OWNER_EMAIL` is the documented override.
+$owner = User::query()->where('email', config('fleet.identity.owner_email'))->firstOrFail();
+Auth::login($owner);
+CurrentCompany::force((int) $owner->company_id);
 
 config(['database.connections.lockprobe' => config('database.connections.mysql')]);
 
@@ -251,7 +255,7 @@ try {
 
     check(
         DB::table('vehicle_assignments')->where('trip_id', $assignedTripId)->count() === $beforeWindows,
-        'the refused dispatch reserved nothing — one truck, one window (§10.1)',
+        'the refused dispatch reserved nothing — one truck, one window',
     );
 
     /* ------------------------------------------------------------------ D: the truck */
@@ -322,7 +326,7 @@ try {
 
     check(
         ! $bookedTwice,
-        'a truck booked after the dispatcher opened its read is refused, not double-booked (§10.1)',
+        'a truck booked after the dispatcher opened its read is refused, not double-booked',
         $bookedTwice ? 'the phantom window was invisible and the second row went in' : $refusal,
     );
 } catch (Throwable $blewUp) {

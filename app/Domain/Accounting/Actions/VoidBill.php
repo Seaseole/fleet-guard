@@ -16,9 +16,9 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * §10.9 / §6.4 — a recorded bill that should not have been recorded is **voided**, never deleted.
+ * / A recorded bill that should not have been recorded is **voided**, never deleted.
  *
- * The bill keeps its `BILL-` number (operational references are never reused, §7), the posting is
+ * The bill keeps its `BILL-` number (operational references are never reused), the posting is
  * mirrored through the ledger's own {@see ReversePosting} door with `reverses_entry_id` so the pair
  * nets to zero and both halves stay readable, and the lines are stamped `released_at` rather than
  * deleted — the document keeps its own record even when the money is unposted.
@@ -27,9 +27,9 @@ use InvalidArgumentException;
  *
  * 1. **A bill with money against it is not voided.** The moment a standing application exists, the
  *    cash has left the till and the payable is settled — voiding would unpost a liability the bank
- *    has already discharged. This is §20.33's decision 6 read from the other side of the ledger; the
- *    correction door for a paid bill is §4.2's debit note, which is a later slice.
- * 2. **A linked bill has nothing to mirror.** Its obligation was posted by Phase 3's movement (§20.36),
+ *    has already discharged. This is the decision 6 read from the other side of the ledger; the
+ *    correction door for a paid bill is the debit note, which is a later slice.
+ * 2. **A linked bill has nothing to mirror.** Its obligation was posted by Phase 3's movement,
  *    so voiding releases the stamp through the owning module's own door and the delivery or receipt
  *    returns to "awaiting the bill" — the paper can then be recorded again on a fresh number.
  */
@@ -45,7 +45,7 @@ final class VoidBill
     public function __invoke(Bill $bill, string $reason, ?int $actorId = null): Bill
     {
         if (! Gate::allows('bills.create')) {
-            throw new InvalidArgumentException('Voiding a supplier bill unposts a ledger entry; it needs the bills.create ability (§9.3).');
+            throw new InvalidArgumentException('Voiding a supplier bill unposts a ledger entry; it needs the bills.create ability.');
         }
 
         $reason = trim($reason);
@@ -53,7 +53,7 @@ final class VoidBill
         if (mb_strlen($reason) < 10) {
             throw new InvalidArgumentException(
                 'A void needs a reason of at least ten characters. It is stored on the document and in the '
-                .'operational trail, because "why" is the only part of a void a later reader cannot reconstruct (§10.1).',
+                .'operational trail, because "why" is the only part of a void a later reader cannot reconstruct.',
             );
         }
 
@@ -71,7 +71,7 @@ final class VoidBill
 
             if ($locked->hasPayments()) {
                 throw new InvalidArgumentException(sprintf(
-                    'Bill %s has a supplier payment against it, so it cannot be voided — the cash has left the till and the payable is settled. A paid bill is corrected by a debit note, not by unposting the debt it already paid (§20.33\'s rule, read from the other side of the ledger).',
+                    'Bill %s has a supplier payment against it, so it cannot be voided — the cash has left the till and the payable is settled. A paid bill is corrected by a debit note, not by unposting the debt it already paid (the rule, read from the other side of the ledger).',
                     $locked->number,
                 ));
             }
@@ -88,7 +88,7 @@ final class VoidBill
                     actorId: $actorId,
                 );
             } else {
-                // A linked bill posted nothing of its own (§20.36), so there is no entry to mirror:
+                // A linked bill posted nothing of its own, so there is no entry to mirror:
                 // the obligation is released through the owning module's door and the delivery or
                 // receipt returns to "awaiting the bill", offerable to the next paper.
                 $companyId = (int) $locked->company_id;

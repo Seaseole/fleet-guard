@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * §10.6's `on_hold → in_progress`: whatever stopped the job has been dealt with.
+ * The `on_hold → in_progress`: whatever stopped the job has been dealt with.
  *
  * The hold reason and its note are cleared in the same UPDATE as the state. `work_orders_hold_is_explained`
  * refuses a running order that still carries a reason, so "resume" is also the moment the row stops
@@ -24,7 +24,7 @@ final class ResumeWorkOrder
     public function __invoke(WorkOrder $workOrder, ?int $actorId = null): WorkOrder
     {
         if (! Gate::allows('work_orders.create')) {
-            throw new InvalidArgumentException('Resuming a job is a workshop act (§9.3).');
+            throw new InvalidArgumentException('Resuming a job is a workshop act.');
         }
 
         return DB::transaction(function () use ($workOrder, $actorId): WorkOrder {

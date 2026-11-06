@@ -8,9 +8,9 @@ use App\Domain\Operations\Support\DispatchGate;
 use InvalidArgumentException;
 
 /**
- * A trip as the planner names it (§4.1 TRIP).
+ * A trip as the planner names it (TRIP).
  *
- * The equipment and crew are chosen at planning and *tested* at dispatch (§10.2 puts the papers
+ * The equipment and crew are chosen at planning and *tested* at dispatch (the design puts the papers
  * checks on `planned → assigned`), so this DTO accepts an unavailable truck or a lapsed driver — the
  * plan is a statement of intent, and refusing it here would hide the reason the dispatcher needs to
  * read. The refusal belongs to {@see DispatchGate}.
@@ -26,7 +26,7 @@ final readonly class TripDto
         public ?int $supercargoEmployeeId = null,
     ) {
         if (trim($jobId) === '') {
-            throw new InvalidArgumentException('A trip executes a job (§4.1); it cannot exist without one.');
+            throw new InvalidArgumentException('A trip executes a job; it cannot exist without one.');
         }
 
         if ($truckId <= 0) {
@@ -34,7 +34,7 @@ final readonly class TripDto
         }
 
         if ($driverId <= 0) {
-            throw new InvalidArgumentException('A trip needs a driver — §10.2 checks that driver\'s papers before it leaves.');
+            throw new InvalidArgumentException('A trip needs a driver — checks that driver\'s papers before it leaves.');
         }
 
         if (trim($plannedDepartureAt) === '') {

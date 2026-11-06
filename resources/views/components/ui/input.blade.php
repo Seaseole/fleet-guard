@@ -42,7 +42,7 @@
             @if($message) aria-invalid="true" @endif
             @if($describedBy !== '') aria-describedby="{{ $describedBy }}" @endif
             {{ $attributes->except(['id', 'name', 'type', 'value', 'aria-describedby'])->class([
-                'h-9 w-full rounded-fg-md border bg-fg-surface px-3 text-sm text-fg-ink shadow-fg-1 placeholder:text-fg-ink-muted transition duration-(--t-fast) ease-(--ease-standard) disabled:cursor-not-allowed disabled:opacity-60',
+                'h-9 w-full rounded-fg-md border bg-fg-surface px-3 text-sm touch:text-base text-fg-ink shadow-fg-1 placeholder:text-fg-ink-muted transition duration-(--t-fast) ease-(--ease-standard) disabled:cursor-not-allowed disabled:opacity-60 touch:h-11',
                 'border-danger' => $message,
                 'border-input hover:border-fg-ink-muted' => ! $message,
                 'pe-10' => $isPassword || $suffix,
@@ -57,7 +57,7 @@
         @if($isPassword)
             <button
                 type="button"
-                class="absolute end-1 grid size-8 place-items-center rounded-fg-sm text-fg-ink-muted hover:text-fg-ink"
+                class="absolute end-1 touch:end-0 grid size-8 touch:size-11 place-items-center rounded-fg-sm text-fg-ink-muted hover:bg-fg-surface-hover hover:text-fg-ink"
                 x-on:click="shown = !shown"
                 aria-label="{{ __('Show password') }}"
                 x-bind:aria-label="shown ? @js(__('Hide password')) : @js(__('Show password'))"

@@ -20,15 +20,15 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §4.1 JOB — the commercial agreement: one customer, one corridor, one quoted price, one promise.
+ * JOB — the commercial agreement: one customer, one corridor, one quoted price, one promise.
  *
- * The quote is three columns and no more (§5.2 lists the eight-column FX block for the documents that
+ * The quote is three columns and no more (the design lists the eight-column FX block for the documents that
  * *post*; a job only offers). `base_amount` is the same figure in company currency as of
  * `quoted_on`, which is what lets the jobs board sort by money without a live FX read — and the
  * invoice that Phase 4 raises carries its own rate block, because the rate the customer is billed at
  * is the invoice's, not the quote's.
  *
- * The externally-referenced key is a ULID (§2), minted here so the number and the id cannot be
+ * The externally-referenced key is a ULID, minted here so the number and the id cannot be
  * authored separately, and `RouteRate`'s corridor+customer pair is where `QuoteJob` proposes the
  * amount from.
  *
@@ -60,7 +60,7 @@ final class Job extends Model implements AuditableContract
     use Auditable, BelongsToCompany, CanTransition;
 
     /**
-     * `freight_jobs`, not `jobs`: the database queue driver owns `jobs` (§4.1's note in the
+     * `freight_jobs`, not `jobs`: the database queue driver owns `jobs` (the note in the
      * migration). Named here rather than left to Eloquent's pluralisation so the collision is visible
      * at the model, which is where the next person reading `Job::query()` will look.
      */
@@ -110,7 +110,7 @@ final class Job extends Model implements AuditableContract
     }
 
     /**
-     * §10.3's machine, storable states only.
+     * The machine, storable states only.
      *
      * `quoted → enquiry` is deliberately absent: a changed quote is a new quote on the same job, not
      * a return to the pending pile, and a board that shows re-quoted work as "new" hides how long the
@@ -132,7 +132,8 @@ final class Job extends Model implements AuditableContract
         ];
     }
 
-    /** §10.1: refusing, cancelling and closing all say something about the world that outlives the click. */
+    /** Refusing, cancelling and closing all say something about the world that outlives the click. */
+    /** @return list<string> */
     protected function transitionsRequiringReason(): array
     {
         return [JobStatus::Declined->value, JobStatus::Cancelled->value, JobStatus::Closed->value];

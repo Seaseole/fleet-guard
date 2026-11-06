@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * The edges of §10.2 that carry no new facts — `assigned → loaded`, `departed → in_transit`,
+ * The edges of that carry no new facts — `assigned → loaded`, `departed → in_transit`,
  * `in_transit ⇄ at_border`, `arrived → pod_pending`, `pod_pending → delivered`.
  *
  * These are reported from the road: a phone at a border post says "we are at the gate", and the only
@@ -21,7 +21,7 @@ use InvalidArgumentException;
  * besides a state, and a single callable that could land any state would make those tests optional by
  * construction.
  *
- * The kiosk guard sits here as well: §10.2 says a driver may capture facts but never decide
+ * The kiosk guard sits here as well: The design says a driver may capture facts but never decide
  * completion, and {@see TripStatus::requiresOfficeRole()} is the one place that line is drawn.
  */
 final class AdvanceTrip
@@ -57,12 +57,12 @@ final class AdvanceTrip
         }
 
         return DB::transaction(function () use ($trip, $to, $actorId, $actorKind): Trip {
-            // §10.2's completion rule: a kiosk reports facts from the road, and only an office seat
+            // The completion rule: a kiosk reports facts from the road, and only an office seat
             // decides that a delivery was made. The move itself is legal — this is the guard that
-            // stops it from being made *by a token*, which is what §9.6's shared phone makes cheap.
+            // stops it from being made *by a token*, which is what the shared phone makes cheap.
             if ($actorKind === ActorKind::Kiosk && $to->requiresOfficeRole()) {
                 throw new InvalidArgumentException(sprintf(
-                    'Trip %s cannot be marked %s from a kiosk token: that is an office decision (§10.2).',
+                    'Trip %s cannot be marked %s from a kiosk token: that is an office decision.',
                     $trip->trip_no,
                     $to->label(),
                 ));
@@ -70,7 +70,7 @@ final class AdvanceTrip
 
             $trip->moveTo($to, null, [], $actorKind, $actorId);
 
-            // §4.1's four timestamps are the columns a report reads without walking events, so the
+            // The four timestamps are the columns a report reads without walking events, so the
             // arrival is stamped here rather than only recorded in the trail.
             if ($to === TripStatus::Arrived) {
                 $trip->arrived_at = now();
@@ -93,7 +93,7 @@ final class AdvanceTrip
         $door = match (true) {
             $to === TripStatus::Planned => ' — use PlanTrip',
             $to === TripStatus::Loaded => ' — use MarkLoaded, which measures the tonnage against the truck and the trailer',
-            $to === TripStatus::Assigned => ' — use DispatchTrip, which runs the §10.2 validity checks',
+            $to === TripStatus::Assigned => ' — use DispatchTrip, which runs the validity checks',
             $to === TripStatus::Departed => ' — use DepartTrip, which records the opening odometer',
             $to === TripStatus::Completed => ' — use CompleteTrip, which runs the completion checklist',
             $to === TripStatus::Closed => ' — use CloseTrip, which freezes the costs',

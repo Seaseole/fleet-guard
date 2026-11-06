@@ -26,7 +26,7 @@ use Livewire\Component;
 use Livewire\WithPagination;
 
 /*
- * Tyres (§3.2, §4.3): the casings the company owns, where each one is bolted on right now, and what a
+ * Tyres: the casings the company owns, where each one is bolted on right now, and what a
  * stint cost per kilometre once it came off.
  *
  * The register and the fitments are two readings of the same fact. A tyre is created once, with its
@@ -36,7 +36,7 @@ use Livewire\WithPagination;
  *
  * Reading is `maintenance.view` like the rest of the workshop; writing is `tyres.manage` (Owner,
  * Operations Manager, Workshop Manager, Stores Clerk), because a fitter's entry is a workshop entry and
- * a dispatcher has no business putting a tyre on a truck (§9.3).
+ * a dispatcher has no business putting a tyre on a truck.
  */
 new #[Title('Tyres')] class extends Component {
     use WithPagination;
@@ -387,7 +387,7 @@ new #[Title('Tyres')] class extends Component {
 }; ?>
 
 <div class="grid gap-6">
-    <header class="flex flex-wrap items-end justify-between gap-3">
+    <header class="fg-page-header flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div class="grid gap-1">
             <x-ui.heading size="xl" level="1">{{ __('Tyres') }}</x-ui.heading>
             <x-ui.text>
@@ -424,7 +424,7 @@ new #[Title('Tyres')] class extends Component {
                         <tr wire:key="fitment-{{ $position->id }}">
                             <x-ui.table.td>
                                 @if ($position->truck)
-                                    <a href="{{ route('fleet.show', ['truck' => $position->truck->id]) }}" wire:navigate class="text-fg-ink hover:text-accent">{{ $position->truck->label() }}</a>
+                                    <a href="{{ route('fleet.show', ['truck' => $position->truck->id]) }}" wire:navigate class="text-fg-ink underline-offset-4 hover:text-accent-ink hover:underline">{{ $position->truck->label() }}</a>
                                 @else
                                     <span class="text-xs text-fg-ink-muted">{{ __('Truck #:id', ['id' => $position->truck_id]) }}</span>
                                 @endif
@@ -473,9 +473,9 @@ new #[Title('Tyres')] class extends Component {
             <thead>
                 <tr>
                     <x-ui.table.th>{{ __('Tyre') }}</x-ui.table.th>
-                    <x-ui.table.th>{{ __('Size') }}</x-ui.table.th>
+                    <x-ui.table.th hideBelow="lg">{{ __('Size') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('New tread') }}</x-ui.table.th>
-                    <x-ui.table.th numeric>{{ __('Cost') }}</x-ui.table.th>
+                    <x-ui.table.th numeric hideBelow="lg">{{ __('Cost') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Status') }}</x-ui.table.th>
                     <x-ui.table.th>{{ __('Where') }}</x-ui.table.th>
                     <x-ui.table.th numeric>{{ __('Actions') }}</x-ui.table.th>
@@ -488,9 +488,9 @@ new #[Title('Tyres')] class extends Component {
                             <span class="font-medium text-fg-ink">{{ $tyre->serial }}</span>
                             <span class="block text-xs text-fg-ink-muted">{{ $tyre->brand ?: __('no brand recorded') }}</span>
                         </x-ui.table.td>
-                        <x-ui.table.td nowrap>{{ $tyre->size }}</x-ui.table.td>
+                        <x-ui.table.td nowrap hideBelow="lg">{{ $tyre->size }}</x-ui.table.td>
                         <x-ui.table.td numeric nowrap>{{ $tyre->treadLabel() }}</x-ui.table.td>
-                        <x-ui.table.td numeric nowrap>
+                        <x-ui.table.td numeric nowrap hideBelow="lg">
                             {{ $tyre->purchase_cost_base === 0 ? '—' : $tyre->purchaseCost()->format($this->currencyCode()) }}
                         </x-ui.table.td>
                         <x-ui.table.td>

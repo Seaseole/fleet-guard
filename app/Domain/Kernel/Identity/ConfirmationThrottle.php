@@ -11,7 +11,7 @@ use Throwable;
 
 /**
  * One five-a-minute budget for each of the two confirmation doors Fortify leaves unthrottled: the ⚑
- * password check (`§9.1`: the gate that stands between a stolen logged-in laptop and a journal posting)
+ * password check (the gate that stands between a stolen logged-in laptop and a journal posting)
  * and the six-digit code that turns on a second factor. Both are short secrets checked by comparison, and
  * the enrolment code is the only one in the application with a one-in-a-million guess — it was the only
  * such gate with no limiter at all, while the TOTP *login* challenge next to it has always had five.
@@ -19,7 +19,7 @@ use Throwable;
  * **Counted on failure, not on request.** A person fumbling with a clock-drifted authenticator is doing
  * what an attacker is doing, one code at a time, and a budget that charges them both punishes the honest
  * case for the sake of the dishonest one. This is Fortify's own `LoginRateLimiter` shape. The numbers are
- * constants rather than config: a brute-force budget is not a business rule an Owner can answer (§17).
+ * constants rather than config: a brute-force budget is not a business rule an Owner can answer.
  */
 final class ConfirmationThrottle
 {

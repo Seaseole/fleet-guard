@@ -8,7 +8,7 @@ use App\Domain\Fleet\Models\Equipment;
 use App\Models\User;
 
 /**
- * Who may see and change yard equipment (§9.3 "Fleet"). Disposal uses `fleet.sell` for the same
+ * Who may see and change yard equipment ("Fleet"). Disposal uses `fleet.sell` for the same
  * reason a truck's does: the capability is "take an asset out of the fleet", whatever its wheels.
  */
 final class EquipmentPolicy

@@ -16,7 +16,7 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
- * §15.2 Phase 0.5 CUTOVER_BATCH — one validated legacy upload and its life through the rehearsal.
+ * Phase 0.5 CUTOVER_BATCH — one validated legacy upload and its life through the rehearsal.
  *
  * The row is written by validation, not by the commit: a rejected file keeps its rows and error
  * report, so the accountant can fix the spreadsheet from the same line numbers the screen showed.

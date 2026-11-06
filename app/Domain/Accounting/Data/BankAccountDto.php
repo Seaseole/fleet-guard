@@ -11,7 +11,7 @@ use InvalidArgumentException;
  * calls one Action; it never fills a model itself.
  *
  * `accountNumber` is the only plaintext that exists here, and only for the length of the request:
- * the Action turns it into the §9.5 trio and the DTO is discarded. It is not read back out of a
+ * the Action turns it into the trio and the DTO is discarded. It is not read back out of a
  * model, so a screen that re-submits an edit form cannot resend a masked value and store the mask
  * as the account number — hence {@see preservesMaskedNumber()}.
  */
@@ -27,6 +27,7 @@ final readonly class BankAccountDto
         public ?string $openedOn = null,
         public bool $active = true,
         public ?string $notes = null,
+        public ?int $glAccountId = null,
     ) {
         if (! in_array($this->type, BankAccountTypes::values(), true)) {
             throw new InvalidArgumentException("Account type '{$this->type}' is not one of ".implode(', ', BankAccountTypes::values()).'.');
@@ -48,6 +49,7 @@ final readonly class BankAccountDto
             openedOn: self::optionalString($input['opened_on'] ?? null),
             active: (bool) ($input['active'] ?? true),
             notes: self::optionalString($input['notes'] ?? null),
+            glAccountId: self::optionalInt($input['gl_account_id'] ?? null),
         );
     }
 
@@ -63,5 +65,15 @@ final readonly class BankAccountDto
     private static function optionalString(mixed $value): ?string
     {
         return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /** The ledger-account picker posts '' for "not linked"; that and only that clears the link. */
+    private static function optionalInt(mixed $value): ?int
+    {
+        if (is_int($value)) {
+            return $value;
+        }
+
+        return is_string($value) && $value !== '' ? (int) $value : null;
     }
 }

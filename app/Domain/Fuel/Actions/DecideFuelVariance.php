@@ -16,15 +16,15 @@ use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
- * §10.9's variance decision: a person reads the figures and says what they think of them.
+ * The variance decision: a person reads the figures and says what they think of them.
  *
  * Every decision carries its sentence — the migration's CHECK and the state trait both refuse a
  * decided row without one, because "we looked at it" that records no reason is how a variance
- * register becomes a place numbers go to be forgotten. The seat is `fuel.waive_variance` (§9.3):
+ * register becomes a place numbers go to be forgotten. The seat is `fuel.waive_variance`:
  * deciding that a truck's diesel consumption is acceptable is the Operations Manager's or the
  * Owner's judgement, not the clerk's who recorded the litres.
  *
- * Resolving the variance closes the alert it raised, through §14.1's own transition door — the
+ * Resolving the variance closes the alert it raised, through the design's own transition door — the
  * register must not keep saying "fuel variance" after the person who owns it has answered.
  */
 final class DecideFuelVariance
@@ -38,11 +38,11 @@ final class DecideFuelVariance
         ?int $actorId = null,
     ): FuelVariance {
         if (! Gate::allows('fuel.waive_variance')) {
-            throw new InvalidArgumentException('Deciding a fuel variance is an operations decision (§9.3).');
+            throw new InvalidArgumentException('Deciding a fuel variance is an operations decision.');
         }
 
         if ($to === FuelVarianceState::Open) {
-            throw new InvalidArgumentException('A variance does not go back to open; the machine has no such move (§10.9).');
+            throw new InvalidArgumentException('A variance does not go back to open; the machine has no such move.');
         }
 
         $note = trim($note);

@@ -9,7 +9,7 @@ use App\Domain\Operations\Models\Route;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Adds a corridor (§4.1, D1). The DTO has already refused unknown country codes and a zero
+ * Adds a corridor (D1). The DTO has already refused unknown country codes and a zero
  * distance; the Action owns the transaction and the single write path the future API shares.
  */
 final class CreateRoute

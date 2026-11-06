@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Kernel\Cutover;
 
 /**
- * The batch's states (§15.2: validate, preview, then post or apply).
+ * The batch's states (validate, preview, then post or apply).
  *
  * `rejected` is terminal on purpose: a file that failed validation is corrected and uploaded
  * again, which leaves the first attempt and its error report intact. Nothing re-validates in
@@ -31,7 +31,7 @@ enum CutoverBatchStatus: string
             self::Rejected => 'Rejected — fix the file',
             self::Posted => 'Posted to the ledger',
             self::Reversed => 'Reversed',
-            self::Applied => 'Applied to master data',
+            self::Applied => 'Applied to the register',
         };
     }
 

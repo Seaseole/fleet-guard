@@ -70,7 +70,7 @@
             <p class="text-center text-sm">
                 <span class="text-fg-ink-muted">{{ __('or you can') }}</span>
 
-                <button type="button" x-on:click="toggleInput()" class="text-accent underline underline-offset-4">
+                <button type="button" x-on:click="toggleInput()" class="text-accent-ink underline underline-offset-4">
                     <span x-show="! showRecoveryInput">{{ __('login using a recovery code') }}</span>
                     <span x-show="showRecoveryInput" x-cloak>{{ __('login using an authentication code') }}</span>
                 </button>

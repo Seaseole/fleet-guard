@@ -21,6 +21,7 @@ use App\Domain\Kernel\Cutover\Actions\ApplyCutoverBatch;
 use App\Domain\Kernel\Cutover\Actions\ImportCutoverBatch;
 use App\Domain\Kernel\Cutover\CutoverBatchStatus;
 use App\Domain\Kernel\Cutover\CutoverDataset;
+use App\Domain\Kernel\Cutover\CutoverHandlers;
 use App\Domain\Kernel\Cutover\Models\CutoverRow;
 use App\Domain\Kernel\Identity\FieldGate;
 use App\Domain\Kernel\State\IllegalTransition;
@@ -44,9 +45,9 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 
 /**
- * Phase 1 master data verification (DESIGN.md §15.2, §4.3, §10.1/§10.2, §14.1, §9.5).
+ * Phase 1 master data verification (DESIGN.md /).
  *
- * Not the test suite — `tests/` is local-only by owner decision (§14.6). This is the runnable proof
+ * Not the test suite — `tests/` is local-only by owner decision. This is the runnable proof
  * that the fleet and people registers, the commercial master and the parts catalogue hold the
  * invariants the design says they hold: odometers only ever rise, an assignment refuses a truck that
  * is not available or a driver whose papers lapsed, the licence and national ID never exist as
@@ -72,7 +73,7 @@ CurrentCompany::force(1);
 /*
  * Pre-clean. A run that dies halfway would otherwise leave fixture trucks behind, and the next run
  * would report the unique indexes misbehaving when the truth is a previous run never reached its
- * cleanup (§20.8's lesson, applied here from the start).
+ * cleanup (the lesson, applied here from the start).
  */
 $fixtureTruckRegs = ['B 901 VFX', 'B 902 VFX', 'B 903 VFX', 'B 904 VFX', 'B 905 VFX', 'B 901 VFY', 'B 902 VFY'];
 $fixtureTruckIds = DB::table('trucks')->whereRaw("registration_no like '%VFX' or registration_no like '%VFY'")->pluck('id')->all();
@@ -80,8 +81,13 @@ $fixtureTruckIds = DB::table('trucks')->whereRaw("registration_no like '%VFX' or
 DB::table('odometer_readings')->whereIn('truck_id', $fixtureTruckIds)->delete();
 // Orphan-tolerant: a crashed run deletes the employee before its driver, so the fixture driver has
 // to be found by its own namespace (the licence tail) as well as through the join — otherwise its
-// assignment rows survive and block every later run on the FK.
-$fixtureDriverIds = DB::table('drivers')->where('licence_no_masked', 'like', '%0001')->pluck('id')->all();
+// assignment rows survive and block every later run on the FK. An orphan is the only safe reading of
+// "tail 0001": a driver whose employee still exists belongs to the demo or the business, and deleting
+// it because its licence happens to end in 0001 once deleted a completed trip's driver.
+$fixtureDriverIds = DB::table('drivers')
+    ->where('licence_no_masked', 'like', '%0001')
+    ->whereNotIn('employee_id', DB::table('employees')->pluck('id'))
+    ->pluck('id')->all();
 DB::table('vehicle_assignments')->where(static fn ($q) => $q->whereIn('truck_id', $fixtureTruckIds)->orWhereIn('driver_id', $fixtureDriverIds))->delete();
 DB::table('trucks')->where('registration_no', 'like', '%VFX')->orWhere('registration_no', 'like', '%VFY')->delete();
 DB::table('drivers')->where(static fn ($q) => $q->whereIn('employee_id', DB::table('employees')->where('employee_no', 'like', 'EMP-VF%')->pluck('id')->all() ?: [0])->orWhereIn('id', $fixtureDriverIds))->delete();
@@ -182,7 +188,7 @@ $created = [
 ];
 
 /* ------------------------------------------------------------------------- */
-echo "== §4.3 the engine holds what the registers claim (live MySQL 9.1 on 3307) ==\n";
+echo "== the engine holds what the registers claim (live MySQL 9.1 on 3307) ==\n";
 
 foreach ([
     'trucks' => ['trucks_company_registration_unique', 'trucks_company_fleet_no_unique', 'trucks_company_vin_unique', 'trucks_status_allowed', 'trucks_odometer_not_negative', 'trucks_purchase_not_negative'],
@@ -203,13 +209,13 @@ $assignmentDdl = (string) array_values((array) DB::select('show create table veh
 check(str_contains($assignmentDdl, 'vehicle_assignments'), 'vehicle_assignments exists with the truck/trailer/driver timeline rows');
 
 $driversCreate = (string) array_values((array) DB::select('show create table drivers')[0])[1];
-check(! str_contains($driversCreate, '`licence_no`'), 'the drivers table has no bare licence column — only the encrypted/masked pair (§9.5)');
+check(! str_contains($driversCreate, '`licence_no`'), 'the drivers table has no bare licence column — only the encrypted/masked pair');
 
 $employeesCreate = (string) array_values((array) DB::select('show create table employees')[0])[1];
-check(str_contains($employeesCreate, '`national_id_encrypted`') && str_contains($employeesCreate, '`national_id_masked`'), 'employees carries the §9.5 column trio for the national ID');
+check(str_contains($employeesCreate, '`national_id_encrypted`') && str_contains($employeesCreate, '`national_id_masked`'), 'employees carries the column trio for the national ID');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §4.3 the schema refuses what the Actions promise not to accept ==\n";
+echo "\n== the schema refuses what the Actions promise not to accept ==\n";
 
 $truckColumns = static fn (array $overrides): array => array_merge([
     'company_id' => 1,
@@ -223,7 +229,7 @@ $truckColumns = static fn (array $overrides): array => array_merge([
 ], $overrides);
 
 checkAccepts('trucks', $truckColumns([]), 'a plain available truck is accepted');
-checkRefuses('trucks', $truckColumns(['status' => 'flying']), 'a status outside §10.1 is refused by the engine');
+checkRefuses('trucks', $truckColumns(['status' => 'flying']), 'a status outside the design is refused by the engine');
 checkRefuses('trucks', $truckColumns(['odometer_km' => -1]), 'a negative odometer is refused');
 checkRefuses('trucks', $truckColumns(['purchase_amount_base' => -100]), 'a negative purchase amount is refused');
 
@@ -236,7 +242,7 @@ DB::table('companies')->insert([
     'updated_at' => $stamp,
 ]);
 
-checkAccepts('trucks', $truckColumns(['company_id' => 2]), 'the same registration in another company is accepted — the per-company unique §4.3 needed');
+checkAccepts('trucks', $truckColumns(['company_id' => 2]), 'the same registration in another company is accepted — the per-company unique needed');
 // The duplicate refusal needs a committed first row — a `checkAccepts` that rolls back leaves nothing
 // for the second insert to collide with, and the refusal would be measured against an empty table.
 commitInsert('trucks', $truckColumns([]));
@@ -262,13 +268,13 @@ checkRefuses('parts', $partColumns(['unit_cost_minor' => -1]), 'a negative part 
 checkRefuses('parts', $partColumns(['sku' => '']), 'a blank SKU is refused — it is how the stores clerk orders the part');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.1 the state machines the registers enforce ==\n";
+echo "\n== the state machines the registers enforce ==\n";
 
 check(FleetStatus::Available->mayBeDispatched(), 'an available asset may be named on an assignment');
 foreach ([FleetStatus::OnTrip, FleetStatus::InWorkshop, FleetStatus::OutOfService, FleetStatus::Sold] as $notFree) {
     check(! $notFree->mayBeDispatched(), "{$notFree->value} cannot be dispatched");
 }
-check(FleetStatus::Sold->isTerminal() && ! FleetStatus::OutOfService->isTerminal(), 'sold is terminal; out of service is recoverable (§10.1)');
+check(FleetStatus::Sold->isTerminal() &&! FleetStatus::OutOfService->isTerminal(), 'sold is terminal; out of service is recoverable');
 
 $truck = (app(CreateTruck::class))(new TruckDto(registrationNo: 'B 901 VFX', odometerKm: 100_000, purchaseAmountBase: 50_000_00));
 $created['truck_ids'][] = $truck->id;
@@ -296,12 +302,12 @@ $probe = $changeStatus($probe, FleetStatus::Available);
 check($probe->status === FleetStatus::Available, '...and with a reason it moves, and can be brought back');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §4.3 the odometer only ever rises ==\n";
+echo "\n== the odometer only ever rises ==\n";
 
 $record = app(RecordOdometerReading::class);
 
 $back = $record(new OdometerReadingDto(truckId: $liveTruck->id, odometerKm: 49_000, readOn: $today->toDateString(), source: OdometerSource::Manual));
-check($back->plausibility === Plausibility::Suspect, 'a reading below the recorded odometer is stored, and stored suspect — the drop is the incident (§4.3)');
+check($back->plausibility === Plausibility::Suspect, 'a reading below the recorded odometer is stored, and stored suspect — the drop is the incident');
 $liveTruck->refresh();
 check((int) $liveTruck->odometer_km === 50_000, '...and the truck keeps the higher number — a suspect reading never drags the projection back');
 
@@ -315,7 +321,7 @@ $liveTruck->refresh();
 check((float) $liveTruck->engine_hours_10_2 === 800.5, 'engine hours follow the same monotonic rule — a workshop note never lowers them');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §10.2 dispatch refuses what the papers say to refuse ==\n";
+echo "\n== dispatch refuses what the papers say to refuse ==\n";
 
 $employee = (app(CreateEmployee::class))(new EmployeeDto(
     employeeNo: 'EMP-VF001',
@@ -348,17 +354,17 @@ refuses(
 );
 
 $driver->forceFill(['licence_expires_on' => null])->save();
-check(! $driver->licenceValidOn($today), 'a null expiry is not "valid forever" — an incomplete record cannot dispatch (§4.3)');
+check(! $driver->licenceValidOn($today), 'a null expiry is not "valid forever" — an incomplete record cannot dispatch');
 
 $driver->forceFill(['licence_expires_on' => $today->copy()->addDays(30)->toDateString()])->save();
 check($driver->eligibleOn($today), 'with valid papers and active status the driver is eligible today');
 
 $driver->forceFill(['status' => DriverStatus::Suspended->value])->save();
-check(! $driver->eligibleOn($today), '...and a suspended driver is not, however valid the papers (§10.2)');
+check(! $driver->eligibleOn($today), '...and a suspended driver is not, however valid the papers');
 $driver->forceFill(['status' => DriverStatus::Active->value])->save();
 
 $assignment = $assign(new AssignmentDto(truckId: $liveTruck->id, fromAt: $today->toDateString(), driverId: $driver->id, reason: 'fixture'));
-check($assignment->id !== null && $liveTruck->fresh()->status === FleetStatus::Available, 'a clean assignment writes the row and does NOT move the truck on trip (§10.2 separates who-has-it from where-is-it)');
+check($assignment->id!== null && $liveTruck->fresh()->status === FleetStatus::Available, 'a clean assignment writes the row and does NOT move the truck on trip (separates who-has-it from where-is-it)');
 
 refuses(
     'an overlapping assignment for the same truck is refused',
@@ -389,7 +395,7 @@ check($second->id !== null, 'after a release the same truck can be assigned agai
 DB::table('vehicle_assignments')->where('id', $second->id)->delete();
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §9.5 the licence and the national ID never exist as plaintext at rest ==\n";
+echo "\n== the licence and the national ID never exist as plaintext at rest ==\n";
 
 $rawDriver = DB::table('drivers')->where('id', $driver->id)->first();
 check(
@@ -411,7 +417,7 @@ $noPair = ['company_id' => 1, 'employee_id' => 999_999, 'default_allowance_rate_
 checkRefuses('drivers', $noPair, 'half a masked/encrypted pair is refused by drivers_licence_no_is_a_pair');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §15.2 the nine importers: create, then update — never duplicate ==\n";
+echo "\n== the nine importers: create, then update — never duplicate ==\n";
 
 $import = app(ImportCutoverBatch::class);
 $apply = app(ApplyCutoverBatch::class);
@@ -440,7 +446,7 @@ check($again->status === CutoverBatchStatus::Validated, 'the same truck in a sec
 $again = $apply->handle($again, $ownerId);
 $imported->refresh();
 check($imported->model === 'FH 500 Edition', '...and applying updated the existing row');
-check((int) $imported->odometer_km === 150_000, '...while the odometer stayed at the recorded reading — an import cannot correct mileage (§4.3)');
+check((int) $imported->odometer_km === 150_000, '...while the odometer stayed at the recorded reading — an import cannot correct mileage');
 check(Truck::query()->where('registration_no', 'B 901 VFY')->count() === 1, '...and no second row was created');
 
 $badCsv = "registration_no,fleet_no,vin\nB 903 VFY,T-901,VINVFX0000000000001\nB 904 VFY,,\n,904\n";
@@ -485,11 +491,24 @@ check(DB::table('customers')->where('code', 'VFY-CUST')->value('name') === 'Veri
 
 $wired = [];
 foreach (CutoverDataset::cases() as $dataset) {
-    if ($dataset->isMasterData()) {
+    if ($dataset !== CutoverDataset::OpeningTrialBalance) {
         $wired[] = $dataset->value;
     }
 }
-check(count($wired) === 9, 'all nine master-data datasets exist — '.implode(', ', $wired));
+
+// Nine master files, six opening intake files (the party detail, the measurements, the
+// advances and facilities) and the trial balance, which is the only dataset the Kernel validates
+// itself. The claim worth making is not a count but the wiring: a dataset the enum offers and no module
+// answers would be refused at upload, which is exactly what this check exists to catch before a file is
+// ever written.
+$allWired = array_reduce(
+    $wired,
+    static fn (bool $carry, string $value): bool => $carry && app(CutoverHandlers::class)
+        ->supports(CutoverDataset::from($value)),
+    true,
+);
+
+check(count($wired) === 15 && $allWired, 'all fifteen intake datasets are wired to a handler — '.implode(', ', $wired));
 
 $probeBatch = $import->handle(CutoverDataset::Trailers, "registration_no,type\nVFY-TRAILER,flatbed\n", 'verify-master-trailers.csv', $ownerId);
 $created['batch_ids'][] = $probeBatch->id;
@@ -525,7 +544,7 @@ check(
 );
 check(
     $demoDriver !== null && ($candidates[(string) $demoDriver]->severity ?? null) === AlertSeverity::Critical,
-    '...as a Critical, because it is already lapsed (§10.8)'
+    '...as a Critical, because it is already lapsed'
 );
 check(
     $demoDriver !== null && ($candidates[(string) $demoDriver]->type ?? null) !== null,
@@ -557,7 +576,7 @@ DB::table('failed_jobs')->where('queue', 'alerts')->delete();
 DB::table('jobs')->where('queue', 'alerts')->delete();
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §15.2 the demo fleet meets the phase's definition of done ==\n";
+echo "\n== the demo fleet meets the phase's definition of done ==\n";
 
 check((int) DB::table('trucks')->count() >= 21, '21+ vehicles seeded (trucks: '.DB::table('trucks')->count().')');
 check((int) DB::table('trailers')->count() >= 1 && (int) DB::table('drivers')->count() >= 1, 'trailers and drivers are seeded alongside');
@@ -568,11 +587,11 @@ $timelineTruck = Truck::query()->where('registration_no', 'B 103 BB')->with(['as
 check($timelineTruck !== null, 'a demo truck with an assignment history exists to inspect');
 check(
     $timelineTruck !== null && $timelineTruck->assignments->isNotEmpty() && $timelineTruck->odometerReadings->isNotEmpty(),
-    '...and its timeline answers assignment + odometer together (§15.2 DoD)'
+    '...and its timeline answers assignment + odometer together (DoD)'
 );
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §9.4 the doors are on the routes ==\n";
+echo "\n== the doors are on the routes ==\n";
 
 foreach ([
     'fleet.index' => 'can:fleet.view',
@@ -591,7 +610,7 @@ foreach ([
 $documentsSubjectLink = Route::getRoutes()->getByName('documents.index');
 check($documentsSubjectLink !== null, 'the document register is reachable for subject links (?subject_type=truck|driver)');
 
-echo "\n== §8 the models are tenant-scoped ==\n";
+echo "\n== the models are tenant-scoped ==\n";
 
 foreach ([Truck::class, Driver::class, Employee::class] as $model) {
     check(in_array(BelongsToCompany::class, class_uses_recursive($model), true), $model.' uses the company scope trait');
@@ -605,7 +624,7 @@ CurrentCompany::force(1);
 check(Truck::query()->count() > 20, '...and company 1 sees its full register again');
 
 /* ------------------------------------------------------------------------- */
-echo "\n== §9.5 the reveal path is the only decrypt path ==\n";
+echo "\n== the reveal path is the only decrypt path ==\n";
 
 Gate::forUser(User::find($ownerId));
 $asOwner = $driver->revealMaskedSecret(Driver::LICENCE, FieldGate::SeePayroll);
@@ -626,7 +645,10 @@ DB::table('trailers')->where('registration_no', 'VFY-TRAILER')->delete();
 // both the fixture trucks and the fixture driver, and MySQL refuses the parent delete while any of
 // them stands (this ordering bug outlived three runs before it was named).
 $runTruckIds = DB::table('trucks')->whereRaw("registration_no like '%VFX' or registration_no like '%VFY'")->pluck('id')->all();
-$runDriverIds = array_merge($created['driver_ids'], DB::table('drivers')->where('licence_no_masked', 'like', '%0001')->pluck('id')->all());
+$runDriverIds = array_merge($created['driver_ids'], DB::table('drivers')
+    ->where('licence_no_masked', 'like', '%0001')
+    ->whereNotIn('employee_id', DB::table('employees')->pluck('id'))
+    ->pluck('id')->all());
 DB::table('odometer_readings')->whereIn('truck_id', $runTruckIds)->delete();
 DB::table('vehicle_assignments')->where(static fn ($q) => $q->whereIn('truck_id', $runTruckIds)->orWhereIn('driver_id', $runDriverIds))->delete();
 DB::table('drivers')->whereIn('id', $runDriverIds)->delete();
@@ -655,7 +677,11 @@ foreach ($leftovers as $what => $count) {
 }
 
 check((int) DB::table('trucks')->count() >= 21, 'the demo fleet is intact: '.DB::table('trucks')->count().' trucks still registered');
-check((int) DB::table('employees')->count() === 8 && (int) DB::table('drivers')->count() === 8, 'the eight demo employees and drivers are untouched');
+$demoEmployeeNos = ['EMP-001', 'EMP-002', 'EMP-003', 'EMP-004', 'EMP-005', 'EMP-006', 'EMP-007', 'EMP-008'];
+$demoEmployeeIds = DB::table('employees')->whereIn('employee_no', $demoEmployeeNos)->pluck('id')->all();
+$demoDrivers = DB::table('drivers')->whereIn('employee_id', $demoEmployeeIds)->count();
+
+check(count($demoEmployeeIds) === 8 && $demoDrivers === 8, 'the eight demo employees and drivers are untouched', sprintf('%d employees, %d drivers', count($demoEmployeeIds), $demoDrivers));
 check(in_array(1, DB::table('users')->pluck('id')->all(), true), 'and the real accounts are still here');
 
 echo "\n== result ==\n";

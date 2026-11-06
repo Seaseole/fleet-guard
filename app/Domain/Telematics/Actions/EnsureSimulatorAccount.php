@@ -7,9 +7,9 @@ namespace App\Domain\Telematics\Actions;
 use App\Domain\Telematics\Models\GpsProviderAccount;
 
 /**
- * The simulator's feed row, made once (§4.4 GPS_PROVIDER_ACCOUNT).
+ * The simulator's feed row, made once (GPS_PROVIDER_ACCOUNT).
  *
- * `gps:simulate` cannot write the account itself — §13 D1 keeps writes out of the console — and it must
+ * `gps:simulate` cannot write the account itself — D1 keeps writes out of the console — and it must
  * not fail on a fresh database either, because the simulator is the only way to see the map before
  * hardware arrives. So the door is an Action that returns the existing row or makes it.
  *

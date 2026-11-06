@@ -222,7 +222,7 @@ new #[Title('Security settings')] class extends Component
             />
 
             <div class="flex items-center gap-4">
-                {{-- Outline, not primary: §9.1 makes the factor the affirmative action of this screen, so
+                {{-- Outline, not primary: The design makes the factor the affirmative action of this screen, so
                      the two-weight rule resolves in its favour and a password change stays a secondary
                      form. --}}
                 <x-ui.button variant="outline" type="submit" data-test="update-password-button">
@@ -270,7 +270,7 @@ new #[Title('Security settings')] class extends Component
                         </div>
                     @else
                         <div class="space-y-4">
-                            <x-ui.text variant="subtle">
+                            <x-ui.text>
                                 {{ __('When you enable two-factor authentication, you will be prompted for a secure pin during login. This pin can be retrieved from a TOTP-supported application on your phone.') }}
                             </x-ui.text>
 
